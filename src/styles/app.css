@@ -14,6 +14,40 @@
     11. 数据页 / 轻提示 / 动效      data / toast / motion
    规则只增不改顺序，避免破坏层叠优先级。
    ========================================================================== */
+/* --------------------------------------------------------------------------
+   字体：随 App 一起分发，不依赖手机自带的字库。
+     · 中文（标题与正文） HarmonyOS Sans SC —— 华为开源，字形开口大、转角微圆
+     · 数字与拉丁        Nunito            —— 端头圆润，带等宽数字（tabular）
+   仅保留 UI 实际用到的 692 个字符，见 design/subset_fonts.py 与 src/assets/fonts/LICENSE.md。
+   -------------------------------------------------------------------------- */
+@font-face {
+  font-family: 'HarmonyOS Sans SC';
+  src: url('../assets/fonts/text-regular.woff2') format('woff2');
+  font-weight: 400;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'HarmonyOS Sans SC';
+  src: url('../assets/fonts/text-medium.woff2') format('woff2');
+  font-weight: 500 600;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'HarmonyOS Sans SC';
+  src: url('../assets/fonts/text-bold.woff2') format('woff2');
+  font-weight: 700 900;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Nunito';
+  src: url('../assets/fonts/Nunito.woff2') format('woff2');
+  font-weight: 200 900;
+  font-display: swap;
+}
+
 :root {
   --paper: #f5f1e8;
   --paper-deep: #ece5d6;
@@ -29,9 +63,9 @@
   --moss: #6e7b5b;
   --moss-soft: #e8e9de;
   --gold: #b0804c;
-  --serif: 'Fraunces Variable', 'Iowan Old Style', 'Palatino Linotype', Georgia, serif;
-  --cn-serif: 'Songti SC', 'Noto Serif CJK SC', 'Source Han Serif SC', STSong, serif;
-  --sans: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Noto Sans CJK SC', 'Microsoft YaHei', system-ui, sans-serif;
+  --num: 'Nunito', 'HarmonyOS Sans SC', 'PingFang SC', 'Noto Sans CJK SC', system-ui, sans-serif;
+  --display: 'HarmonyOS Sans SC', 'PingFang SC', 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif;
+  --sans: 'HarmonyOS Sans SC', -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Noto Sans CJK SC', 'Microsoft YaHei', system-ui, sans-serif;
   --radius: 20px;
   --shadow: 0 1px 2px rgba(33, 31, 26, 0.04), 0 10px 26px rgba(33, 31, 26, 0.045);
 }
@@ -154,7 +188,7 @@ textarea:focus-visible {
   border-radius: 11px;
   background: var(--accent);
   color: #fff8ee;
-  font-family: var(--cn-serif);
+  font-family: var(--display);
   font-size: 21px;
   line-height: 1;
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14);
@@ -194,7 +228,7 @@ textarea:focus-visible {
 }
 
 .brand h1 {
-  font-family: var(--cn-serif);
+  font-family: var(--display);
   font-size: 17px;
   font-weight: 600;
   letter-spacing: 0.03em;
@@ -223,7 +257,7 @@ textarea:focus-visible {
 }
 
 .page-head h1 {
-  font-family: var(--cn-serif);
+  font-family: var(--display);
   font-size: 26px;
   font-weight: 600;
   letter-spacing: 0.02em;
@@ -270,7 +304,7 @@ textarea:focus-visible {
 }
 
 .hero-pct {
-  font-family: var(--serif);
+  font-family: var(--num);
   font-size: 11px;
   letter-spacing: 0;
   color: rgba(247, 241, 227, 0.72);
@@ -278,7 +312,7 @@ textarea:focus-visible {
 
 .hero-amount {
   margin-top: 9px;
-  font-family: var(--serif);
+  font-family: var(--num);
   font-size: 47px;
   line-height: 1.02;
   letter-spacing: -0.02em;
@@ -337,7 +371,7 @@ textarea:focus-visible {
 }
 
 .hero-foot b {
-  font-family: var(--serif);
+  font-family: var(--num);
   font-size: 15px;
   font-weight: 500;
   color: #f7f1e3;
@@ -417,7 +451,7 @@ textarea:focus-visible {
 
 .action-today b {
   font-size: 16px;
-  font-family: var(--serif);
+  font-family: var(--num);
   font-weight: 500;
 }
 
@@ -589,7 +623,7 @@ textarea:focus-visible {
   display: flex;
   align-items: baseline;
   gap: 1px;
-  font-family: var(--serif);
+  font-family: var(--num);
   font-size: 15px;
   color: var(--ink);
 }
@@ -628,7 +662,7 @@ textarea:focus-visible {
   border-radius: 50%;
   background: var(--moss);
   color: #f7f3e7;
-  font-family: var(--cn-serif);
+  font-family: var(--display);
   font-size: 14px;
   display: grid;
   place-items: center;
@@ -646,7 +680,7 @@ textarea:focus-visible {
 }
 
 .pace-card p b {
-  font-family: var(--serif);
+  font-family: var(--num);
   font-size: 14px;
   font-weight: 600;
 }
@@ -674,7 +708,7 @@ textarea:focus-visible {
 
 .pace-arrow {
   color: var(--ink-3);
-  font-family: var(--serif);
+  font-family: var(--num);
   font-size: 15px;
   padding: 2px 0 0 2px;
 }
@@ -790,7 +824,7 @@ textarea:focus-visible {
 }
 
 .spark-figure {
-  font-family: var(--serif);
+  font-family: var(--num);
   font-size: 21px;
   line-height: 1.2;
   letter-spacing: -0.01em;
@@ -813,7 +847,7 @@ textarea:focus-visible {
 }
 
 .spark-meta .money {
-  font-family: var(--serif);
+  font-family: var(--num);
   font-size: 10px;
   color: var(--ink-2);
 }
@@ -994,7 +1028,7 @@ textarea:focus-visible {
 }
 
 .day-head .money {
-  font-family: var(--serif);
+  font-family: var(--num);
   font-size: 10.5px;
   color: var(--ink-2);
 }
@@ -1097,7 +1131,7 @@ textarea:focus-visible {
 
 .stats-total > .money {
   color: var(--ink);
-  font-family: var(--serif);
+  font-family: var(--num);
   font-size: 38px;
   line-height: 1.1;
   letter-spacing: -0.015em;
@@ -1152,7 +1186,7 @@ textarea:focus-visible {
 .stats-meta b {
   font-size: 12.5px;
   font-weight: 500;
-  font-family: var(--serif);
+  font-family: var(--num);
   white-space: nowrap;
 }
 
@@ -1281,7 +1315,7 @@ textarea:focus-visible {
 }
 
 .donut-center b {
-  font-family: var(--cn-serif);
+  font-family: var(--display);
   font-size: 13px;
   font-weight: 600;
   max-width: 100%;
@@ -1292,7 +1326,7 @@ textarea:focus-visible {
 
 .donut-center em {
   font-style: normal;
-  font-family: var(--serif);
+  font-family: var(--num);
   font-size: 10.5px;
   color: var(--accent);
 }
@@ -1335,7 +1369,7 @@ textarea:focus-visible {
 }
 
 .legend-row b {
-  font-family: var(--serif);
+  font-family: var(--num);
   font-size: 10.5px;
   font-weight: 500;
   min-width: 30px;
@@ -1359,7 +1393,7 @@ textarea:focus-visible {
 }
 
 .budget-top b {
-  font-family: var(--serif);
+  font-family: var(--num);
   font-size: 23px;
   font-weight: 500;
 }
@@ -1431,7 +1465,7 @@ textarea:focus-visible {
 }
 
 .budget-legend b {
-  font-family: var(--serif);
+  font-family: var(--num);
   font-weight: 500;
   font-size: 11.5px;
 }
@@ -1527,7 +1561,7 @@ textarea:focus-visible {
 }
 
 .profile-main h2 {
-  font-family: var(--cn-serif);
+  font-family: var(--display);
   font-size: 17px;
   font-weight: 600;
   letter-spacing: 0.04em;
@@ -1556,7 +1590,7 @@ textarea:focus-visible {
 }
 
 .profile-stats b {
-  font-family: var(--serif);
+  font-family: var(--num);
   font-size: 20px;
   font-weight: 500;
 }
@@ -1628,7 +1662,7 @@ textarea:focus-visible {
 }
 
 .setting-value {
-  font-family: var(--serif);
+  font-family: var(--num);
   font-size: 12px;
   color: var(--ink-2);
   white-space: nowrap;
@@ -1716,7 +1750,7 @@ textarea:focus-visible {
 
 .ob-year {
   margin-left: auto;
-  font-family: var(--serif);
+  font-family: var(--num);
   letter-spacing: 0.08em;
 }
 
@@ -1736,7 +1770,7 @@ textarea:focus-visible {
 }
 
 .ob-body h1 {
-  font-family: var(--cn-serif);
+  font-family: var(--display);
   font-size: 33px;
   font-weight: 600;
   line-height: 1.38;
@@ -1778,7 +1812,7 @@ textarea:focus-visible {
 
 .ob-field i {
   font-style: normal;
-  font-family: var(--serif);
+  font-family: var(--num);
   font-size: 17px;
   color: var(--ink-3);
 }
@@ -1787,7 +1821,7 @@ textarea:focus-visible {
   width: 100%;
   border: 0;
   background: none;
-  font-family: var(--serif);
+  font-family: var(--num);
   font-size: 29px;
   letter-spacing: -0.01em;
   color: var(--ink);
@@ -2051,7 +2085,7 @@ textarea:focus-visible {
 }
 
 .sheet-head h2 {
-  font-family: var(--cn-serif);
+  font-family: var(--display);
   font-size: 18px;
   font-weight: 600;
   letter-spacing: 0.03em;
@@ -2301,7 +2335,7 @@ textarea:focus-visible {
   gap: 1px;
   max-width: 100%;
   overflow: hidden;
-  font-family: var(--serif);
+  font-family: var(--num);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
@@ -2438,7 +2472,7 @@ textarea:focus-visible {
   border-radius: 14px;
   background: rgba(255, 255, 255, 0.055);
   color: #f3efe6;
-  font-family: var(--serif);
+  font-family: var(--num);
   font-size: 21px;
   font-variant-numeric: tabular-nums;
   transition: background 0.12s ease, transform 0.12s ease;
@@ -2559,14 +2593,14 @@ textarea:focus-visible {
   place-items: center;
   background: linear-gradient(150deg, #c2563b, #a8482f);
   color: #fff4e3;
-  font-family: var(--cn-serif);
+  font-family: var(--display);
   font-size: 22px;
   line-height: 1;
   box-shadow: 0 8px 18px rgba(0, 0, 0, 0.38), inset 0 0 0 1px rgba(255, 244, 227, 0.22);
 }
 
 .rcp-cap-text {
-  font-family: var(--cn-serif);
+  font-family: var(--display);
   font-size: 12.5px;
   letter-spacing: 0.22em;
   text-indent: 0.22em;
@@ -2618,7 +2652,7 @@ textarea:focus-visible {
 }
 
 .rcp-brand {
-  font-family: var(--cn-serif);
+  font-family: var(--display);
   font-size: 11px;
   letter-spacing: 0.2em;
   color: #4a443a;
@@ -2638,13 +2672,13 @@ textarea:focus-visible {
 }
 
 .rcp-yen {
-  font-family: var(--serif);
+  font-family: var(--num);
   font-size: 13px;
   color: #8a8375;
 }
 
 .rcp-figure {
-  font-family: var(--serif);
+  font-family: var(--num);
   font-size: 33px;
   font-weight: 600;
   line-height: 1;
@@ -2735,7 +2769,7 @@ textarea:focus-visible {
 .rcp-foot {
   margin: 9px 0 0;
   text-align: center;
-  font-family: var(--cn-serif);
+  font-family: var(--display);
   font-size: 10px;
   letter-spacing: 0.2em;
   color: #8d8676;
@@ -2753,7 +2787,7 @@ textarea:focus-visible {
   border-radius: 50%;
   box-shadow: inset 0 0 0 2px #f9f3e4, inset 0 0 0 3.5px var(--accent);
   color: var(--accent);
-  font-family: var(--cn-serif);
+  font-family: var(--display);
   font-size: 12.5px;
   letter-spacing: 0.08em;
   text-indent: 0.08em;
@@ -2796,7 +2830,7 @@ textarea:focus-visible {
   border-radius: 50%;
   display: grid;
   place-items: center;
-  font-family: var(--serif);
+  font-family: var(--num);
   font-size: 15px;
   font-weight: 600;
   color: #6b3a25;
@@ -2923,7 +2957,7 @@ textarea:focus-visible {
 
 .money-input i {
   font-style: normal;
-  font-family: var(--serif);
+  font-family: var(--num);
   font-size: 14px;
   color: var(--ink-3);
 }
@@ -2932,7 +2966,7 @@ textarea:focus-visible {
   width: 100%;
   border: 0;
   background: none;
-  font-family: var(--serif);
+  font-family: var(--num);
   font-size: 22px;
   color: var(--ink);
 }
@@ -2996,7 +3030,7 @@ textarea:focus-visible {
 }
 
 .cat-manage-group h3 span {
-  font-family: var(--serif);
+  font-family: var(--num);
 }
 
 .manage-row {

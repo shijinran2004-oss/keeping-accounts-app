@@ -7,7 +7,7 @@ shijinran-money/
 ├─ src/
 │  ├─ types.ts            全项目唯一的类型文件（领域模型 + 数据接口 + 组件契约）
 │  ├─ App.tsx             应用外壳：Tab 切换、弹层调度、Android 返回键
-│  ├─ main.tsx            入口：字体、样式、状态栏与启动屏
+│  ├─ main.tsx            入口：样式、状态栏与启动屏
 │  ├─ data/               数据层
 │  │  ├─ index.ts         对外唯一入口（页面只从这里 import）
 │  │  ├─ store.tsx        LedgerProvider / useLedger / 本地持久化 / 导入导出
@@ -32,9 +32,11 @@ shijinran-money/
 │  │  ├─ stats.ts         区间筛选、分类汇总、资金口径 moneyFlow、连续记账天数 streakDays
 │  │  ├─ haptics.ts       触感反馈（Capacitor）
 │  │  └─ modalStack.ts    弹层栈，供返回键关闭
+│  ├─ assets/fonts/       随包分发的中文字体子集（鸿蒙 Sans SC ×3 字重 + Nunito）
 │  └─ styles/app.css      单一样式表，文件头有分区目录
 ├─ android/               Capacitor 生成的 Android 工程（SDK 35 / AGP 8.7.2）
 ├─ design/build_brand.py  图标 / 启动图生成脚本（改名字或配色只动这里）
+├─ design/subset_fonts.py 字体子集化脚本（改文案后重跑，把整字库裁成只含 UI 用字）
 ├─ assets/icon/           图标源文件（1024px）
 ├─ docs/                  架构说明与真机截图
 ├─ public/                favicon 等静态资源
