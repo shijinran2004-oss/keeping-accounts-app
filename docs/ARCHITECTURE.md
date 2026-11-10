@@ -35,9 +35,10 @@ shijinran-money/
 │  ├─ assets/fonts/       随包分发的中文字体子集（鸿蒙 Sans SC ×3 字重 + Nunito）
 │  └─ styles/app.css      单一样式表，文件头有分区目录
 ├─ android/               Capacitor 生成的 Android 工程（SDK 35 / AGP 8.7.2）
-├─ design/build_brand.py  图标 / 启动图生成脚本（改名字或配色只动这里）
+├─ design/build_brand.py  图标 / 启动图 / favicon 生成脚本（抠白底、遮罩、各密度一次铺完）
+├─ design/icon-src/       图标源图（手绘贴纸，换图标只换这里）
 ├─ design/subset_fonts.py 字体子集化脚本（改文案后重跑，把整字库裁成只含 UI 用字）
-├─ assets/icon/           图标源文件（1024px）
+├─ assets/icon/           生成的 1024px 图标与抠图结果（mascot-cutout.png）
 ├─ docs/                  架构说明与真机截图
 ├─ public/                favicon 等静态资源
 └─ release/               可直接安装的 APK

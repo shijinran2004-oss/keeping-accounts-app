@@ -39,7 +39,7 @@ src/
   utils/                money、date、stats、haptics、modalStack（index.ts 统一出口）
   styles/app.css        单一样式表，文件头有分区目录
 android/                Capacitor 生成的 Android 工程（已配好 SDK 35 / AGP 8.7.2）
-design/build_brand.py   图标 / 启动图生成脚本（改配色或名字只改这一处再跑一次）
+design/build_brand.py   图标 / 启动图 / favicon 生成脚本（源图在 design/icon-src/mascot.png）
 assets/icon/            1024px 品牌原图
 docs/                   架构说明 docs/ARCHITECTURE.md、截图 docs/screenshots/
 release/                可直接安装的 APK
@@ -67,7 +67,8 @@ JAVA_HOME='C:\Program Files\Java\jdk-17' /c/Android/gradle-8.9/bin/gradle.bat -p
 
 > 当前为 debug 签名，可直接侧载安装；上架应用商店需要换成自己的 release keystore。
 
-改 App 名字或配色时：改 `design/build_brand.py` 顶部的常量 → `python design/build_brand.py` → 重新 `cap copy` 并打包，图标、各密度启动图会一起更新。
+改 App 名字或配色时：改 `design/build_brand.py` 顶部的常量 → `python design/build_brand.py` → 重新 `cap copy` 并打包，图标、各密度启动图、favicon 会一起更新。
+换图标就替换 `design/icon-src/mascot.png`（带白底的手绘贴纸也行，脚本会自己抠白底）：先洪泛抠图 → 缩进纸色圆角卡片 → 铺 5 个密度的自适应图标、圆形图标、单色主题图标，再生成 11 张启动图和 favicon。
 
 ## 截图
 
