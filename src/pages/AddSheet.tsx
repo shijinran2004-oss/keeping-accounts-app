@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { CalendarDays, Check, Delete, Trash2, X } from 'lucide-react'
+import { CalendarDays, Delete, Trash2, X } from 'lucide-react'
 import { useLedger } from '../data'
-import type { AmountSeed, Tx, TxType } from '../types'
+import type { AmountSeed, ReceiptData, Tx, TxType } from '../types'
 import {
   centsToYuanInput,
   expressionParts,
@@ -9,12 +9,12 @@ import {
   formatMoney,
   hasOperator,
   relativeDay,
+  streakDays,
   sumExpression,
   tap,
-  tapSuccess,
   todayStr,
 } from '../utils'
-import { CategoryIcon, MorphSheet, useToast } from '../components'
+import { CategoryIcon, MorphSheet, SuccessReceipt, useToast } from '../components'
 
 const PAD: string[] = ['7', '8', '9', '+', '4', '5', '6', '-', '1', '2', '3', 'back', '.', '0']
 
@@ -37,7 +37,7 @@ export function AddSheet({
   const [note, setNote] = useState('')
   const [date, setDate] = useState(todayStr())
   const [confirmDelete, setConfirmDelete] = useState(false)
-  const [saved, setSaved] = useState(false)
+  const [receipt, setReceipt] = useState<ReceiptData | null>(null)
 
   // 数字跳跃：每次敲键让金额整体上跳一下再落回，连打时重跑而不是叠加
   const figureRef = useRef<HTMLDivElement>(null)
@@ -76,7 +76,7 @@ export function AddSheet({
 
   useEffect(() => {
     if (!open) return
-    setSaved(false)
+    setReceipt(null)
     setConfirmDelete(false)
     if (editing) {
       setType(editing.type)
@@ -110,7 +110,7 @@ export function AddSheet({
   }
 
   const press = (key: string) => {
-    if (saved) return
+    if (receipt) return
     tap()
     setExpr((prev) => {
       if (key === 'back') return prev.slice(0, -1)
@@ -134,7 +134,7 @@ export function AddSheet({
   }
 
   const submit = () => {
-    if (saved) return
+    if (receipt) return
     if (!cents || !current) {
       toast('先输入金额和分类', 'error')
       return
@@ -144,10 +144,21 @@ export function AddSheet({
       updateTx(editing.id, draft)
     } else {
       addTx(draft)
-      tapSuccess()
     }
-    setSaved(true)
-    window.setTimeout(() => onClose(), 760)
+    const now = new Date()
+    setReceipt({
+      amount: cents,
+      categoryName: current.name,
+      categoryIcon: current.icon,
+      categoryColor: current.color,
+      note: note.trim(),
+      dateTime: `${date} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`,
+      streak: streakDays(
+        editing ? state.txs : [...state.txs, { ...draft, id: 'pending', createdAt: 0 }],
+        date,
+      ),
+      mode: editing ? 'edit' : 'create',
+    })
   }
 
   const remove = () => {
@@ -157,8 +168,18 @@ export function AddSheet({
     onClose()
   }
 
+  const kid = editing ? '编辑这一笔' : '记一笔'
+
+  if (receipt) {
+    return (
+      <MorphSheet open={open} onClose={onClose} label={kid}>
+        <SuccessReceipt data={receipt} onDone={onClose} />
+      </MorphSheet>
+    )
+  }
+
   return (
-    <MorphSheet open={open} onClose={onClose} label={editing ? '编辑这一笔' : '记一笔'}>
+    <MorphSheet open={open} onClose={onClose} label={kid}>
       <div className="qa">
         <div className="qa-grab" />
 
@@ -311,19 +332,8 @@ export function AddSheet({
                 </button>
               ),
             )}
-            <button
-              type="button"
-              className={`qa-save ${saved ? 'is-saved' : ''}`}
-              onClick={submit}
-              disabled={!cents || !current}
-            >
-              {saved ? (
-                <>
-                  <Check size={17} strokeWidth={2.6} /> 已记一笔
-                </>
-              ) : (
-                '保存'
-              )}
+            <button type="button" className="qa-save" onClick={submit} disabled={!cents || !current}>
+              保存
             </button>
           </div>
         )}

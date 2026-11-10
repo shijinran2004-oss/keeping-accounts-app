@@ -103,6 +103,21 @@ export function dailySeries(txs: Tx[], start: string, end: string): { date: stri
   })
 }
 
+/** 从 date 往前数，连续有记账的天数（当天没记就是 0） */
+export function streakDays(txs: Tx[], date: string): number {
+  if (!txs.length) return 0
+  const days = new Set(txs.map((t) => t.date))
+  let n = 0
+  const d = parseDate(date)
+  while (n < 400) {
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+    if (!days.has(key)) break
+    n += 1
+    d.setDate(d.getDate() - 1)
+  }
+  return n
+}
+
 export function previousRange(kind: 'day' | 'week' | 'month', date: string): { start: string; end: string } {
   const d = parseDate(date)
   if (kind === 'day') {

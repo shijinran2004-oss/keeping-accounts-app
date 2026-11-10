@@ -2484,11 +2484,6 @@ textarea:focus-visible {
   color: #6f6d66;
 }
 
-.qa-save.is-saved {
-  background: #f3efe6;
-  color: #0e1a15;
-}
-
 .qa-confirm {
   flex: 1;
   display: flex;
@@ -2523,6 +2518,370 @@ textarea:focus-visible {
 .qa-danger {
   background: var(--accent);
   color: #fff7ec;
+}
+
+/* ---------- 记账成功小票 ---------- */
+
+.rcp {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  padding: 10px 0 calc(20px + env(safe-area-inset-bottom));
+  background:
+    radial-gradient(120% 70% at 50% 46%, #1b1f21 0%, #15181a 58%, #121416 100%);
+  color: #f3efe6;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: opacity 260ms ease, transform 260ms ease;
+}
+
+.rcp.is-out {
+  opacity: 0;
+  transform: translateY(12px);
+}
+
+.rcp-cap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 9px;
+  animation: rcpCapIn 300ms ease both;
+}
+
+.rcp-seal {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(150deg, #c2563b, #a8482f);
+  color: #fff4e3;
+  font-family: var(--cn-serif);
+  font-size: 22px;
+  line-height: 1;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.38), inset 0 0 0 1px rgba(255, 244, 227, 0.22);
+}
+
+.rcp-cap-text {
+  font-family: var(--cn-serif);
+  font-size: 12.5px;
+  letter-spacing: 0.22em;
+  text-indent: 0.22em;
+  color: rgba(243, 239, 230, 0.62);
+}
+
+.rcp-machine {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  perspective: 720px;
+}
+
+/* 出票口：纸从这里升上来 */
+.rcp-window {
+  position: relative;
+  width: 244px;
+  filter: drop-shadow(0 14px 22px rgba(0, 0, 0, 0.45));
+}
+
+.rcp-paper {
+  position: relative;
+  padding: 15px 18px 13px;
+  background: linear-gradient(180deg, #fdfaf1, #f8f2e3);
+  color: #23211c;
+  border-radius: 2px 2px 1px 1px;
+  clip-path: inset(100% 0 0 0);
+  transform: translateY(6px);
+}
+
+.rcp-paper.is-print {
+  animation: rcpPrint 820ms cubic-bezier(0.24, 0.86, 0.3, 1) forwards;
+}
+
+/* 撕口：热敏纸的锯齿压痕 */
+.rcp-perf {
+  height: 5px;
+  margin: -15px -18px 11px;
+  background:
+    repeating-linear-gradient(90deg, #ded4bd 0 4px, transparent 4px 8px) bottom / 100% 1px no-repeat,
+    repeating-linear-gradient(90deg, #ece3ce 0 4px, transparent 4px 8px) top / 100% 4px no-repeat;
+}
+
+.rcp-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.rcp-brand {
+  font-family: var(--cn-serif);
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  color: #4a443a;
+}
+
+.rcp-kind {
+  font-size: 8.5px;
+  letter-spacing: 0.18em;
+  color: #9a9384;
+}
+
+.rcp-amount {
+  display: flex;
+  align-items: baseline;
+  gap: 3px;
+  margin: 9px 0 7px;
+}
+
+.rcp-yen {
+  font-family: var(--serif);
+  font-size: 13px;
+  color: #8a8375;
+}
+
+.rcp-figure {
+  font-family: var(--serif);
+  font-size: 33px;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -0.012em;
+  font-variant-numeric: tabular-nums;
+  color: #23211c;
+}
+
+.rcp-cat {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.rcp-tile {
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  display: grid;
+  place-items: center;
+  color: #2a2620;
+}
+
+.rcp-cat-name {
+  font-size: 12px;
+  color: #34302a;
+}
+
+.rcp-note {
+  margin: 6px 0 0;
+  font-size: 11px;
+  line-height: 1.55;
+  color: #6f6a5e;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rcp-rows {
+  margin-top: 10px;
+  padding-top: 9px;
+  border-top: 1px dashed #d9d0bb;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.rcp-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  color: #8a8375;
+}
+
+.rcp-row b {
+  font-weight: 500;
+  font-size: 10.5px;
+  color: #34302a;
+  font-variant-numeric: tabular-nums;
+}
+
+.rcp-code {
+  height: 20px;
+  margin: 11px 0 5px;
+  opacity: 0.78;
+  background: repeating-linear-gradient(
+    90deg,
+    #34302a 0 1.5px,
+    transparent 1.5px 4px,
+    #34302a 4px 5px,
+    transparent 5px 9px,
+    #34302a 9px 10.5px,
+    transparent 10.5px 14px
+  );
+}
+
+.rcp-serial {
+  margin: 0;
+  text-align: center;
+  font-size: 8px;
+  letter-spacing: 0.2em;
+  color: #a29a88;
+  font-variant-numeric: tabular-nums;
+}
+
+.rcp-foot {
+  margin: 9px 0 0;
+  text-align: center;
+  font-family: var(--cn-serif);
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  color: #8d8676;
+}
+
+.rcp-stamp {
+  position: absolute;
+  right: 12px;
+  top: 43px;
+  width: 61px;
+  height: 61px;
+  display: grid;
+  place-items: center;
+  border: 2.5px solid var(--accent);
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 2px #f9f3e4, inset 0 0 0 3.5px var(--accent);
+  color: var(--accent);
+  font-family: var(--cn-serif);
+  font-size: 12.5px;
+  letter-spacing: 0.08em;
+  text-indent: 0.08em;
+  opacity: 0;
+  transform: rotate(-12deg) scale(2.3);
+  mix-blend-mode: multiply;
+}
+
+.rcp-stamp.is-in {
+  animation: rcpStamp 440ms cubic-bezier(0.2, 1.25, 0.4, 1) forwards;
+}
+
+/* 出票口本体 */
+.rcp-slot {
+  position: relative;
+  width: 244px;
+  height: 13px;
+  border-radius: 0 0 4px 4px;
+  background: linear-gradient(180deg, #0a0c0d 0%, #24282b 62%, #30353a 100%);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.75), 0 1px 0 rgba(255, 255, 255, 0.05);
+  animation: rcpSlot 260ms cubic-bezier(0.3, 1.2, 0.5, 1) 520ms;
+}
+
+.rcp-slot-lip {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 2px;
+  background: rgba(0, 0, 0, 0.85);
+}
+
+.rcp-coin {
+  position: absolute;
+  left: 50%;
+  bottom: 7px;
+  margin-left: -16px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-family: var(--serif);
+  font-size: 15px;
+  font-weight: 600;
+  color: #6b3a25;
+  background: radial-gradient(circle at 34% 28%, #f4dcaf, #d9aa61 62%, #b0823c);
+  box-shadow: inset 0 -2px 3px rgba(120, 80, 30, 0.4), 0 8px 14px rgba(0, 0, 0, 0.42);
+  animation: rcpCoin 580ms cubic-bezier(0.34, 1.35, 0.64, 1) forwards;
+}
+
+.rcp-hint {
+  margin: 0;
+  font-size: 9.5px;
+  letter-spacing: 0.2em;
+  color: rgba(243, 239, 230, 0.3);
+}
+
+@keyframes rcpCapIn {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes rcpCoin {
+  0% {
+    transform: translateY(-172px) scale(0.5) rotateY(0deg);
+    opacity: 0;
+  }
+  14% {
+    opacity: 1;
+  }
+  34% {
+    transform: translateY(-118px) scale(1.12) rotateY(360deg);
+    opacity: 1;
+  }
+  78% {
+    transform: translateY(-6px) scale(0.96) rotateY(900deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(9px) scale(0.3) rotateY(1080deg);
+    opacity: 0;
+  }
+}
+
+@keyframes rcpSlot {
+  0%,
+  100% {
+    transform: scaleY(1);
+  }
+  45% {
+    transform: scaleY(0.78) translateY(1px);
+  }
+}
+
+@keyframes rcpPrint {
+  0% {
+    clip-path: inset(100% 0 0 0);
+    transform: translateY(6px);
+  }
+  100% {
+    clip-path: inset(0 0 0 0);
+    transform: none;
+  }
+}
+
+@keyframes rcpStamp {
+  0% {
+    transform: rotate(-12deg) scale(2.3);
+    opacity: 0;
+  }
+  62% {
+    transform: rotate(-12deg) scale(0.9);
+    opacity: 1;
+  }
+  80% {
+    transform: rotate(-12deg) scale(1.05);
+  }
+  100% {
+    transform: rotate(-12deg) scale(1);
+    opacity: 1;
+  }
 }
 
 /* ---------- forms ---------- */

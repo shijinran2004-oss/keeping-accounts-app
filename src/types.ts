@@ -187,6 +187,23 @@ export interface SparkSummaryProps {
   comparePct: number | null
 }
 
+/** 记账成功小票上的数据 */
+export interface ReceiptData {
+  /** 金额，单位：分 */
+  amount: number
+  categoryName: string
+  categoryIcon: IconKey
+  /** 分类磁贴底色 */
+  categoryColor: string
+  note: string
+  /** 形如 2026-11-10 18:30 */
+  dateTime: string
+  /** 连续记账天数 */
+  streak: number
+  /** 新增还是编辑 */
+  mode: 'create' | 'edit'
+}
+
 /** 轻提示样式 */
 export type ToastTone = 'default' | 'success' | 'error'
 

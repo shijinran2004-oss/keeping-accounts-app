@@ -21,6 +21,7 @@ shijinran-money/
 │  │  ├─ Money.tsx        金额渲染（分 → 千分位 + 小数弱化）
 │  │  ├─ Charts.tsx       手写 SVG 柱状图 / 环形图
 │  │  ├─ SparkSummary.tsx 明细页趋势横条（描边生长 + 面积淡入 + 末点呼吸光斑）
+│  │  ├─ SuccessReceipt.tsx 记账成功小票（金币落槽 → 出票 → 砸章）
 │  │  ├─ MorphSheet.tsx   形变弹层容器（从 + 号按钮长成面板，收起时缩回）
 │  │  ├─ Sheet.tsx        常规底部弹层（预算、分类等）
 │  │  └─ …                TxRow / TabBar / Toast / Empty / SectionTitle / Icon
@@ -28,7 +29,7 @@ shijinran-money/
 │  │  ├─ index.ts         统一出口
 │  │  ├─ money.ts         金额格式化与解析（单位：分）
 │  │  ├─ date.ts          本地日期运算（周一为周首）
-│  │  ├─ stats.ts         区间筛选、分类汇总、资金口径 moneyFlow
+│  │  ├─ stats.ts         区间筛选、分类汇总、资金口径 moneyFlow、连续记账天数 streakDays
 │  │  ├─ haptics.ts       触感反馈（Capacitor）
 │  │  └─ modalStack.ts    弹层栈，供返回键关闭
 │  └─ styles/app.css      单一样式表，文件头有分区目录
