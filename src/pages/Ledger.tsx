@@ -1,11 +1,11 @@
 import { useMemo, useState } from 'react'
 import { ChevronLeft, ChevronRight, ReceiptText } from 'lucide-react'
 import { useLedger } from '../data'
-import { addMonths, formatDay, formatMonth, monthKey, monthRange, relativeDay, todayStr, weekdayLabel } from '../utils'
-import { groupByDay, inRange, sumAmount, summarize } from '../utils'
+import { addDays, addMonths, daysInMonth, formatDay, formatMonth, monthKey, monthRange, parseDate, relativeDay, todayStr, weekdayLabel } from '../utils'
+import { dailySeries, groupByDay, inRange, moneyFlow, sumAmount, summarize } from '../utils'
 import { findCategory } from '../data'
 import type { TransactionFilter, Tx, TxType } from '../types'
-import { Empty, Money, TxRow } from '../components'
+import { Empty, Money, SparkSummary, TxRow } from '../components'
 
 export function Ledger({ onEdit, onAdd }: { onEdit: (tx: Tx) => void; onAdd: () => void }) {
   const { state } = useLedger()
@@ -24,6 +24,16 @@ export function Ledger({ onEdit, onAdd }: { onEdit: (tx: Tx) => void; onAdd: () 
   )
   const groups = useMemo(() => Array.from(groupByDay(shown).entries()), [shown])
   const isCurrent = monthKey(anchor) >= monthKey(todayStr())
+
+  // 迷你趋势：本月每天的支出（当月只画到今天），和上月同期做个对比
+  const flow = moneyFlow(state.settings, monthTxs, anchor)
+  const points = dailySeries(monthTxs, range.start, isCurrent ? todayStr() : range.end).map((d) => d.amount)
+  const prevStart = monthRange(addMonths(anchor, -1)).start
+  const prevDays = isCurrent
+    ? Math.min(parseDate(todayStr()).getDate(), daysInMonth(prevStart))
+    : daysInMonth(prevStart)
+  const prevSpent = sumAmount(inRange(state.txs, prevStart, addDays(prevStart, prevDays - 1)), 'expense')
+  const comparePct = prevSpent > 0 ? ((sum.expense - prevSpent) / prevSpent) * 100 : null
 
   return (
     <div className="page ledger">
@@ -48,20 +58,15 @@ export function Ledger({ onEdit, onAdd }: { onEdit: (tx: Tx) => void; onAdd: () 
         </div>
       </header>
 
-      <div className="card ledger-sum">
-        <div>
-          <span>支出</span>
-          <b><Money cents={sum.expense} decimals="auto" /></b>
-        </div>
-        <div>
-          <span>收入</span>
-          <b className="is-income"><Money cents={sum.income} decimals="auto" /></b>
-        </div>
-        <div>
-          <span>收支差</span>
-          <b><Money cents={sum.income - sum.expense} decimals="auto" /></b>
-        </div>
-      </div>
+      <SparkSummary
+        label="本月支出"
+        spent={sum.expense}
+        income={sum.income}
+        balance={sum.income - sum.expense}
+        spentPct={flow.spentPct}
+        points={points}
+        comparePct={comparePct}
+      />
 
       <div className="filter-row" role="tablist" aria-label="筛选">
         {(['all', 'expense', 'income'] as TransactionFilter[]).map((f) => (

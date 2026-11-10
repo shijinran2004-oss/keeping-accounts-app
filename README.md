@@ -35,7 +35,7 @@ src/
   types.ts              全部类型与接口（唯一一份）
   data/                 数据层：index.ts 统一出口 → store.tsx / categories.ts
   pages/                Home / Ledger / Stats / Me / AddSheet / Onboarding
-  components/           Money、TxRow、Charts、MorphSheet（形变弹层）、Sheet、TabBar、Toast、Icon
+  components/           Money、TxRow、Charts、SparkSummary（明细页趋势横条）、MorphSheet、Sheet、TabBar、Toast、Icon
   utils/                money、date、stats、haptics、modalStack（index.ts 统一出口）
   styles/app.css        单一样式表，文件头有分区目录
 android/                Capacitor 生成的 Android 工程（已配好 SDK 35 / AGP 8.7.2）
@@ -84,6 +84,8 @@ JAVA_HOME='C:\Program Files\Java\jdk-17' /c/Android/gradle-8.9/bin/gradle.bat -p
 记一笔是一块「会变形的面板」：点底部中间的加号，那个圆形按钮原地长成整块深色面板（位置、宽高、圆角同一个元素补间，内容延后淡入），收起时再缩回按钮里。面板里是计算器式键盘，`128.5+45` 这样的算式会实时折算出「= ¥173.50」，保存后按钮变成「✓ 已记一笔」再收起。整块面板的配色是纸面上的深色对比面：炭黑 `#15181A` + 薄荷绿 `#2FBF87`，与正文的朱砂不冲突。
 
 数字会「跳」：每敲一键，金额整体上跳 2.5px、放大到 1.045 倍再落回（210ms，Web Animations，连打会重跑而不是叠加）；换分类时分类磁贴轻微弹一下，出现算式时「= ¥总计」从下方滑入。系统开了减少动态效果时，这些都会自动关掉。
+
+明细页顶部是一条趋势横条，替掉原来的「支出 / 收入 / 收支差」三栏：左边是本月支出、占可支配的比例、收入与收支差，右边一条 42px 高的迷你曲线画这个月每天的支出。进页面时按路径长度做描边生长（1.15s，Web Animations，先量 `getTotalLength()` 再跑关键帧，避免首帧反向闪一下），面积渐变晚 80ms 淡入，末点有一个呼吸光斑，卡片上还有一层 5.6s 一轮的扫光。空月份曲线会转成灰色细线、不显示光斑。
 
 
 ## 参考的开源项目

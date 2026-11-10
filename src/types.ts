@@ -170,6 +170,23 @@ export interface DonutSlice {
   color: string
 }
 
+/** 明细页顶部迷你趋势卡（横条） */
+export interface SparkSummaryProps {
+  label: string
+  /** 本期支出，单位：分 */
+  spent: number
+  /** 本期收入，单位：分 */
+  income: number
+  /** 收入 − 支出，单位：分 */
+  balance: number
+  /** 日常支出占可支配的百分比 */
+  spentPct: number
+  /** 每日支出序列，单位：分 */
+  points: number[]
+  /** 相比上月同期的变化百分比；无上月数据时为 null */
+  comparePct: number | null
+}
+
 /** 轻提示样式 */
 export type ToastTone = 'default' | 'success' | 'error'
 

@@ -20,6 +20,7 @@ shijinran-money/
 │  │  ├─ index.ts         统一出口
 │  │  ├─ Money.tsx        金额渲染（分 → 千分位 + 小数弱化）
 │  │  ├─ Charts.tsx       手写 SVG 柱状图 / 环形图
+│  │  ├─ SparkSummary.tsx 明细页趋势横条（描边生长 + 面积淡入 + 末点呼吸光斑）
 │  │  ├─ MorphSheet.tsx   形变弹层容器（从 + 号按钮长成面板，收起时缩回）
 │  │  ├─ Sheet.tsx        常规底部弹层（预算、分类等）
 │  │  └─ …                TxRow / TabBar / Toast / Empty / SectionTitle / Icon

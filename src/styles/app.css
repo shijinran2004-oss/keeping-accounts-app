@@ -724,34 +724,227 @@ textarea:focus-visible {
   padding: 0 2px;
 }
 
-.ledger-sum {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
-  padding: 14px 16px;
+.spark-card {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+  overflow: hidden;
+  padding: 12px 14px 11px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--card);
+  box-shadow: 0 1px 2px rgba(33, 31, 26, 0.035), 0 8px 20px rgba(33, 31, 26, 0.035);
 }
 
-.ledger-sum div {
+.spark-main {
+  position: relative;
+  z-index: 1;
   display: flex;
+  flex: 1 1 auto;
   flex-direction: column;
-  gap: 3px;
+  gap: 2px;
   min-width: 0;
 }
 
-.ledger-sum span {
-  font-size: 9.5px;
-  color: var(--ink-3);
+.spark-top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
-.ledger-sum b {
-  font-family: var(--serif);
-  font-size: 16.5px;
-  font-weight: 500;
+.spark-label {
+  font-size: 10px;
+  color: var(--ink-3);
+  letter-spacing: 0.03em;
   white-space: nowrap;
 }
 
-.ledger-sum b .money-sym {
+.spark-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 15px;
+  padding: 0 6px 0 5px;
+  border-radius: 999px;
+  background: rgba(33, 31, 26, 0.05);
+  color: var(--ink-2);
+  font-size: 9px;
+  font-variant-numeric: tabular-nums;
+}
+
+.spark-badge.is-over {
+  background: rgba(194, 86, 59, 0.12);
+  color: var(--accent-deep);
+}
+
+.spark-badge-dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--moss);
+}
+
+.spark-badge.is-over .spark-badge-dot {
+  background: var(--accent);
+}
+
+.spark-figure {
+  font-family: var(--serif);
+  font-size: 21px;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+}
+
+.spark-figure .money-sym {
+  font-size: 10.5px;
+  margin-right: 1px;
+}
+
+.spark-meta {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  overflow: hidden;
   font-size: 9.5px;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+
+.spark-meta .money {
+  font-family: var(--serif);
+  font-size: 10px;
+  color: var(--ink-2);
+}
+
+.spark-sep {
+  opacity: 0.45;
+}
+
+.spark-viz {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex: 0 0 40%;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
+  min-width: 92px;
+}
+
+.spark-svg-wrap {
+  position: relative;
+  height: 42px;
+}
+
+.spark-svg-wrap svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.spark-grid {
+  fill: none;
+  stroke: var(--line);
+  stroke-width: 1;
+  stroke-dasharray: 2 3;
+  vector-effect: non-scaling-stroke;
+}
+
+.spark-area {
+  transition: opacity 0.9s ease 0.12s;
+}
+
+.spark-line {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.spark-line.is-empty {
+  stroke: var(--ink-3);
+  opacity: 0.45;
+}
+
+.spark-dot,
+.spark-dot-halo {
+  position: absolute;
+  right: 1px;
+  border-radius: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.spark-dot {
+  width: 5px;
+  height: 5px;
+  background: var(--accent);
+  box-shadow: 0 0 0 2px var(--card);
+}
+
+.spark-dot-halo {
+  width: 11px;
+  height: 11px;
+  background: rgba(194, 86, 59, 0.2);
+  animation: sparkPulse 2.6s ease-in-out infinite;
+}
+
+.spark-cmp {
+  font-size: 8.5px;
+  color: var(--ink-3);
+  letter-spacing: 0.01em;
+  text-align: right;
+}
+
+.spark-cmp b {
+  margin-left: 2px;
+  font-weight: 500;
+}
+
+.spark-cmp b.is-down {
+  color: var(--moss);
+}
+
+.spark-cmp b.is-up {
+  color: var(--accent);
+}
+
+.spark-sheen {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 38%;
+  background: linear-gradient(100deg, transparent 0%, rgba(255, 252, 245, 0.55) 50%, transparent 100%);
+  pointer-events: none;
+  animation: sparkSheen 5.6s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+}
+
+@keyframes sparkPulse {
+  0%,
+  100% {
+    transform: translateY(-50%) scale(1);
+    opacity: 0.6;
+  }
+  50% {
+    transform: translateY(-50%) scale(1.7);
+    opacity: 0;
+  }
+}
+
+@keyframes sparkSheen {
+  0% {
+    transform: translateX(-130%);
+  }
+  55%,
+  100% {
+    transform: translateX(330%);
+  }
 }
 
 .filter-row {
