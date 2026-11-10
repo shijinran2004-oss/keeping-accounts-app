@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { CalendarDays, Check, Delete, Trash2, X } from 'lucide-react'
 import { useLedger } from '../data'
 import type { AmountSeed, Tx, TxType } from '../types'
@@ -38,6 +38,32 @@ export function AddSheet({
   const [date, setDate] = useState(todayStr())
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [saved, setSaved] = useState(false)
+
+  // 数字跳跃：每次敲键让金额整体上跳一下再落回，连打时重跑而不是叠加
+  const figureRef = useRef<HTMLDivElement>(null)
+  const popAnim = useRef<Animation | null>(null)
+  const lastExpr = useRef('')
+
+  useEffect(() => {
+    if (!open) {
+      lastExpr.current = ''
+      return
+    }
+    if (lastExpr.current === expr) return
+    lastExpr.current = expr
+    const el = figureRef.current
+    if (!el) return
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
+    popAnim.current?.cancel()
+    popAnim.current = el.animate(
+      [
+        { transform: 'translateY(0) scale(1)' },
+        { transform: 'translateY(-2.5px) scale(1.045)', offset: 0.42 },
+        { transform: 'translateY(0) scale(1)' },
+      ],
+      { duration: 210, easing: 'cubic-bezier(.2,.9,.3,1)' },
+    )
+  }, [expr, open])
 
   const pickCategory = (next: TxType) => {
     const list = state.categories.filter((c) => c.type === next)
@@ -173,6 +199,7 @@ export function AddSheet({
           <div className="qa-cat">
             <span
               className="qa-tile"
+              key={current?.id ?? 'none'}
               style={{ background: current?.color ?? 'var(--mint)' } as React.CSSProperties}
               aria-hidden="true"
             >
@@ -192,7 +219,10 @@ export function AddSheet({
           </div>
 
           <div className="qa-amount">
-            <div className={`qa-figure ${expr ? '' : 'is-empty'} ${expr.length > 10 ? 'is-long' : ''}`}>
+            <div
+              className={`qa-figure ${expr ? '' : 'is-empty'} ${expr.length > 10 ? 'is-long' : ''}`}
+              ref={figureRef}
+            >
               <span className="qa-yen">¥</span>
               {parts.length === 0 ? (
                 <span className="qa-num">0</span>
