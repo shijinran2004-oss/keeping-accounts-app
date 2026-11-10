@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">使劲燃的钱</string>
+    <string name="title_activity_main">使劲燃的钱</string>
+    <string name="package_name">com.shijinran.money</string>
+    <string name="custom_url_scheme">com.shijinran.money</string>
+</resources>
