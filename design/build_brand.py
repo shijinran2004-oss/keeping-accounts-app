@@ -36,8 +36,9 @@ FONT_REGULAR = FONT_DIR / "HarmonyOS_Sans_SC_Regular.ttf"
 FONT_FALLBACK = Path("C:/Windows/Fonts/simsun.ttc")
 SS = 4  # 超采样倍数
 
-# 自适应图标：内容要落在 72/108 的安全区里，留出被裁成圆形/方形的余量
-FG_RATIO = 0.64
+# 自适应图标：圆形遮罩的可见直径是 72/108，图形包围盒的对角线必须小于它才不会被切角
+# art 宽高比 ≈ 0.835 → 对角线 = 1.303 × 高；0.51 正好内切，取 0.50 再留一点余量
+FG_RATIO = 0.54
 # 桌面图标里图形的占比（其余是纸色留白）
 ICON_RATIO = 0.74
 

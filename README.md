@@ -67,7 +67,7 @@ JAVA_HOME='C:\Program Files\Java\jdk-17' /c/Android/gradle-8.9/bin/gradle.bat -p
 
 > 当前为 debug 签名，可直接侧载安装；上架应用商店需要换成自己的 release keystore。
 
-图标源图是一张贴纸，脚本会先洪泛抠掉白底再排版；系统开了「主题图标」时，安卓会用自己的取色替换底色、走脚本生成的 `ic_launcher_monochrome` 单色层，这是系统行为，不是图标本身的问题。
+图标源图是一张贴纸，脚本会先洪泛抠掉白底再排版；自适应图标的前景只占画布的 54%（圆形遮罩可见直径是 72/108，图形包围盒对角线要小于它），所以桌面上的小狗是完整的、四边都有留白，不会被圆角或圆形切掉；系统开了「主题图标」时，安卓会用自己的取色替换底色、走脚本生成的 `ic_launcher_monochrome` 单色层，这是系统行为，不是图标本身的问题。
 改 App 名字或配色时：改 `design/build_brand.py` 顶部的常量 → `python design/build_brand.py` → 重新 `cap copy` 并打包，图标、各密度启动图、favicon 会一起更新。
 换图标就替换 `design/icon-src/mascot.png`（带白底的手绘贴纸也行，脚本会自己抠白底）：先洪泛抠图 → 缩进纸色圆角卡片 → 铺 5 个密度的自适应图标、圆形图标、单色主题图标，再生成 11 张启动图和 favicon。
 
