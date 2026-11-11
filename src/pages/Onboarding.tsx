@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { ShieldCheck } from 'lucide-react'
 import { useLedger } from '../data'
+import { Seal } from '../components'
 import { parseYuan } from '../utils'
 import { tapSuccess } from '../utils'
 
@@ -27,7 +28,7 @@ export function Onboarding() {
   return (
     <div className="onboarding">
       <header className="ob-top">
-        <span className="seal">燃</span>
+        <Seal />
         <span className="ob-brand">使劲燃的钱</span>
         <span className="ob-year">2026</span>
       </header>

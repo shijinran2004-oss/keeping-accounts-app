@@ -2,6 +2,7 @@
  * 通用组件统一出口。页面按需取用：import { Money, Sheet } from '../components'
  */
 export { Money } from './Money'
+export { Seal } from './Seal'
 export { TxRow } from './TxRow'
 export { Empty } from './Empty'
 export { SectionTitle } from './SectionTitle'

@@ -170,6 +170,16 @@ export interface DonutSlice {
   color: string
 }
 
+/** 小狗印章的尺寸档位 */
+export type SealSize = 'sm' | 'lg' | 'mini'
+
+/** 页头 / 我的页 / 引导页 / 小票上的小狗印章 */
+export interface SealProps {
+  size?: SealSize
+  /** 额外类名，用于局部微调（如小票里的发光版） */
+  className?: string
+}
+
 /** 明细页顶部迷你趋势卡（横条） */
 export interface SparkSummaryProps {
   label: string

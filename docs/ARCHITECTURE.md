@@ -23,6 +23,7 @@ shijinran-money/
 │  │  ├─ SparkSummary.tsx 明细页趋势横条（描边生长 + 面积淡入 + 末点呼吸光斑）
 │  │  ├─ SuccessReceipt.tsx 记账成功小票（金币落槽 → 出票 → 砸章）
 │  │  ├─ MorphSheet.tsx   形变弹层容器（从 + 号按钮长成面板，收起时缩回）
+│  │  ├─ Seal.tsx         小狗印章（页头 / 我的 / 引导页 / 小票共用，尺寸三档）
 │  │  ├─ Sheet.tsx        常规底部弹层（预算、分类等）
 │  │  └─ …                TxRow / TabBar / Toast / Empty / SectionTitle / Icon
 │  ├─ utils/             纯函数
@@ -33,6 +34,8 @@ shijinran-money/
 │  │  ├─ haptics.ts       触感反馈（Capacitor）
 │  │  └─ modalStack.ts    弹层栈，供返回键关闭
 │  ├─ assets/fonts/       随包分发的中文字体子集（鸿蒙 Sans SC ×3 字重 + Nunito）
+│  ├─ assets/mascot-head.png 印章用的头部贴纸（由 build_brand.py 裁剪生成）
+│  ├─ vite-env.d.ts       只为 png / woff2 等打包资源提供类型，不放业务类型
 │  └─ styles/app.css      单一样式表，文件头有分区目录
 ├─ android/               Capacitor 生成的 Android 工程（SDK 35 / AGP 8.7.2）
 ├─ design/build_brand.py  图标 / 启动图 / favicon 生成脚本（抠白底、遮罩、各密度一次铺完）

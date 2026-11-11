@@ -20,7 +20,7 @@ import type { Category, TxType } from '../types'
 import type { CSSProperties } from 'react'
 import type { LucideIcon } from 'lucide-react'
 import { Clipboard as CapClipboard } from '@capacitor/clipboard'
-import { CategoryIcon, SectionTitle, Sheet, useToast } from '../components'
+import { CategoryIcon, Seal, SectionTitle, Sheet, useToast } from '../components'
 
 export function Me() {
   const { state, clearTxs, resetAll } = useLedger()
@@ -42,7 +42,7 @@ export function Me() {
       </header>
 
       <section className="profile-card">
-        <span className="seal large" aria-hidden="true">燃</span>
+        <Seal size="lg" />
         <div className="profile-main">
           <h2>使劲燃的钱</h2>
           <p>每一笔，都算数</p>
@@ -94,7 +94,7 @@ export function Me() {
       </section>
 
       <footer className="me-foot">
-        <span className="seal mini" aria-hidden="true">燃</span>
+        <Seal size="mini" />
         <div>
           <b>使劲燃的钱 v1.0.0</b>
           <p><ShieldCheck size={13} strokeWidth={1.6} /> 数据只保存在这台手机上，不上传</p>

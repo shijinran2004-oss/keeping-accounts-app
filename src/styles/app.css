@@ -181,32 +181,47 @@ textarea:focus-visible {
 /* ---------- brand / header ---------- */
 
 .seal {
+  position: relative;
   display: grid;
   place-items: center;
   width: 38px;
   height: 38px;
   border-radius: 11px;
-  background: var(--accent);
-  color: #fff8ee;
-  font-family: var(--display);
-  font-size: 21px;
-  line-height: 1;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14);
+  overflow: hidden;
+  background: var(--card);
+  box-shadow: 0 1px 0 rgba(33, 31, 26, 0.05);
   flex: none;
+}
+
+/* 朱砂细线画在图形之上，才不会被贴纸盖住 */
+.seal::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 1.5px var(--accent);
+  pointer-events: none;
+}
+
+/* 用裁好的头部贴纸（src/assets/mascot-head.png），小尺寸也认得出是谁 */
+.seal img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  -webkit-user-drag: none;
 }
 
 .seal.large {
   width: 52px;
   height: 52px;
   border-radius: 15px;
-  font-size: 28px;
 }
 
 .seal.mini {
   width: 27px;
   height: 27px;
   border-radius: 8px;
-  font-size: 14px;
 }
 
 .home-head,
@@ -2586,17 +2601,10 @@ textarea:focus-visible {
 }
 
 .rcp-seal {
-  width: 44px;
-  height: 44px;
-  border-radius: 12px;
-  display: grid;
-  place-items: center;
-  background: linear-gradient(150deg, #c2563b, #a8482f);
-  color: #fff4e3;
-  font-family: var(--display);
-  font-size: 22px;
-  line-height: 1;
-  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.38), inset 0 0 0 1px rgba(255, 244, 227, 0.22);
+  width: 46px;
+  height: 46px;
+  border-radius: 13px;
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.42), inset 0 0 0 1.5px var(--accent);
 }
 
 .rcp-cap-text {
@@ -2781,19 +2789,28 @@ textarea:focus-visible {
   top: 43px;
   width: 61px;
   height: 61px;
-  display: grid;
-  place-items: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
   border: 2.5px solid var(--accent);
   border-radius: 50%;
   box-shadow: inset 0 0 0 2px #f9f3e4, inset 0 0 0 3.5px var(--accent);
   color: var(--accent);
-  font-family: var(--display);
-  font-size: 12.5px;
-  letter-spacing: 0.08em;
-  text-indent: 0.08em;
   opacity: 0;
   transform: rotate(-12deg) scale(2.3);
   mix-blend-mode: multiply;
+}
+
+/* 爪印在上，字在下，像盖的一枚小章 */
+.rcp-stamp b {
+  font-family: var(--display);
+  font-size: 9.5px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-indent: 0.04em;
+  line-height: 1;
 }
 
 .rcp-stamp.is-in {

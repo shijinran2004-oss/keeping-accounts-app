@@ -6,7 +6,7 @@ import { daysInMonth, formatMonth, greeting, todayStr } from '../utils'
 import { formatMoneyShort, formatPercent } from '../utils'
 import { EXPENSE_CATEGORIES, findCategory } from '../data'
 import type { Tx } from '../types'
-import { CategoryIcon, Empty, Money, SectionTitle, TxRow } from '../components'
+import { CategoryIcon, Empty, Money, Seal, SectionTitle, TxRow } from '../components'
 
 export function Home({
   onAdd,
@@ -47,7 +47,7 @@ export function Home({
     <div className="page home">
       <header className="home-head">
         <div className="brand">
-          <span className="seal" aria-hidden="true">燃</span>
+          <Seal />
           <div>
             <h1>使劲燃的钱</h1>
             <p>{formatMonth(today)} · {greeting()}</p>

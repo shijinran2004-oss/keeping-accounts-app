@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
+import { PawPrint } from 'lucide-react'
 import { CategoryIcon } from './Icon'
+import { Seal } from './Seal'
 import { formatMoney, tap, tapSuccess } from '../utils'
 import type { ReceiptData } from '../types'
 
@@ -53,9 +55,7 @@ export function SuccessReceipt({ data, onDone }: { data: ReceiptData; onDone: ()
       aria-label="记账成功，轻点收起"
     >
       <div className="rcp-cap">
-        <span className="rcp-seal" aria-hidden="true">
-          燃
-        </span>
+        <Seal className="rcp-seal" />
         <span className="rcp-cap-text">{data.mode === 'create' ? '这一笔记下了' : '这一笔改好了'}</span>
       </div>
 
@@ -98,7 +98,8 @@ export function SuccessReceipt({ data, onDone }: { data: ReceiptData; onDone: ()
             <p className="rcp-foot">每一笔，都算数</p>
 
             <span className={`rcp-stamp ${stage === 'done' || stage === 'out' ? 'is-in' : ''}`}>
-              {data.mode === 'create' ? '已入账' : '已更新'}
+              <PawPrint size={17} strokeWidth={2.1} aria-hidden="true" />
+              <b>{data.mode === 'create' ? '已入账' : '已更新'}</b>
             </span>
           </article>
         </div>
