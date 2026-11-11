@@ -203,12 +203,12 @@ textarea:focus-visible {
   pointer-events: none;
 }
 
-/* 用裁好的头部贴纸（src/assets/mascot-head.png），小尺寸也认得出是谁 */
+/* 与桌面图标同一张构图（src/assets/mascot.png：方块画布 + 整张贴纸），不裁切 */
 .seal img {
   display: block;
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
   -webkit-user-drag: none;
 }
 

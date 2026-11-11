@@ -34,7 +34,7 @@ shijinran-money/
 │  │  ├─ haptics.ts       触感反馈（Capacitor）
 │  │  └─ modalStack.ts    弹层栈，供返回键关闭
 │  ├─ assets/fonts/       随包分发的中文字体子集（鸿蒙 Sans SC ×3 字重 + Nunito）
-│  ├─ assets/mascot-head.png 印章用的头部贴纸（由 build_brand.py 裁剪生成）
+│  ├─ assets/mascot.png 印章用的小图（与桌面图标同构图，由 build_brand.py 生成）
 │  ├─ vite-env.d.ts       只为 png / woff2 等打包资源提供类型，不放业务类型
 │  └─ styles/app.css      单一样式表，文件头有分区目录
 ├─ android/               Capacitor 生成的 Android 工程（SDK 35 / AGP 8.7.2）

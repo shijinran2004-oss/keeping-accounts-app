@@ -108,36 +108,15 @@ def load_mascot() -> Image.Image:
     return art
 
 
-def seal_head(art: Image.Image, size: int = 320) -> Image.Image:
-    """印章用的小图：只留头部，擦掉花和项圈，缩到 size×size。
+def seal_sticker(art: Image.Image, size: int = 512) -> Image.Image:
+    """App 内的印章小图：与桌面图标同一套构图 —— 方块画布，整张贴纸按 ICON_RATIO 居中。
 
-    整张贴纸缩到 38px 就只剩一团墨点，所以界面上单独用这张头部图。
+    不裁头也不切花，缩到 27px 也是个完整的小狗剪影。
     """
-    w, h = art.size
-    head = art.crop((int(w * 0.055), 0, int(w * 0.915), int(h * 0.58))).copy()
-    wipe = Image.new("L", head.size, 0)
-    d = ImageDraw.Draw(wipe)
-    d.rectangle((int(head.width * 0.78), int(head.height * 0.60), head.width, head.height), fill=255)
-    d.rectangle((0, int(head.height * 0.80), int(head.width * 0.30), head.height), fill=255)
-    d.rectangle((0, int(head.height * 0.62), int(head.width * 0.05), head.height), fill=255)
-    head = Image.composite(Image.new("RGBA", head.size, (0, 0, 0, 0)), head, wipe)
-
-    # 底部残留的有色碎片（项圈、花瓣尖）按饱和度清掉，黑色线条保留
-    px = head.load()
-    for y in range(int(head.height * 0.72), head.height):
-        for x in range(head.width):
-            r, g, b, a = px[x, y]
-            if a == 0:
-                continue
-            mx, mn = max(r, g, b), min(r, g, b)
-            if mx and (mx - mn) / mx > 0.22:
-                px[x, y] = (0, 0, 0, 0)
-
-    side = max(head.size)
-    pad = int(side * 0.03)
-    canvas = Image.new("RGBA", (side + pad * 2, side + pad * 2), (0, 0, 0, 0))
-    canvas.alpha_composite(head, ((canvas.width - head.width) // 2,
-                                  (canvas.height - head.height) // 2))
+    s = size * SS
+    canvas = Image.new("RGBA", (s, s), (0, 0, 0, 0))
+    piece = fit(art, int(s * ICON_RATIO))
+    canvas.alpha_composite(piece, ((s - piece.width) // 2, (s - piece.height) // 2))
     return canvas.resize((size, size), Image.LANCZOS)
 
 
@@ -333,8 +312,8 @@ def main() -> None:
     docs.mkdir(parents=True, exist_ok=True)
     preview_sheet(art).save(docs / "icon-preview.png")
 
-    # App 内的印章：只用头部
-    seal_head(art).save(ROOT / "src" / "assets" / "mascot-head.png", optimize=True)
+    # App 内的印章：与图标同构图（整张贴纸，不裁切）
+    seal_sticker(art).save(ROOT / "src" / "assets" / "mascot.png", optimize=True)
 
     # 浏览器标签页：同一个图形
     icon(192, art).save(PUBLIC / "favicon-192.png")
