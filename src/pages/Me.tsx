@@ -1,8 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   ChevronRight,
   Clipboard,
   Download,
+  FileJson,
+  FolderOpen,
   Info,
   Plus,
   ReceiptText,
@@ -14,7 +16,18 @@ import {
 } from 'lucide-react'
 import { useLedger } from '../data'
 import { COLOR_CHOICES, ICON_CHOICES } from '../data'
-import { centsToYuanInput, formatMoney, parseYuan } from '../utils'
+import {
+  backupBytes,
+  backupFileName,
+  backupJson,
+  centsToYuanInput,
+  exportBackupFile,
+  formatBytes,
+  formatMoney,
+  parseYuan,
+  readBackupFile,
+  todayStr,
+} from '../utils'
 import { formatDay } from '../utils'
 import type { Category, TxType } from '../types'
 import type { CSSProperties } from 'react'
@@ -370,28 +383,72 @@ function DataSheet({
   const toast = useToast()
   const [mode, setMode] = useState<'export' | 'import'>('export')
   const [text, setText] = useState('')
+  const [pickedName, setPickedName] = useState('')
   const [confirmClear, setConfirmClear] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const fileRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (!open) return
     setMode('export')
     setText('')
+    setPickedName('')
     setConfirmClear(false)
+    setBusy(false)
   }, [open])
 
-  const backup = JSON.stringify(state, null, 2)
+  const json = backupJson(state)
+  const fileName = backupFileName(todayStr())
+  const bytes = backupBytes(json)
 
   const copy = async () => {
     try {
-      await navigator.clipboard.writeText(backup)
-      toast('备份已复制', 'success')
+      await navigator.clipboard.writeText(json)
+      toast('备份文本已复制', 'success')
     } catch {
       try {
-        await CapClipboard.write({ string: backup })
-        toast('备份已复制', 'success')
+        await CapClipboard.write({ string: json })
+        toast('备份文本已复制', 'success')
       } catch {
         toast('复制失败，请长按选择文本', 'error')
       }
+    }
+  }
+
+  const exportFile = async () => {
+    if (busy) return
+    setBusy(true)
+    try {
+      const res = await exportBackupFile(json, fileName)
+      toast(res === 'downloaded' ? '备份文件已下载' : '备份文件已生成', 'success')
+    } catch {
+      toast('导出失败，可以改用下面的文本备份', 'error')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const onFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    try {
+      const content = await readBackupFile(file)
+      setText(content)
+      setPickedName(file.name)
+      toast(`已读取 ${file.name}`, 'success')
+    } catch {
+      toast('读取失败，换一个文件试试', 'error')
+    }
+  }
+
+  const doImport = () => {
+    const res = importState(text)
+    if (res.ok) {
+      toast('账本已恢复', 'success')
+      onClose()
+    } else {
+      toast(res.error ?? '导入失败', 'error')
     }
   }
 
@@ -409,36 +466,56 @@ function DataSheet({
 
         {mode === 'export' ? (
           <>
-            <p className="hint">复制下面这段内容，保存到备忘录或电脑里。换手机时再粘贴回来即可。</p>
-            <textarea className="backup-area" readOnly value={backup} aria-label="备份内容" />
-            <button type="button" className="btn-primary" onClick={copy}>
-              <Clipboard size={16} strokeWidth={1.8} /> 复制备份
+            <div className="backup-card">
+              <div className="backup-file">
+                <FileJson size={20} strokeWidth={1.5} />
+                <div>
+                  <b>{fileName}</b>
+                  <span>
+                    {state.txs.length} 笔记录 · {state.categories.length} 个分类 · {formatBytes(bytes)}
+                  </span>
+                </div>
+              </div>
+              <button type="button" className="btn-primary" onClick={exportFile} disabled={busy}>
+                <Download size={16} strokeWidth={1.8} /> {busy ? '正在生成…' : '导出备份文件'}
+              </button>
+            </div>
+            <p className="hint">
+              导出后可以把文件发到微信、网盘或电脑上。换手机、重装 App 之后，切到「导入」选这个文件就能完整恢复。
+            </p>
+            <button type="button" className="btn-ghost block" onClick={copy}>
+              <Clipboard size={15} strokeWidth={1.7} /> 复制为文本备份
             </button>
           </>
         ) : (
           <>
-            <p className="hint">粘贴之前导出的备份内容，导入后会覆盖当前账本。</p>
+            <p className="hint">选择之前导出的 .json 文件；也可以把备份内容直接粘到下面的框里。导入会覆盖当前账本。</p>
+            <input
+              ref={fileRef}
+              type="file"
+              accept="application/json,.json"
+              className="file-input"
+              onChange={onFile}
+            />
+            <button type="button" className="btn-primary" onClick={() => fileRef.current?.click()}>
+              <FolderOpen size={16} strokeWidth={1.8} /> 选择备份文件
+            </button>
+            {pickedName ? (
+              <p className="backup-picked">
+                <FileJson size={14} strokeWidth={1.7} /> {pickedName}
+              </p>
+            ) : null}
             <textarea
               className="backup-area"
               value={text}
-              onChange={(e) => setText(e.target.value)}
+              onChange={(e) => {
+                setText(e.target.value)
+                setPickedName('')
+              }}
               placeholder='把备份内容粘贴到这里，形如 {"version":1,...}'
               aria-label="粘贴备份内容"
             />
-            <button
-              type="button"
-              className="btn-primary"
-              disabled={!text.trim()}
-              onClick={() => {
-                const res = importState(text)
-                if (res.ok) {
-                  toast('账本已恢复', 'success')
-                  onClose()
-                } else {
-                  toast(res.error ?? '导入失败', 'error')
-                }
-              }}
-            >
+            <button type="button" className="btn-primary" disabled={!text.trim()} onClick={doImport}>
               导入并覆盖
             </button>
           </>
@@ -446,7 +523,7 @@ function DataSheet({
 
         <div className="data-note">
           <Info size={15} strokeWidth={1.7} />
-          <p>数据保存在本机的应用存储里，卸载 App 会一起清除，记得偶尔备份。</p>
+          <p>数据保存在本机的应用存储里，卸载 App 会一起清除，记得偶尔导出一次备份。</p>
         </div>
 
         <div className="danger-zone">

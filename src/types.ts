@@ -223,3 +223,10 @@ export interface ToastItem {
   text: string
   tone: ToastTone
 }
+
+/* ============================================================
+ * 6. 备份文件
+ * ========================================================== */
+
+/** 导出结果：原生端走系统分享面板，浏览器直接下载 */
+export type BackupExportResult = 'shared' | 'downloaded'

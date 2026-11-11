@@ -31,6 +31,7 @@ shijinran-money/
 │  │  ├─ money.ts         金额格式化与解析（单位：分）
 │  │  ├─ date.ts          本地日期运算（周一为周首）
 │  │  ├─ stats.ts         区间筛选、分类汇总、资金口径 moneyFlow、连续记账天数 streakDays
+│  │  ├─ backup.ts        备份文件的生成 / 写入 / 分享 / 读取（文件名、JSON、字节数）
 │  │  ├─ haptics.ts       触感反馈（Capacitor）
 │  │  └─ modalStack.ts    弹层栈，供返回键关闭
 │  ├─ assets/fonts/       随包分发的中文字体子集（鸿蒙 Sans SC ×3 字重 + Nunito）
@@ -64,6 +65,7 @@ shijinran-money/
 | 加一个通用 UI 组件 | `src/components/Xxx.tsx` + 在 `components/index.ts` 导出 |
 | 加一个数据类型 / props 契约 | `src/types.ts` |
 | 加一个计算口径（如年统计） | `src/utils/stats.ts` |
+| 改备份文件名或导出方式 | `src/utils/backup.ts`（页面只调 `exportBackupFile` / `readBackupFile`） |
 | 加一个持久化字段 | `src/types.ts` 的 `LedgerState` + `store.tsx` 的 `freshState` / `normalize` |
 | 加内置分类 | `src/data/categories.ts` |
 
