@@ -6,7 +6,7 @@
 
 - 纯本地存储，不联网、不上传、无广告、无账号
 - 黑色 / 炭灰卡片 + iOS 绿强调的深色界面，鸿蒙 Sans 中文 + Nunito 圆体数字；版式参考 openGym，代码全部重写
-- 安装包：`release/使劲燃的钱-1.1.0.apk`（约 5.0 MB，minSdk 23 / targetSdk 35）
+- 安装包：`release/使劲燃的钱-1.1.1.apk`（约 5.0 MB，minSdk 23 / targetSdk 35）
 
 ## 功能
 
@@ -50,7 +50,8 @@ src/
   styles/app.css        结构、组件与基础样式
   styles/og.css         深色皮肤：token 覆盖、首页 / 底栏 / 各页面深色化（后加载）
 android/                Capacitor 生成的 Android 工程（已配好 SDK 35 / AGP 8.7.2）
-design/build_brand.py   图标 / 启动图 / favicon 生成脚本（源图在 design/icon-src/mascot.png）
+design/build_icon.py    桌面图标生成脚本（源图 design/icon-src/app-icon.png）
+design/build_brand.py   启动图 / App 内印章生成脚本（源图 design/icon-src/mascot.png）
 assets/icon/            1024px 品牌原图
 docs/                   架构说明 docs/ARCHITECTURE.md、截图 docs/screenshots/
 release/                可直接安装的 APK
@@ -78,9 +79,8 @@ JAVA_HOME='C:\Program Files\Java\jdk-17' /c/Android/gradle-8.9/bin/gradle.bat -p
 
 > 当前为 debug 签名，可直接侧载安装；上架应用商店需要换成自己的 release keystore。
 
-图标源图是一张贴纸，脚本会先洪泛抠掉白底再排版；自适应图标的前景只占画布的 54%（圆形遮罩可见直径是 72/108，图形包围盒对角线要小于它），所以桌面上的小狗是完整的、四边都有留白，不会被圆角或圆形切掉；系统开了「主题图标」时，安卓会用自己的取色替换底色、走脚本生成的 `ic_launcher_monochrome` 单色层，这是系统行为，不是图标本身的问题。
-改 App 名字或配色时：改 `design/build_brand.py` 顶部的常量 → `python design/build_brand.py` → 重新 `cap copy` 并打包，图标、各密度启动图、favicon 会一起更新。
-换图标就替换 `design/icon-src/mascot.png`（带白底的手绘贴纸也行，脚本会自己抠白底）：先洪泛抠图 → 缩进纸色圆角卡片 → 铺 5 个密度的自适应图标、圆形图标、单色主题图标，再生成 11 张启动图和 favicon。
+桌面图标和 App 里的印章是两套资产。桌面图标走 `design/build_icon.py`，源图是 `design/icon-src/app-icon.png`：从四个角洪泛抠掉白底、保留原图的圆角，再铺 5 个密度的传统图标、圆形图标、自适应前景和单色层，favicon 也一并更新。自适应前景补了一层同色模糊底再铺满 108dp，圆形或方圆遮罩裁切时不会露出白边。启动图和页头小狗印章仍走 `design/build_brand.py`，源图是 `design/icon-src/mascot.png`。
+换桌面图标：替换 `design/icon-src/app-icon.png` → `python design/build_icon.py` → `cap copy` 并重新打包。换启动图或印章：替换 `mascot.png` → `python design/build_brand.py`。两个脚本互不覆盖。系统开了「主题图标」时，安卓会用自己的取色走 `ic_launcher_monochrome` 单色层，这是系统行为，不是图标本身的问题。
 
 ## 截图
 
@@ -100,7 +100,7 @@ JAVA_HOME='C:\Program Files\Java\jdk-17' /c/Android/gradle-8.9/bin/gradle.bat -p
 
 保存之后不是直接收起，而是把面板当成一台小机器，出一张热敏小票：金币从上方旋着落进出票口（580ms，3D 翻转带一点回弹，落槽时槽口被压一下），小票从槽里升上来（820ms，用 `clip-path` 从下往上揭，读起来就是纸在往外走），小票上印着金额、分类、备注、时间、连续记账天数和一段条形码，1150ms 时一枚「爪印 + 已入账」的双圈绿章从右上角砸下来（放大 2.3 倍落回 1 倍，带一点过冲），停一会儿后整块淡出并收起面板，全程 2.6 秒。轻点任意处可以立刻收起。小票仍是奶油纸配炭黑面板，绿色章和 App 的强调色一致。编辑已有记录时印章换成「已更新」，标题换成「修改凭证」。
 
-品牌标记是那只抱花的小狗：页头、我的页、引导页和小票顶部都用同一枚印章——深色圆角卡片里放贴纸，外面一圈 1.5px 朱砂细线（线画在图形之上，不会被盖住）。小图用的是 `src/assets/mascot.png`（由 `design/build_brand.py` 按桌面图标同一套构图生成：方块画布 + 整张贴纸居中），所以印章里就是图标上那只完整的小狗，不裁头也不切花。
+品牌标记是那只抱花的小狗：页头、我的页、引导页和小票顶部都用同一枚印章——深色圆角卡片里放贴纸，外面一圈 1.5px 朱砂细线（线画在图形之上，不会被盖住）。小图用的是 `src/assets/mascot.png`（由 `design/build_brand.py` 从 `design/icon-src/mascot.png` 生成：方块画布 + 整张贴纸居中），和桌面图标是两套资产，印章里始终是那只完整的小狗，不裁头也不切花。
 
 「数据备份」弹层分导出、导入两个模式：导出页是一张文件名卡片（`使劲燃的钱-备份-日期.json` + 记录数 / 分类数 / 文件大小）加一个「导出备份文件」按钮，安卓走 `Filesystem` 写缓存再 `Share` 唤起系统分享面板，浏览器退化成 Blob 下载；导入页是「选择备份文件」+ 可编辑的文本框，两条路都行，读进来的内容先过一遍 `normalize()` 再整份覆盖。两个模式共用同一块弹层，切页不重开。
 

@@ -1,11 +1,11 @@
-"""生成「使劲燃的钱」的品牌图：桌面图标、自适应前景、启动图、favicon。
+"""生成「使劲燃的钱」的启动图与 App 内印章。桌面图标见 build_icon.py。
 
-图标用的是 design/icon-src/mascot.png（带白底的手绘贴纸），脚本会先把白底抠掉，
-再按 Android 各密度铺出去。改了源图或配色，重跑一次即可：
+只用 design/icon-src/mascot.png（带白底的手绘贴纸）：先把白底抠掉，再按 Android
+各密度生成启动图，并输出 App 内印章 src/assets/mascot.png。改图后重跑一次即可：
 
     python design/build_brand.py
 
-产物写入 android/app/src/main/res/、assets/icon/ 与 public/。
+产物写入 android/app/src/main/res/ 与 src/assets/mascot.png。
 """
 
 from collections import deque
@@ -284,41 +284,13 @@ def main() -> None:
     art = load_mascot()
     print(f"抠图后尺寸 {art.size[0]}×{art.size[1]}")
 
-    master = icon(1024, art)
-    master_round = round_icon(1024, art)
-    master_fg = foreground(1024, art)
-    master_mono = monochrome(1024, art)
-    master.save(ICON_DIR / "icon-1024.png")
-    master_round.save(ICON_DIR / "icon-round-1024.png")
-    master_fg.save(ICON_DIR / "foreground-1024.png")
-    master_mono.save(ICON_DIR / "monochrome-1024.png")
-
-    for name, scale in MIPMAPS.items():
-        folder = RES / f"mipmap-{name}"
-        folder.mkdir(parents=True, exist_ok=True)
-        big = int(BASE * scale)
-        master.resize((big, big), Image.LANCZOS).save(folder / "ic_launcher.png")
-        master_round.resize((big, big), Image.LANCZOS).save(folder / "ic_launcher_round.png")
-        fg = int(108 * scale)
-        master_fg.resize((fg, fg), Image.LANCZOS).save(folder / "ic_launcher_foreground.png")
-        master_mono.resize((fg, fg), Image.LANCZOS).save(folder / "ic_launcher_monochrome.png")
-
     for folder, (w, h) in SPLASH_SIZES.items():
         out = RES / folder
         out.mkdir(parents=True, exist_ok=True)
         splash(w, h, art).save(out / "splash.png")
 
-    # 文档用：桌面遮罩预览
-    docs = ROOT / "docs" / "screenshots"
-    docs.mkdir(parents=True, exist_ok=True)
-    preview_sheet(art).save(docs / "icon-preview.png")
-
     # App 内的印章：与图标同构图（整张贴纸，不裁切）
     seal_sticker(art).save(ROOT / "src" / "assets" / "mascot.png", optimize=True)
-
-    # 浏览器标签页：同一个图形
-    icon(192, art).save(PUBLIC / "favicon-192.png")
-    icon(64, art).save(PUBLIC / "favicon.png")
 
     print("brand assets generated")
 

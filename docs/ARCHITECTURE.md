@@ -36,15 +36,16 @@ shijinran-money/
 │  │  ├─ haptics.ts       触感反馈（Capacitor）
 │  │  └─ modalStack.ts    弹层栈，供返回键关闭
 │  ├─ assets/fonts/       随包分发的中文字体子集（鸿蒙 Sans SC ×3 字重 + Nunito）
-│  ├─ assets/mascot.png 印章用的小图（与桌面图标同构图，由 build_brand.py 生成）
+│  ├─ assets/mascot.png 印章用的小图（由 build_brand.py 生成）
 │  ├─ vite-env.d.ts       只为 png / woff2 等打包资源提供类型，不放业务类型
 │  ├─ styles/app.css      结构、组件与基础样式（文件头有分区目录）
 │  └─ styles/og.css       深色皮肤：token 覆盖、首页 / 底栏 / 各页面深色化，后加载覆盖
 ├─ android/               Capacitor 生成的 Android 工程（SDK 35 / AGP 8.7.2）
-├─ design/build_brand.py  图标 / 启动图 / favicon 生成脚本（抠白底、遮罩、各密度一次铺完）
-├─ design/icon-src/       图标源图（手绘贴纸，换图标只换这里）
+├─ design/build_icon.py   桌面图标：抠白底、5 密度、圆形 / 自适应 / 单色层、favicon
+├─ design/build_brand.py  启动图 / App 内印章：抠白底、各密度启动图
+├─ design/icon-src/       源图：app-icon.png 桌面图标，mascot.png 启动图 / 印章
 ├─ design/subset_fonts.py 字体子集化脚本（改文案后重跑，把整字库裁成只含 UI 用字）
-├─ assets/icon/           生成的 1024px 图标与抠图结果（mascot-cutout.png）
+├─ assets/icon/           生成的 1024px 图标（桌面图标 + 抠图结果）
 ├─ docs/                  架构说明与真机截图
 ├─ public/                favicon 等静态资源
 └─ release/               可直接安装的 APK
