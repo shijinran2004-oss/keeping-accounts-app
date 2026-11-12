@@ -20,7 +20,7 @@ shijinran-money/
 │  │  ├─ index.ts         统一出口
 │  │  ├─ Money.tsx        金额渲染（分 → 千分位 + 小数弱化）
 │  │  ├─ Charts.tsx       手写 SVG 柱状图 / 环形图
-│  │  ├─ SparkSummary.tsx 明细页趋势横条（描边生长 + 面积淡入 + 末点呼吸光斑）
+│  │  ├─ SparkSummary.tsx 明细页趋势横条（裁剪展开 + 面积淡入 + 末点呼吸光斑）
 │  │  ├─ MonthCalendar.tsx 明细页月历（金额/圆点、周视图折叠、跨月选中）
 │  │  ├─ SuccessReceipt.tsx 记账成功小票（金币落槽 → 出票 → 砸章）
 │  │  ├─ MorphSheet.tsx   形变弹层容器（从 + 号按钮长成面板，收起时缩回）
@@ -38,7 +38,8 @@ shijinran-money/
 │  ├─ assets/fonts/       随包分发的中文字体子集（鸿蒙 Sans SC ×3 字重 + Nunito）
 │  ├─ assets/mascot.png 印章用的小图（与桌面图标同构图，由 build_brand.py 生成）
 │  ├─ vite-env.d.ts       只为 png / woff2 等打包资源提供类型，不放业务类型
-│  └─ styles/app.css      单一样式表，文件头有分区目录
+│  ├─ styles/app.css      结构、组件与基础样式（文件头有分区目录）
+│  └─ styles/og.css       深色皮肤：token 覆盖、首页 / 底栏 / 各页面深色化，后加载覆盖
 ├─ android/               Capacitor 生成的 Android 工程（SDK 35 / AGP 8.7.2）
 ├─ design/build_brand.py  图标 / 启动图 / favicon 生成脚本（抠白底、遮罩、各密度一次铺完）
 ├─ design/icon-src/       图标源图（手绘贴纸，换图标只换这里）
@@ -48,6 +49,16 @@ shijinran-money/
 ├─ public/                favicon 等静态资源
 └─ release/               可直接安装的 APK
 ```
+
+## 视觉层
+
+`main.tsx` 先 import `styles/app.css`，再 import `styles/og.css`。前者是组件与布局的「结构层」，
+后者只做两件事：在 `:root` 覆盖颜色 / 圆角 / 字体 token，以及针对具体页面补深色规则。
+同样的选择器，后者因为后加载而生效；所以**换整套配色只改 `og.css` 顶部的 token 区**，
+不要在页面里写死颜色（`#30d158` 这类值只应出现在 token 与 SVG 渐变里）。
+
+当前视觉参考 openGym 的移动端版式：纯黑底、`#1c1c1e` 卡片、16px 间距、全宽卡片、底部通栏五项导航。
+openGym 是 AGPL-3.0，这里只借鉴版式与间距，没有复制它的代码或素材。
 
 ## 三条硬规矩
 

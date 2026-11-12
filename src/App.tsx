@@ -26,6 +26,10 @@ function Shell() {
   }
 
   useEffect(() => {
+    window.scrollTo(0, 0)
+  }, [tab])
+
+  useEffect(() => {
     if (!Capacitor.isNativePlatform()) return
     let remove: (() => void) | undefined
     CapApp.addListener('backButton', () => {

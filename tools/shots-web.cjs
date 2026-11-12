@@ -77,6 +77,7 @@ const shot = (page, name) => page.screenshot({ path: path.join(OUT, name) })
   await shot(page, '08-stats-day.png')
 
   await tab('明细')
+  await page.waitForTimeout(1500)
   await shot(page, '09-ledger.png')
 
   await tab('我的')

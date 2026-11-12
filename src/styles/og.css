@@ -1,0 +1,972 @@
+/* ==========================================================================
+   openGym 风格皮肤
+   深色底 + 炭灰卡片 + iOS 绿；16px 页边距与卡片间距，发丝分隔线。
+   这一层只做视觉覆盖，不动布局与数据逻辑；加载顺序在 app.css 之后。
+   ========================================================================== */
+
+:root {
+  --paper: #000000;
+  --paper-deep: #0e0e10;
+  --card: #1c1c1e;
+  --surface: #1c1c1e;
+  --surface-2: #2c2c2e;
+  --surface-3: #3a3a3c;
+  --ink: #ffffff;
+  --ink-2: rgba(235, 235, 245, 0.6);
+  --ink-3: rgba(235, 235, 245, 0.32);
+  --line: rgba(84, 84, 88, 0.6);
+  --line-soft: rgba(84, 84, 88, 0.34);
+  --accent: #30d158;
+  --accent-deep: #248a3d;
+  --accent-soft: rgba(48, 209, 88, 0.16);
+  --on-accent: #000000;
+  --moss: #30d158;
+  --moss-soft: rgba(48, 209, 88, 0.14);
+  --gold: #ff9f0a;
+  --orange: #ff9f0a;
+  --blue: #0a84ff;
+  --radius: 16px;
+  --shadow: none;
+  --num: 'HarmonyOS Sans SC', 'PingFang SC', 'Noto Sans CJK SC', system-ui, sans-serif;
+  --display: 'HarmonyOS Sans SC', 'PingFang SC', 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif;
+  --sans: 'HarmonyOS Sans SC', -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Noto Sans CJK SC',
+    'Microsoft YaHei', system-ui, sans-serif;
+}
+
+html {
+  background: #000;
+}
+
+body {
+  background: #000;
+  color: var(--ink);
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.app {
+  max-width: 560px;
+  background: #000;
+  background-image: none;
+  min-height: 100dvh;
+}
+
+@media (min-width: 600px) {
+  .app {
+    box-shadow: 0 0 0 0.5px rgba(255, 255, 255, 0.1);
+  }
+}
+
+.main {
+  min-height: 100dvh;
+}
+
+.page {
+  gap: 16px;
+  padding: calc(18px + env(safe-area-inset-top)) 16px calc(104px + env(safe-area-inset-bottom));
+  animation: ogPageIn 0.18s ease both;
+}
+
+@keyframes ogPageIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ---------- 页头 ---------- */
+
+.og-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 2px 2px 4px;
+}
+
+.og-head h1 {
+  font-family: var(--display);
+  font-size: 31px;
+  font-weight: 700;
+  line-height: 1.06;
+  letter-spacing: -0.035em;
+}
+
+.og-head p {
+  margin-top: 7px;
+  font-size: 14px;
+  color: var(--ink-2);
+  letter-spacing: -0.006em;
+}
+
+.og-avatar {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--surface);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  flex: none;
+}
+
+.og-avatar .seal {
+  width: 36px;
+  height: 36px;
+  border-radius: 11px;
+  box-shadow: none;
+}
+
+.og-avatar:active {
+  transform: scale(0.96);
+}
+
+.page-head {
+  align-items: flex-start;
+  padding: 2px 2px 4px;
+}
+
+.page-head h1 {
+  font-family: var(--display);
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: -0.032em;
+  line-height: 1.1;
+}
+
+.page-head p {
+  margin-top: 5px;
+  font-size: 13px;
+  color: var(--ink-2);
+}
+
+/* ---------- 卡片与通用块 ---------- */
+
+.og-card,
+.card,
+.cal-card,
+.spark-card {
+  background: var(--surface);
+  border: 0;
+  border-radius: 16px;
+  box-shadow: none;
+}
+
+.og-card {
+  padding: 14px;
+}
+
+.section {
+  gap: 8px;
+}
+
+.section-title {
+  padding: 0 2px;
+}
+
+.section-title h2 {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.text-btn {
+  font-size: 13px;
+  color: var(--ink-2);
+}
+
+.og-card-head {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 1px 1px 12px;
+}
+
+.og-card-head.is-plain {
+  padding: 0 1px 10px;
+}
+
+.og-card-copy {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.og-eyebrow {
+  display: block;
+  font-size: 12px;
+  color: var(--ink-2);
+  letter-spacing: -0.004em;
+}
+
+.og-card-copy h2 {
+  font-family: var(--display);
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.018em;
+  line-height: 1.2;
+}
+
+.og-tile {
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  flex: none;
+}
+
+.og-tile.is-green {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.og-tile.is-orange {
+  background: var(--orange);
+  color: #000;
+}
+
+.og-tile.is-blue {
+  background: var(--blue);
+  color: #fff;
+}
+
+.og-tile.is-cat {
+  background: color-mix(in srgb, var(--cat) 86%, #000);
+  color: #0b0b0c;
+}
+
+.og-icon-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: var(--ink-2);
+  flex: none;
+}
+
+.og-icon-btn:active {
+  background: var(--surface-2);
+}
+
+.og-icon-btn:disabled {
+  opacity: 0.25;
+}
+
+.og-link {
+  font-size: 14px;
+  color: var(--accent);
+  padding: 4px 2px;
+  flex: none;
+}
+
+/* ---------- 首页：周条 ---------- */
+
+.og-week-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 0 8px;
+}
+
+.og-week-nav > span {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink-2);
+  letter-spacing: -0.006em;
+}
+
+.og-week {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 1px;
+  padding: 0 0 4px;
+}
+
+.og-day {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 0 5px;
+}
+
+.og-day > span {
+  font-size: 11px;
+  color: var(--ink-2);
+  letter-spacing: 0.02em;
+}
+
+.og-day > b {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  font-family: var(--num);
+  font-size: 16px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.og-day.is-today > b {
+  background: var(--accent);
+  color: var(--on-accent);
+  font-weight: 600;
+}
+
+.og-day > i {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: transparent;
+}
+
+.og-day > i.has {
+  background: rgba(235, 235, 245, 0.38);
+}
+
+.og-day.is-today > i.has {
+  background: var(--orange);
+}
+
+.og-week-note {
+  padding: 2px 0 12px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--ink-2);
+}
+
+.og-today {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 12px;
+  border-radius: 14px;
+  background: var(--surface-2);
+}
+
+.og-today .og-tile {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+}
+
+.og-today-copy {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.og-today-copy b {
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.og-today-copy small {
+  font-size: 12px;
+  color: var(--ink-2);
+}
+
+.og-pill {
+  flex: none;
+  padding: 8px 13px;
+  border-radius: 9px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.og-pill:active {
+  background: rgba(48, 209, 88, 0.24);
+}
+
+.og-ghost-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  width: 100%;
+  padding: 13px 0 1px;
+  font-size: 13px;
+  color: var(--ink-2);
+}
+
+/* ---------- 首页：预算进度 ---------- */
+
+.og-meters {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  padding: 3px 2px 4px;
+}
+
+.og-meter-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 7px;
+}
+
+.og-meter-top > span {
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: -0.012em;
+}
+
+.og-meter-top > b {
+  font-family: var(--num);
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.og-meter-top > b > em {
+  font-style: normal;
+  color: var(--ink-3);
+}
+
+.og-meter > i {
+  display: block;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: var(--surface-3);
+}
+
+.og-meter > i > em {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  background: var(--orange);
+  transition: width 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.og-meter.is-green > i > em {
+  background: var(--accent);
+}
+
+/* ---------- 首页：常记 ---------- */
+
+.og-quick {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  padding: 2px 0 0;
+}
+
+.og-quick-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 2px 6px;
+  border-radius: 12px;
+  font-size: 12px;
+  color: var(--ink-2);
+  letter-spacing: -0.004em;
+}
+
+.og-quick-tile .og-tile {
+  width: 44px;
+  height: 44px;
+  border-radius: 13px;
+}
+
+.og-quick-tile:active {
+  background: var(--surface-2);
+}
+
+/* ---------- 首页：趋势卡（复用 SparkSummary） ---------- */
+
+.spark-card {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 14px;
+}
+
+.spark-main {
+  gap: 3px;
+}
+
+.spark-label {
+  font-size: 13px;
+  color: var(--ink-2);
+  letter-spacing: -0.006em;
+}
+
+.spark-badge {
+  height: 22px;
+  padding: 0 8px;
+  background: var(--surface-2);
+  color: var(--ink-2);
+  font-size: 11px;
+}
+
+.spark-badge.is-over {
+  background: rgba(255, 69, 58, 0.16);
+  color: #ff453a;
+}
+
+.spark-badge-dot {
+  width: 5px;
+  height: 5px;
+  background: var(--accent);
+}
+
+.spark-figure {
+  font-family: var(--num);
+  font-size: 32px;
+  font-weight: 600;
+  line-height: 1.12;
+  letter-spacing: -0.035em;
+}
+
+.spark-figure .money-sym {
+  font-size: 16px;
+  font-weight: 500;
+  opacity: 0.62;
+  margin-right: 1px;
+}
+
+.spark-meta {
+  gap: 6px;
+  font-size: 12px;
+  color: var(--ink-2);
+}
+
+.spark-meta .money {
+  font-size: 12px;
+  color: var(--ink-2);
+}
+
+.spark-viz {
+  flex: none;
+  width: 100%;
+  min-width: 0;
+  gap: 4px;
+}
+
+.spark-svg-wrap {
+  height: 74px;
+}
+
+.spark-grid {
+  stroke: rgba(255, 255, 255, 0.08);
+}
+
+.spark-cmp {
+  font-size: 12px;
+  color: var(--ink-2);
+}
+
+.spark-cmp b.is-up {
+  color: #ff453a;
+}
+
+.spark-cmp b.is-down {
+  color: var(--accent);
+}
+
+.spark-sheen {
+  opacity: 0.35;
+}
+
+/* 小狗印章保留暖朱砂细线，不跟随界面强调色 */
+.seal::after {
+  box-shadow: inset 0 0 0 1.5px #c2563b;
+}
+
+/* 我的页身份卡 */
+.profile-card {
+  padding: 16px;
+  border-radius: 16px;
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.profile-card::after {
+  background: radial-gradient(circle, rgba(48, 209, 88, 0.2), transparent 70%);
+}
+
+.profile-main p,
+.profile-stats span,
+.profile-since {
+  color: var(--ink-2);
+}
+
+.profile-stats {
+  border-top-color: var(--line);
+}
+
+/* 记一笔面板：沿用炭黑底，强调色统一到 iOS 绿 */
+.morph-panel {
+  --mint: #30d158;
+}
+
+.qa-seg button.is-active {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+/* ---------- 首页：最近流水 ---------- */
+
+.list-card {
+  padding: 14px;
+}
+
+.tx-row {
+  gap: 11px;
+  padding: 11px 0;
+  border-bottom: 0.5px solid var(--line-soft);
+}
+
+.tx-row .cat-tile {
+  width: 37px;
+  height: 37px;
+  border-radius: 11px;
+}
+
+.tx-title {
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: -0.012em;
+}
+
+.tx-sub {
+  font-size: 12px;
+  color: var(--ink-2);
+  letter-spacing: -0.004em;
+}
+
+.tx-amount {
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.cat-tile {
+  background: color-mix(in srgb, var(--cat) 18%, var(--surface-2));
+  color: color-mix(in srgb, var(--cat) 72%, #fff);
+}
+
+.og-footnote {
+  padding: 6px 0 2px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--ink-3);
+  letter-spacing: 0.04em;
+}
+
+/* ---------- 底部导航 ---------- */
+
+.tabbar {
+  max-width: 560px;
+  height: calc(62px + env(safe-area-inset-bottom));
+  padding: 0 4px env(safe-area-inset-bottom);
+  background: rgba(10, 10, 11, 0.88);
+  border-top: 0.5px solid rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+}
+
+.tab {
+  height: 56px;
+  gap: 2px;
+  color: var(--ink-3);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+
+.tab svg {
+  color: var(--ink-3);
+}
+
+.tab.is-active,
+.tab.is-active svg {
+  color: var(--accent);
+}
+
+.tab.is-active span {
+  font-weight: 600;
+}
+
+.tab-add-wrap {
+  width: 64px;
+}
+
+.tab-add {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  border: 0;
+  background: var(--accent);
+  color: var(--on-accent);
+  box-shadow: 0 6px 18px -4px rgba(48, 209, 88, 0.55);
+  transform: translateY(-18px);
+}
+
+.tab-add svg {
+  width: 25px;
+  height: 25px;
+  stroke-width: 2.2;
+}
+
+.tab-add:active {
+  background: #28b74c;
+  transform: translateY(-17px) scale(0.96);
+}
+
+@media (min-width: 600px) {
+  .tabbar {
+    bottom: 12px;
+    width: calc(100% - 32px);
+    max-width: 520px;
+    border: 0.5px solid rgba(255, 255, 255, 0.12);
+    border-radius: 28px;
+    height: calc(60px + env(safe-area-inset-bottom));
+    padding-bottom: env(safe-area-inset-bottom);
+    box-shadow: 0 18px 40px rgba(0, 0, 0, 0.6);
+  }
+}
+
+/* ---------- 明细 / 统计 / 我的：通用深色化 ---------- */
+
+.cal-card {
+  padding: 14px 10px 8px;
+}
+
+.cal-nav:active,
+.cal-today-jump:active {
+  background: var(--surface-2);
+}
+
+.cal-today-jump {
+  background: var(--surface-2);
+  border-color: transparent;
+  color: var(--ink-2);
+}
+
+.cal-mode {
+  background: var(--surface-2);
+  border-color: transparent;
+}
+
+.cal-mode button.is-active {
+  background: var(--surface-3);
+  color: var(--ink);
+  box-shadow: none;
+}
+
+.cal-cell.is-sel {
+  background: var(--accent);
+  color: var(--on-accent);
+  box-shadow: none;
+}
+
+.cal-cell.is-sel .cal-amt,
+.cal-cell.is-sel .cal-amt.is-pos {
+  color: rgba(0, 0, 0, 0.72);
+}
+
+.cal-cell.is-sel .cal-dot {
+  background: rgba(0, 0, 0, 0.72);
+}
+
+.cal-today-jump {
+  color: var(--ink-2);
+}
+
+.segmented {
+  background: var(--surface-2);
+}
+
+.segmented button.is-active {
+  background: var(--surface-3);
+  color: var(--ink);
+  box-shadow: none;
+}
+
+.stats-total > .money {
+  color: var(--ink);
+}
+
+.stats-summary::after {
+  background: radial-gradient(circle, rgba(48, 209, 88, 0.16), transparent 68%);
+}
+
+.card-head {
+  border-bottom: 0.5px solid var(--line-soft);
+}
+
+.setting-row {
+  border-bottom: 0.5px solid var(--line-soft);
+}
+
+.setting-row:active {
+  background: var(--surface-2);
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: var(--on-accent);
+  border-radius: 12px;
+}
+
+.btn-primary:active {
+  background: #28b74c;
+}
+
+.btn-primary:disabled {
+  background: var(--surface-2);
+  color: var(--ink-3);
+  box-shadow: none;
+}
+
+.btn-ghost {
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  color: var(--ink);
+  border-radius: 12px;
+}
+
+.btn-ghost:active {
+  background: var(--surface-3);
+}
+
+/* ---------- 弹层与表单 ---------- */
+
+.sheet {
+  background: var(--surface);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  box-shadow: 0 -20px 48px rgba(0, 0, 0, 0.6);
+}
+
+.sheet-backdrop {
+  background: rgba(0, 0, 0, 0.62);
+}
+
+.sheet-head h2 {
+  color: var(--ink);
+}
+
+.setting-row .setting-main b {
+  color: var(--ink);
+}
+
+/* ---------- 引导页 ---------- */
+
+.onboarding {
+  background: #000;
+}
+
+.ob-sub,
+.ob-field > span,
+.ob-foot,
+.ob-skip,
+.ob-privacy,
+.ob-quote {
+  color: var(--ink-2);
+}
+
+.ob-body h1 {
+  color: var(--ink);
+}
+
+.ob-field > div {
+  padding: 11px 13px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 14px;
+  background: var(--surface);
+}
+
+.ob-kicker {
+  color: var(--accent);
+}
+
+.ob-field input {
+  color: var(--ink);
+}
+
+.ob-field input::placeholder {
+  color: var(--ink-3);
+}
+
+/* ---------- 滚动手感 ---------- */
+
+* {
+  -webkit-overflow-scrolling: touch;
+}
+
+.quick-scroll,
+.og-quick,
+.sheet-body,
+.main {
+}
+
+::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+button {
+  transition: opacity 0.16s ease, background-color 0.16s ease, transform 0.16s ease;
+}
+
+.card:active,
+.og-card:active {
+  transform: scale(0.997);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  .page {
+    animation: none;
+  }
+}
+
+/* 深色下不需要奶油扫光，否则右侧会出现一条灰带 */
+.spark-sheen {
+  display: none;
+}
+
+.backup-card {
+  border-color: var(--line);
+  background: var(--surface);
+}
+
+.spark-card.is-empty .spark-svg-wrap,
+.spark-card.is-empty .spark-cmp {
+  display: none;
+}
+
+.spark-empty-note {
+  display: none;
+  font-size: 10px;
+  color: var(--ink-3);
+  text-align: right;
+}
+
+.spark-card.is-empty .spark-empty-note {
+  display: block;
+}

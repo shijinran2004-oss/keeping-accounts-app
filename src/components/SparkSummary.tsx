@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import { Money } from './Money'
 import type { SparkSummaryProps } from '../types'
 
@@ -51,38 +51,39 @@ export function SparkSummary({
   comparePct,
 }: SparkSummaryProps) {
   const pathRef = useRef<SVGPathElement>(null)
+  const clipRef = useRef<SVGRectElement>(null)
   const drawRef = useRef<Animation | null>(null)
   const [visible, setVisible] = useState(false)
+  const clipId = `sparkClip${useId().replace(/:/g, '')}`
 
   const key = points.join(',')
   const geo = buildGeometry(points)
   const over = spentPct > 100
   const isEmpty = spent === 0
 
-  // 绘制前先把描边整段藏起来，再用 WAAPI 让它「长」出来；
-  // 不用 CSS transition 是因为首帧还没有基准值，会先反向播一次（线先出现再消失）。
+  // 用一条从左侧展开的裁剪矩形做「描边生长」。
+  // 不能用 stroke-dasharray：线开了 vector-effect: non-scaling-stroke，
+  // 虚线长度按屏幕像素算、getTotalLength() 按用户单位算，两者对不上会画出断线。
   useLayoutEffect(() => {
-    const el = pathRef.current
-    if (!el) return
-    const total = el.getTotalLength()
+    const clip = clipRef.current
+    if (!clip) return
     drawRef.current?.cancel()
-    el.style.strokeDasharray = `${total}`
-    el.style.strokeDashoffset = `${total}`
     setVisible(false)
 
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      el.style.strokeDashoffset = '0'
+      clip.style.transform = 'scaleX(1)'
       setVisible(true)
       return
     }
 
-    const anim = el.animate(
-      [{ strokeDashoffset: total }, { strokeDashoffset: 0 }],
+    clip.style.transform = 'scaleX(0)'
+    const anim = clip.animate(
+      [{ transform: 'scaleX(0)' }, { transform: 'scaleX(1)' }],
       { duration: 1150, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' },
     )
     drawRef.current = anim
     anim.onfinish = () => {
-      el.style.strokeDashoffset = '0'
+      clip.style.transform = 'scaleX(1)'
     }
     return () => anim.cancel()
   }, [key])
@@ -97,7 +98,7 @@ export function SparkSummary({
   const lastTop = `${((geo.lastY / VH) * 100).toFixed(2)}%`
 
   return (
-    <section className="spark-card" aria-label="本期小计">
+    <section className={`spark-card${isEmpty ? ' is-empty' : ''}`} aria-label="本期小计">
       <div className="spark-main">
         <div className="spark-top">
           <span className="spark-label">{label}</span>
@@ -126,16 +127,24 @@ export function SparkSummary({
         <div className="spark-svg-wrap">
           <svg viewBox={`0 0 ${VW} ${VH}`} preserveAspectRatio="none" aria-hidden="true">
             <defs>
+              <clipPath id={clipId}>
+                <rect ref={clipRef} x="0" y="0" width={VW} height={VH} />
+              </clipPath>
               <linearGradient id="sparkFill" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#c2563b" stopOpacity="0.22" />
-                <stop offset="100%" stopColor="#c2563b" stopOpacity="0" />
+                <stop offset="0%" style={{ stopColor: 'var(--accent)' }} stopOpacity="0.16" />
+                <stop offset="100%" style={{ stopColor: 'var(--accent)' }} stopOpacity="0" />
               </linearGradient>
             </defs>
             <path className="spark-grid" d={`M 0 ${VH * 0.4} H ${VW}`} />
             {!isEmpty && (
               <path className="spark-area" d={geo.area} fill="url(#sparkFill)" style={{ opacity: visible ? 1 : 0 }} />
             )}
-            <path ref={pathRef} className={`spark-line${isEmpty ? ' is-empty' : ''}`} d={geo.line} />
+            <path
+              ref={pathRef}
+              clipPath={`url(#${clipId})`}
+              className={`spark-line${isEmpty ? ' is-empty' : ''}`}
+              d={geo.line}
+            />
           </svg>
           {!isEmpty && (
             <>
@@ -145,6 +154,7 @@ export function SparkSummary({
           )}
         </div>
 
+        {isEmpty && <span className="spark-empty-note">这个月还没有支出</span>}
         <span className="spark-cmp">
           {compare == null ? (
             '暂无对比'

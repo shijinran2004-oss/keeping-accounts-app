@@ -239,7 +239,8 @@ def paper(w: int, h: int) -> Image.Image:
 
 
 def splash(w: int, h: int, art: Image.Image) -> Image.Image:
-    img = paper(w, h)
+    # 深色版：纯黑底，白字 + 绿线，和 App 内的 openGym 风格保持一致
+    img = Image.new("RGB", (w, h), (0, 0, 0))
     d = ImageDraw.Draw(img)
     unit = min(w, h)
 
@@ -251,11 +252,11 @@ def splash(w: int, h: int, art: Image.Image) -> Image.Image:
     name_font = font(int(unit * 0.072), bold=True)
     tag_font = font(int(unit * 0.034))
     text_y = cy + piece.height // 2 + int(unit * 0.06)
-    bottom = _centered_text(d, w, text_y, APP_NAME, name_font, INK)
+    bottom = _centered_text(d, w, text_y, APP_NAME, name_font, (255, 255, 255))
 
     rule_y = bottom + int(unit * 0.045)
-    d.line((cx - unit * 0.05, rule_y, cx + unit * 0.05, rule_y), fill=VERMILION, width=max(1, int(unit * 0.0026)))
-    _centered_text(d, w, rule_y + int(unit * 0.035), TAGLINE, tag_font, INK_SOFT)
+    d.line((cx - unit * 0.05, rule_y, cx + unit * 0.05, rule_y), fill=(48, 209, 88), width=max(1, int(unit * 0.0026)))
+    _centered_text(d, w, rule_y + int(unit * 0.035), TAGLINE, tag_font, (150, 150, 155))
     return img
 
 

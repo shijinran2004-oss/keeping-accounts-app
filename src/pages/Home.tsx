@@ -1,12 +1,40 @@
 import type { CSSProperties } from 'react'
-import { Plus, ReceiptText, UserRound } from 'lucide-react'
+import { useState } from 'react'
+import {
+  Bookmark,
+  ChevronLeft,
+  ChevronRight,
+  Plus,
+  ReceiptText,
+  Target,
+} from 'lucide-react'
 import { useLedger } from '../data'
-import { moneyFlow, categoryBreakdown, stateMonthTxs, summarize } from '../utils'
-import { daysInMonth, formatMonth, greeting, todayStr } from '../utils'
-import { formatMoneyShort, formatPercent } from '../utils'
+import {
+  addDays,
+  addMonths,
+  categoryBreakdown,
+  dailySeries,
+  daysInMonth,
+  eachDay,
+  formatDay,
+  formatMoneyShort,
+  formatMonth,
+  formatPercent,
+  inRange,
+  moneyFlow,
+  monthRange,
+  parseDate,
+  startOfWeek,
+  stateMonthTxs,
+  sumAmount,
+  summarize,
+  todayStr,
+  weekdayLabel,
+  weekdayShort,
+} from '../utils'
 import { EXPENSE_CATEGORIES, findCategory } from '../data'
 import type { Tx } from '../types'
-import { CategoryIcon, Empty, Money, Seal, SectionTitle, TxRow } from '../components'
+import { CategoryIcon, Empty, Money, Seal, SparkSummary, TxRow } from '../components'
 
 export function Home({
   onAdd,
@@ -25,10 +53,28 @@ export function Home({
 }) {
   const { state } = useLedger()
   const today = todayStr()
+  const [weekOffset, setWeekOffset] = useState(0)
+
   const monthTxs = stateMonthTxs(state, today)
   const flow = moneyFlow(state.settings, monthTxs, today)
   const todayTxs = state.txs.filter((t) => t.date === today)
   const todaySum = summarize(todayTxs)
+
+  const base = startOfWeek(today)
+  const weekStart = addDays(base, weekOffset * 7)
+  const weekEnd = addDays(weekStart, 6)
+  const weekDays = eachDay(weekStart, weekEnd)
+  const weekTxs = inRange(state.txs, weekStart, weekEnd)
+  const weekExpense = sumAmount(weekTxs, 'expense')
+  const weekStats = new Map<string, { expense: number; count: number }>()
+  for (const tx of weekTxs) {
+    const row = weekStats.get(tx.date) ?? { expense: 0, count: 0 }
+    if (tx.type === 'expense') row.expense += tx.amount
+    row.count += 1
+    weekStats.set(tx.date, row)
+  }
+  const recordedDays = weekDays.filter((d) => (weekStats.get(d)?.count ?? 0) > 0).length
+
   const recent = [...state.txs]
     .sort((a, b) => b.date.localeCompare(a.date) || b.createdAt - a.createdAt)
     .slice(0, 5)
@@ -40,141 +86,231 @@ export function Home({
           .slice(0, 4)
           .map((u) => u.category)
       : EXPENSE_CATEGORIES.slice(0, 4)
-  const projected = flow.available - flow.dailyAverage * daysInMonth(today)
-  const over = projected < 0
+
+  const yuan = (cents: number) => Math.round(cents / 100).toLocaleString('zh-CN')
+  const spentPct = Math.max(0, flow.spentPct)
+  const fixedPct = flow.salary > 0 ? (flow.fixedCost / flow.salary) * 100 : 0
+  const remainPct = flow.available > 0 ? (Math.max(0, flow.remaining) / flow.available) * 100 : 0
+  const todayLabel = `${formatDay(today)} · ${weekdayLabel(today)}`
+  const weekTitle = weekOffset === 0 ? '本周' : `${formatDay(weekStart)} – ${formatDay(weekEnd)}`
+  const monthSum = summarize(monthTxs)
+  const points = dailySeries(monthTxs, monthRange(today).start, today).map((d) => d.amount)
+  const prevStart = monthRange(addMonths(today, -1)).start
+  const prevDays = Math.min(parseDate(today).getDate(), daysInMonth(prevStart))
+  const prevSpent = sumAmount(inRange(state.txs, prevStart, addDays(prevStart, prevDays - 1)), 'expense')
+  const comparePct = prevSpent > 0 ? ((flow.spent - prevSpent) / prevSpent) * 100 : null
 
   return (
     <div className="page home">
-      <header className="home-head">
-        <div className="brand">
-          <Seal />
-          <div>
-            <h1>使劲燃的钱</h1>
-            <p>{formatMonth(today)} · {greeting()}</p>
-          </div>
+      <header className="og-head">
+        <div>
+          <h1>使劲燃的钱</h1>
+          <p>{todayLabel}</p>
         </div>
-        <button className="avatar-btn" onClick={onGoMe} aria-label="我的" type="button">
-          <UserRound size={19} strokeWidth={1.6} />
+        <button className="og-avatar" onClick={onGoMe} aria-label="我的" type="button">
+          <Seal />
         </button>
       </header>
 
-      <section className="hero" aria-label="本月可支配">
-        <div className="hero-glow" aria-hidden="true" />
-        <div className="hero-top">
-          <span>本月可支配</span>
-          <span className="hero-pct">已用 {formatPercent(flow.spentPct)}</span>
+      <section className="og-card" aria-label="本周概览">
+        <div className="og-week-nav">
+          <button
+            className="og-icon-btn"
+            onClick={() => setWeekOffset((w) => w - 1)}
+            aria-label="上一周"
+            type="button"
+          >
+            <ChevronLeft size={16} strokeWidth={2} />
+          </button>
+          <span>{weekTitle}</span>
+          <button
+            className="og-icon-btn"
+            onClick={() => setWeekOffset((w) => Math.min(0, w + 1))}
+            aria-label="下一周"
+            type="button"
+            disabled={weekOffset >= 0}
+          >
+            <ChevronRight size={16} strokeWidth={2} />
+          </button>
         </div>
-        <div className="hero-amount">
-          <Money cents={flow.available} decimals="never" />
+
+        <div className="og-week">
+          {weekDays.map((day) => {
+            const row = weekStats.get(day)
+            const isToday = day === today
+            return (
+              <div key={day} className={`og-day${isToday ? ' is-today' : ''}`}>
+                <span>{weekdayShort(day)}</span>
+                <b>{Number(day.slice(-2))}</b>
+                <i className={row && row.count > 0 ? 'has' : ''} />
+              </div>
+            )
+          })}
         </div>
-        <p className="hero-note">
-          月薪 ¥{formatMoneyShort(flow.salary)} · 固定 ¥{formatMoneyShort(flow.fixedCost)}，扣完才是能花的钱
+
+        <p className="og-week-note">
+          {recordedDays} 天有记录 · 本周支出 ¥{formatMoneyShort(weekExpense)}
         </p>
-        <div className="hero-bar" aria-hidden="true">
-          <i style={{ width: `${Math.min(100, Math.max(0, flow.spentPct))}%` }} />
+
+        <div className="og-today">
+          <span className="og-tile is-green">
+            <Plus size={20} strokeWidth={2.2} />
+          </span>
+          <div className="og-today-copy">
+            <span className="og-eyebrow">{weekOffset === 0 ? '今天' : '这一周'}</span>
+            <b>
+              {weekOffset === 0 ? '已花 ' : '共花 '}
+              <Money cents={weekOffset === 0 ? todaySum.expense : weekExpense} decimals="never" />
+            </b>
+            <small>
+              {weekOffset === 0
+                ? `按天可花 ¥${formatMoneyShort(Math.max(0, flow.dailyAvailable))}`
+                : `${recordedDays} 天有记录`}
+            </small>
+          </div>
+          <button className="og-pill" onClick={onAdd} type="button">
+            {weekOffset === 0 ? '记一笔' : '记今天'}
+          </button>
         </div>
-        <div className="hero-foot">
-          <div>
-            <span>日常已花</span>
-            <b><Money cents={flow.spent} symbol={false} decimals="never" /></b>
+
+        <button className="og-ghost-row" onClick={onGoLedger} type="button">
+          查看本周流水
+          <ChevronRight size={14} strokeWidth={1.8} />
+        </button>
+      </section>
+
+      <section className="og-card" aria-label="本月预算">
+        <div className="og-card-head">
+          <span className="og-tile is-orange">
+            <Target size={20} strokeWidth={1.9} />
+          </span>
+          <div className="og-card-copy">
+            <span className="og-eyebrow">
+              {formatMonth(today)} · 已用 {formatPercent(spentPct)}
+            </span>
+            <h2>本月预算</h2>
           </div>
-          <div>
-            <span>还剩</span>
-            <b><Money cents={Math.max(0, flow.remaining)} symbol={false} decimals="never" /></b>
+          <button className="og-icon-btn" onClick={onGoStats} aria-label="查看统计" type="button">
+            <ChevronRight size={16} strokeWidth={2} />
+          </button>
+        </div>
+
+        <div className="og-meters">
+          <div className="og-meter">
+            <div className="og-meter-top">
+              <span>日常支出</span>
+              <b>
+                ¥{yuan(flow.spent)} <em>/ ¥{yuan(flow.available)}</em>
+              </b>
+            </div>
+            <i>
+              <em style={{ width: `${Math.min(100, spentPct)}%` }} />
+            </i>
           </div>
-          <div>
-            <span>每天可花</span>
-            <b><Money cents={Math.max(0, flow.dailyAvailable)} symbol={false} decimals="never" /></b>
+          <div className="og-meter">
+            <div className="og-meter-top">
+              <span>固定支出</span>
+              <b>
+                ¥{yuan(flow.fixedCost)} <em>/ ¥{yuan(flow.salary)}</em>
+              </b>
+            </div>
+            <i>
+              <em style={{ width: `${Math.min(100, fixedPct)}%` }} />
+            </i>
+          </div>
+          <div className="og-meter is-green">
+            <div className="og-meter-top">
+              <span>本月还剩</span>
+              <b>
+                ¥{yuan(Math.max(0, flow.remaining))} <em>可用</em>
+              </b>
+            </div>
+            <i>
+              <em style={{ width: `${Math.min(100, Math.max(0, remainPct))}%` }} />
+            </i>
           </div>
         </div>
       </section>
 
-      <div className="home-actions">
-        <button className="action-main" onClick={onAdd} type="button">
-          <span className="action-plus"><Plus size={20} strokeWidth={2.2} /></span>
-          <span className="action-label">
-            <b>记一笔</b>
-            <small>随手记下，不费事</small>
+      <section className="og-card" aria-label="常记分类">
+        <div className="og-card-head">
+          <span className="og-tile is-blue">
+            <Bookmark size={19} strokeWidth={1.9} />
           </span>
-        </button>
-        <button className="action-today" onClick={onGoStats} type="button">
-          <span>今天</span>
-          <b>{todaySum.count} 笔</b>
-          <small><Money cents={todaySum.expense} symbol={false} decimals="never" /> 元</small>
-        </button>
-      </div>
-
-      <section className="quick-block">
-        <div className="quick-head">
-          <span>常记</span>
-          <button type="button" className="text-btn" onClick={onGoLedger}>全部</button>
+          <div className="og-card-copy">
+            <span className="og-eyebrow">最常记</span>
+            <h2>常记分类</h2>
+          </div>
+          <button className="og-link" onClick={onGoLedger} type="button">
+            全部
+          </button>
         </div>
-        <div className="quick-scroll">
+
+        <div className="og-quick">
           {quick.map((cat) => (
             <button
               key={cat.id}
               type="button"
-              className="quick-chip"
-              style={{ ['--cat' as string]: cat.color } as CSSProperties}
+              className="og-quick-tile"
               onClick={() => onQuickAdd(cat.id)}
             >
-              <span className="cat-tile">
-                <CategoryIcon name={cat.icon} size={17} />
+              <span
+                className="og-tile is-cat"
+                style={{ ['--cat' as string]: cat.color } as CSSProperties}
+              >
+                <CategoryIcon name={cat.icon} size={19} />
               </span>
-              {cat.name}
+              <span>{cat.name}</span>
             </button>
           ))}
         </div>
       </section>
 
-      <section className="section">
-        <SectionTitle action="全部" onAction={onGoLedger}>最近记录</SectionTitle>
+      <SparkSummary
+        label={formatMonth(today)}
+        spent={flow.spent}
+        income={monthSum.income}
+        balance={monthSum.income - flow.spent}
+        spentPct={flow.spentPct}
+        points={points}
+        comparePct={comparePct}
+      />
+
+      <section className="og-card list-card" aria-label="最近记录">
+        <div className="og-card-head is-plain">
+          <div className="og-card-copy">
+            <span className="og-eyebrow">最近</span>
+            <h2>流水</h2>
+          </div>
+          <button className="og-link" onClick={onGoLedger} type="button">
+            全部
+          </button>
+        </div>
         {recent.length > 0 ? (
-          <div className="card list-card">
-            {recent.map((tx) => (
-              <TxRow
-                key={tx.id}
-                tx={tx}
-                category={findCategory(state.categories, tx.categoryId)}
-                showDate
-                onClick={() => onEdit(tx)}
-              />
-            ))}
-          </div>
-        ) : (
-          <div className="card">
-            <Empty
-              icon={ReceiptText}
-              title="还没有记过账"
-              hint="第一笔，从今天的一杯咖啡开始。"
-              action={
-                <button className="btn-ghost sm" onClick={onAdd} type="button">
-                  记下第一笔
-                </button>
-              }
+          recent.map((tx) => (
+            <TxRow
+              key={tx.id}
+              tx={tx}
+              category={findCategory(state.categories, tx.categoryId)}
+              showDate
+              onClick={() => onEdit(tx)}
             />
-          </div>
+          ))
+        ) : (
+          <Empty
+            icon={ReceiptText}
+            title="还没有记过账"
+            hint="第一笔，从今天的一杯咖啡开始。"
+            action={
+              <button className="btn-ghost sm" onClick={onAdd} type="button">
+                记下第一笔
+              </button>
+            }
+          />
         )}
       </section>
 
-      <section className={`pace-card ${over ? 'is-over' : ''}`}>
-        <span className="pace-mark" aria-hidden="true">{over ? '紧' : '余'}</span>
-        <div>
-          {monthTxs.length === 0 ? (
-            <p>这个月还没开始花钱，可支配的钱都还在。</p>
-          ) : over ? (
-            <p>照这个速度，月底会超支 <b>¥{Math.round(Math.abs(projected) / 100).toLocaleString('zh-CN')}</b>，要不要看看哪儿花多了？</p>
-          ) : (
-            <p>照现在的节奏，月底大约还能剩下 <b>¥{Math.round(projected / 100).toLocaleString('zh-CN')}</b>。</p>
-          )}
-          <span>
-            按 {flow.daysElapsed} 天日均 ¥{(flow.dailyAverage / 100).toFixed(0)} 估算 · 本月已过 {flow.daysElapsed} 天
-          </span>
-        </div>
-        <button type="button" className="pace-arrow" onClick={onGoStats} aria-label="查看统计">→</button>
-      </section>
-
-      <p className="home-quote">每一笔，都算数</p>
+      <p className="og-footnote">每一笔，都算数</p>
     </div>
   )
 }

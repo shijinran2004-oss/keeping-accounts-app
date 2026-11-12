@@ -109,7 +109,7 @@ export function Me() {
       <footer className="me-foot">
         <Seal size="mini" />
         <div>
-          <b>使劲燃的钱 v1.0.0</b>
+          <b>使劲燃的钱 v1.1.0</b>
           <p><ShieldCheck size={13} strokeWidth={1.6} /> 数据只保存在这台手机上，不上传</p>
         </div>
         <button
