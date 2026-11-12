@@ -1,13 +1,5 @@
 import type { CSSProperties } from 'react'
-import { useState } from 'react'
-import {
-  Bookmark,
-  ChevronLeft,
-  ChevronRight,
-  Plus,
-  ReceiptText,
-  Target,
-} from 'lucide-react'
+import { Bookmark, ChevronRight, ReceiptText, Target } from 'lucide-react'
 import { useLedger } from '../data'
 import {
   addDays,
@@ -15,22 +7,18 @@ import {
   categoryBreakdown,
   dailySeries,
   daysInMonth,
-  eachDay,
   formatDay,
-  formatMoneyShort,
   formatMonth,
   formatPercent,
   inRange,
   moneyFlow,
   monthRange,
   parseDate,
-  startOfWeek,
   stateMonthTxs,
   sumAmount,
   summarize,
   todayStr,
   weekdayLabel,
-  weekdayShort,
 } from '../utils'
 import { EXPENSE_CATEGORIES, findCategory } from '../data'
 import type { Tx } from '../types'
@@ -53,28 +41,8 @@ export function Home({
 }) {
   const { state } = useLedger()
   const today = todayStr()
-  const [weekOffset, setWeekOffset] = useState(0)
-
   const monthTxs = stateMonthTxs(state, today)
   const flow = moneyFlow(state.settings, monthTxs, today)
-  const todayTxs = state.txs.filter((t) => t.date === today)
-  const todaySum = summarize(todayTxs)
-
-  const base = startOfWeek(today)
-  const weekStart = addDays(base, weekOffset * 7)
-  const weekEnd = addDays(weekStart, 6)
-  const weekDays = eachDay(weekStart, weekEnd)
-  const weekTxs = inRange(state.txs, weekStart, weekEnd)
-  const weekExpense = sumAmount(weekTxs, 'expense')
-  const weekStats = new Map<string, { expense: number; count: number }>()
-  for (const tx of weekTxs) {
-    const row = weekStats.get(tx.date) ?? { expense: 0, count: 0 }
-    if (tx.type === 'expense') row.expense += tx.amount
-    row.count += 1
-    weekStats.set(tx.date, row)
-  }
-  const recordedDays = weekDays.filter((d) => (weekStats.get(d)?.count ?? 0) > 0).length
-
   const recent = [...state.txs]
     .sort((a, b) => b.date.localeCompare(a.date) || b.createdAt - a.createdAt)
     .slice(0, 5)
@@ -92,7 +60,6 @@ export function Home({
   const fixedPct = flow.salary > 0 ? (flow.fixedCost / flow.salary) * 100 : 0
   const remainPct = flow.available > 0 ? (Math.max(0, flow.remaining) / flow.available) * 100 : 0
   const todayLabel = `${formatDay(today)} · ${weekdayLabel(today)}`
-  const weekTitle = weekOffset === 0 ? '本周' : `${formatDay(weekStart)} – ${formatDay(weekEnd)}`
   const monthSum = summarize(monthTxs)
   const points = dailySeries(monthTxs, monthRange(today).start, today).map((d) => d.amount)
   const prevStart = monthRange(addMonths(today, -1)).start
@@ -111,73 +78,6 @@ export function Home({
           <Seal />
         </button>
       </header>
-
-      <section className="og-card" aria-label="本周概览">
-        <div className="og-week-nav">
-          <button
-            className="og-icon-btn"
-            onClick={() => setWeekOffset((w) => w - 1)}
-            aria-label="上一周"
-            type="button"
-          >
-            <ChevronLeft size={16} strokeWidth={2} />
-          </button>
-          <span>{weekTitle}</span>
-          <button
-            className="og-icon-btn"
-            onClick={() => setWeekOffset((w) => Math.min(0, w + 1))}
-            aria-label="下一周"
-            type="button"
-            disabled={weekOffset >= 0}
-          >
-            <ChevronRight size={16} strokeWidth={2} />
-          </button>
-        </div>
-
-        <div className="og-week">
-          {weekDays.map((day) => {
-            const row = weekStats.get(day)
-            const isToday = day === today
-            return (
-              <div key={day} className={`og-day${isToday ? ' is-today' : ''}`}>
-                <span>{weekdayShort(day)}</span>
-                <b>{Number(day.slice(-2))}</b>
-                <i className={row && row.count > 0 ? 'has' : ''} />
-              </div>
-            )
-          })}
-        </div>
-
-        <p className="og-week-note">
-          {recordedDays} 天有记录 · 本周支出 ¥{formatMoneyShort(weekExpense)}
-        </p>
-
-        <div className="og-today">
-          <span className="og-tile is-green">
-            <Plus size={20} strokeWidth={2.2} />
-          </span>
-          <div className="og-today-copy">
-            <span className="og-eyebrow">{weekOffset === 0 ? '今天' : '这一周'}</span>
-            <b>
-              {weekOffset === 0 ? '已花 ' : '共花 '}
-              <Money cents={weekOffset === 0 ? todaySum.expense : weekExpense} decimals="never" />
-            </b>
-            <small>
-              {weekOffset === 0
-                ? `按天可花 ¥${formatMoneyShort(Math.max(0, flow.dailyAvailable))}`
-                : `${recordedDays} 天有记录`}
-            </small>
-          </div>
-          <button className="og-pill" onClick={onAdd} type="button">
-            {weekOffset === 0 ? '记一笔' : '记今天'}
-          </button>
-        </div>
-
-        <button className="og-ghost-row" onClick={onGoLedger} type="button">
-          查看本周流水
-          <ChevronRight size={14} strokeWidth={1.8} />
-        </button>
-      </section>
 
       <section className="og-card" aria-label="本月预算">
         <div className="og-card-head">
