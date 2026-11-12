@@ -2,27 +2,18 @@ import type { CSSProperties } from 'react'
 import { Bookmark, ChevronRight, ReceiptText, Target } from 'lucide-react'
 import { useLedger } from '../data'
 import {
-  addDays,
-  addMonths,
   categoryBreakdown,
-  dailySeries,
-  daysInMonth,
   formatDay,
   formatMonth,
   formatPercent,
-  inRange,
   moneyFlow,
-  monthRange,
-  parseDate,
   stateMonthTxs,
-  sumAmount,
-  summarize,
   todayStr,
   weekdayLabel,
 } from '../utils'
 import { EXPENSE_CATEGORIES, findCategory } from '../data'
 import type { Tx } from '../types'
-import { CategoryIcon, Empty, Money, Seal, SparkSummary, TxRow } from '../components'
+import { CategoryIcon, Empty, Money, Seal, TxRow } from '../components'
 
 export function Home({
   onAdd,
@@ -60,12 +51,6 @@ export function Home({
   const fixedPct = flow.salary > 0 ? (flow.fixedCost / flow.salary) * 100 : 0
   const remainPct = flow.available > 0 ? (Math.max(0, flow.remaining) / flow.available) * 100 : 0
   const todayLabel = `${formatDay(today)} · ${weekdayLabel(today)}`
-  const monthSum = summarize(monthTxs)
-  const points = dailySeries(monthTxs, monthRange(today).start, today).map((d) => d.amount)
-  const prevStart = monthRange(addMonths(today, -1)).start
-  const prevDays = Math.min(parseDate(today).getDate(), daysInMonth(prevStart))
-  const prevSpent = sumAmount(inRange(state.txs, prevStart, addDays(prevStart, prevDays - 1)), 'expense')
-  const comparePct = prevSpent > 0 ? ((flow.spent - prevSpent) / prevSpent) * 100 : null
 
   return (
     <div className="page home">
@@ -165,16 +150,6 @@ export function Home({
           ))}
         </div>
       </section>
-
-      <SparkSummary
-        label={formatMonth(today)}
-        spent={flow.spent}
-        income={monthSum.income}
-        balance={monthSum.income - flow.spent}
-        spentPct={flow.spentPct}
-        points={points}
-        comparePct={comparePct}
-      />
 
       <section className="og-card list-card" aria-label="最近记录">
         <div className="og-card-head is-plain">
