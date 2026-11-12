@@ -14,6 +14,16 @@ export function formatMoneyShort(cents: number): string {
   return `${Math.round(abs / 100).toLocaleString('zh-CN')}`
 }
 
+/** 日历格子里的紧凑金额：−128.5 / +2,500 / +1.3万 */
+export function formatCompactAmount(cents: number): string {
+  if (!cents) return '0'
+  const sign = cents > 0 ? '+' : '−'
+  const yuan = Math.abs(cents) / 100
+  if (yuan >= 10000) return `${sign}${(yuan / 10000).toFixed(1).replace(/\.0$/, '')}万`
+  if (yuan >= 1000) return `${sign}${Math.round(yuan).toLocaleString('zh-CN')}`
+  return `${sign}${Number.isInteger(yuan) ? yuan : Number(yuan.toFixed(1))}`
+}
+
 /** parse a user-typed yuan string into integer cents */
 export function parseYuan(input: string): number {
   const clean = input.replace(/[^\d.]/g, '')

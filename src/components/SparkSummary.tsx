@@ -132,7 +132,9 @@ export function SparkSummary({
               </linearGradient>
             </defs>
             <path className="spark-grid" d={`M 0 ${VH * 0.4} H ${VW}`} />
-            <path className="spark-area" d={geo.area} fill="url(#sparkFill)" style={{ opacity: visible ? 1 : 0 }} />
+            {!isEmpty && (
+              <path className="spark-area" d={geo.area} fill="url(#sparkFill)" style={{ opacity: visible ? 1 : 0 }} />
+            )}
             <path ref={pathRef} className={`spark-line${isEmpty ? ' is-empty' : ''}`} d={geo.line} />
           </svg>
           {!isEmpty && (

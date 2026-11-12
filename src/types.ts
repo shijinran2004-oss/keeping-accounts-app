@@ -180,6 +180,43 @@ export interface SealProps {
   className?: string
 }
 
+/** 明细页日历的两种显示方式：金额 / 圆点 */
+export type CalendarMode = 'amount' | 'dot'
+
+/** 日历里的一天（已按账本汇总） */
+export interface CalendarCell {
+  /** YYYY-MM-DD */
+  date: string
+  /** 1–31，格子上的数字 */
+  day: number
+  /** 是否属于当前浏览的月份（前后补位的日期为 false） */
+  inMonth: boolean
+  /** 当日支出，单位：分 */
+  expense: number
+  /** 当日收入，单位：分 */
+  income: number
+  /** 当日记录条数 */
+  count: number
+}
+
+/** 明细页的月历卡片 */
+export interface MonthCalendarProps {
+  /** 当前浏览的月份，任意一天即可（内部只看年月） */
+  month: string
+  /** 选中的日期 YYYY-MM-DD */
+  selected: string
+  /** 整月格子（从周一开始，长度是 7 的倍数） */
+  cells: CalendarCell[]
+  mode: CalendarMode
+  /** 只显示选中日期所在的那一周 */
+  weekOnly: boolean
+  onChangeMonth: (delta: number) => void
+  onSelect: (date: string) => void
+  onToday: () => void
+  onMode: (mode: CalendarMode) => void
+  onToggleWeek: () => void
+}
+
 /** 明细页顶部迷你趋势卡（横条） */
 export interface SparkSummaryProps {
   label: string

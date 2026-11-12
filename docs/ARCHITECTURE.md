@@ -21,6 +21,7 @@ shijinran-money/
 │  │  ├─ Money.tsx        金额渲染（分 → 千分位 + 小数弱化）
 │  │  ├─ Charts.tsx       手写 SVG 柱状图 / 环形图
 │  │  ├─ SparkSummary.tsx 明细页趋势横条（描边生长 + 面积淡入 + 末点呼吸光斑）
+│  │  ├─ MonthCalendar.tsx 明细页月历（金额/圆点、周视图折叠、跨月选中）
 │  │  ├─ SuccessReceipt.tsx 记账成功小票（金币落槽 → 出票 → 砸章）
 │  │  ├─ MorphSheet.tsx   形变弹层容器（从 + 号按钮长成面板，收起时缩回）
 │  │  ├─ Seal.tsx         小狗印章（页头 / 我的 / 引导页 / 小票共用，尺寸三档）
