@@ -79,6 +79,7 @@ openGym 是 AGPL-3.0，这里只借鉴版式与间距，没有复制它的代码
 | 加一个数据类型 / props 契约 | `src/types.ts` |
 | 加一个计算口径（如年统计） | `src/utils/stats.ts` |
 | 改备份文件名或导出方式 | `src/utils/backup.ts`（页面只调 `exportBackupFile` / `readBackupFile`） |
+| 改头像裁剪尺寸或格式 | `src/utils/avatar.ts` 的 `fileToAvatar` |
 | 加一个持久化字段 | `src/types.ts` 的 `LedgerState` + `store.tsx` 的 `freshState` / `normalize` |
 | 加内置分类 | `src/data/categories.ts` |
 

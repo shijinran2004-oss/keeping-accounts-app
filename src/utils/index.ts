@@ -6,6 +6,7 @@ export * from './date'
 export * from './stats'
 export { tap, tapSuccess } from './haptics'
 export { pushModal, popModal, closeTopModal } from './modalStack'
+export { fileToAvatar } from './avatar'
 export {
   backupFileName,
   backupJson,

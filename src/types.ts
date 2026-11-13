@@ -65,6 +65,8 @@ export interface Settings {
   fixedCost: number
   /** 是否完成首次引导 */
   onboarded: boolean
+  /** 自定义头像，data:image/... 的 data URL；为空时显示默认小狗印章 */
+  avatar?: string
 }
 
 /** 本地持久化的完整账本状态 */

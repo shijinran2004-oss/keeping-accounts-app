@@ -53,6 +53,7 @@ function normalize(raw: unknown): LedgerState | null {
       salary: Math.max(0, Math.round(Number(s.salary) || 0)),
       fixedCost: Math.max(0, Math.round(Number(s.fixedCost) || 0)),
       onboarded: !!s.onboarded,
+      avatar: typeof s.avatar === 'string' && /^data:image\//.test(s.avatar) ? s.avatar : undefined,
     },
   }
 }

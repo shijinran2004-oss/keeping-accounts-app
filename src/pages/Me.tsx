@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import {
+  Camera,
   ChevronRight,
   Clipboard,
   Download,
@@ -21,6 +22,7 @@ import {
   backupFileName,
   backupJson,
   centsToYuanInput,
+  fileToAvatar,
   exportBackupFile,
   formatBytes,
   formatMoney,
@@ -36,11 +38,13 @@ import { Clipboard as CapClipboard } from '@capacitor/clipboard'
 import { CategoryIcon, Seal, SectionTitle, Sheet, useToast } from '../components'
 
 export function Me() {
-  const { state, clearTxs, resetAll } = useLedger()
+  const { state, saveSettings, clearTxs, resetAll } = useLedger()
   const toast = useToast()
   const [budgetOpen, setBudgetOpen] = useState(false)
   const [categoryOpen, setCategoryOpen] = useState(false)
   const [dataOpen, setDataOpen] = useState(false)
+  const [avatarBusy, setAvatarBusy] = useState(false)
+  const avatarInput = useRef<HTMLInputElement>(null)
 
   const days = new Set(state.txs.map((t) => t.date)).size
   const first = [...state.txs].sort((a, b) => a.date.localeCompare(b.date))[0]
@@ -55,7 +59,44 @@ export function Me() {
       </header>
 
       <section className="profile-card">
-        <Seal size="lg" />
+        <button
+          type="button"
+          className="avatar-btn"
+          aria-label="从相册更换头像"
+          onClick={() => avatarInput.current?.click()}
+        >
+          {state.settings.avatar ? (
+            <img src={state.settings.avatar} alt="我的头像" />
+          ) : (
+            <Seal size="lg" />
+          )}
+          <span className="avatar-badge" aria-hidden="true">
+            <Camera size={12} strokeWidth={2.2} />
+          </span>
+        </button>
+        <input
+          ref={avatarInput}
+          type="file"
+          accept="image/*"
+          className="file-input"
+          aria-hidden="true"
+          tabIndex={-1}
+          onChange={async (e) => {
+            const file = e.target.files?.[0]
+            e.target.value = ''
+            if (!file || avatarBusy) return
+            setAvatarBusy(true)
+            try {
+              const avatar = await fileToAvatar(file)
+              saveSettings({ avatar })
+              toast('头像已更新')
+            } catch {
+              toast('这张图片读不了，换一张试试')
+            } finally {
+              setAvatarBusy(false)
+            }
+          }}
+        />
         <div className="profile-main">
           <h2>使劲燃的钱</h2>
           <p>每一笔，都算数</p>
@@ -107,9 +148,13 @@ export function Me() {
       </section>
 
       <footer className="me-foot">
-        <Seal size="mini" />
+        {state.settings.avatar ? (
+          <img className="me-foot-avatar" src={state.settings.avatar} alt="" />
+        ) : (
+          <Seal size="mini" />
+        )}
         <div>
-          <b>使劲燃的钱 v1.1.4</b>
+          <b>使劲燃的钱 v1.1.5</b>
           <p><ShieldCheck size={13} strokeWidth={1.6} /> 数据只保存在这台手机上，不上传</p>
         </div>
         <button
