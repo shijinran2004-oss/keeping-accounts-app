@@ -89,6 +89,7 @@ openGym 是 AGPL-3.0，这里只借鉴版式与间距，没有复制它的代码
 | 改备份文件名或导出方式 | `src/utils/backup.ts`（页面只调 `exportBackupFile` / `readBackupFile`） |
 | 改头像裁剪尺寸或格式 | `src/utils/avatar.ts` 的 `fileToAvatar` |
 | 改主题 / 强调色预设 | `src/utils/theme.ts` 的 `ACCENTS`，配色值在 `styles/og.css` 顶部 |
+| 改账本名字 / 问候语 | `Settings.name`（默认值 `DEFAULT_LEDGER_NAME`）+ `Home.tsx` 里的 `greeting(now)` 与 30 秒时钟 |
 | 加一个持久化字段 | `src/types.ts` 的 `LedgerState` + `store.tsx` 的 `freshState` / `normalize` |
 | 加内置分类 | `src/data/categories.ts` |
 

@@ -10,6 +10,7 @@ import {
   MonitorSmartphone,
   Moon,
   Palette,
+  Pencil,
   Plus,
   ReceiptText,
   ShieldCheck,
@@ -19,7 +20,7 @@ import {
   Upload,
   Wallet,
 } from 'lucide-react'
-import { useLedger } from '../data'
+import { DEFAULT_LEDGER_NAME, useLedger } from '../data'
 import { COLOR_CHOICES, ICON_CHOICES } from '../data'
 import {
   ACCENTS,
@@ -52,6 +53,7 @@ export function Me() {
   const [budgetOpen, setBudgetOpen] = useState(false)
   const [categoryOpen, setCategoryOpen] = useState(false)
   const [dataOpen, setDataOpen] = useState(false)
+  const [nameOpen, setNameOpen] = useState(false)
   const [avatarBusy, setAvatarBusy] = useState(false)
   const avatarInput = useRef<HTMLInputElement>(null)
 
@@ -59,6 +61,7 @@ export function Me() {
   const first = [...state.txs].sort((a, b) => a.date.localeCompare(b.date))[0]
   const theme = state.settings.theme ?? 'dark'
   const accent = state.settings.accent ?? 'lime'
+  const ledgerName = state.settings.name?.trim() || DEFAULT_LEDGER_NAME
 
   return (
     <div className="page me">
@@ -109,7 +112,15 @@ export function Me() {
           }}
         />
         <div className="profile-main">
-          <h2>使劲燃的钱</h2>
+          <button
+            className="profile-name"
+            type="button"
+            aria-label="修改账本名字"
+            onClick={() => setNameOpen(true)}
+          >
+            <span>{ledgerName}</span>
+            <Pencil size={13} strokeWidth={2} />
+          </button>
           <p>每一笔，都算数</p>
         </div>
         <div className="profile-stats">
@@ -206,7 +217,7 @@ export function Me() {
       <footer className="me-foot">
         <img className="me-brand-icon" src={appIcon} alt="使劲燃的钱" />
         <div>
-          <b>使劲燃的钱 v1.1.11</b>
+          <b>使劲燃的钱 v1.1.12</b>
           <p><ShieldCheck size={13} strokeWidth={1.6} /> 数据只保存在这台手机上，不上传</p>
         </div>
         <button
@@ -223,6 +234,7 @@ export function Me() {
         </button>
       </footer>
 
+      <NameSheet open={nameOpen} onClose={() => setNameOpen(false)} />
       <BudgetSheet open={budgetOpen} onClose={() => setBudgetOpen(false)} />
       <CategorySheet open={categoryOpen} onClose={() => setCategoryOpen(false)} />
       <DataSheet
@@ -261,6 +273,47 @@ function Row({
       {value && <span className="setting-value">{value}</span>}
       {onClick && <ChevronRight size={16} strokeWidth={1.6} className="setting-chev" />}
     </button>
+  )
+}
+
+function NameSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const { state, saveSettings } = useLedger()
+  const toast = useToast()
+  const [draft, setDraft] = useState('')
+
+  useEffect(() => {
+    if (open) setDraft(state.settings.name?.trim() || DEFAULT_LEDGER_NAME)
+  }, [open, state.settings.name])
+
+  const save = () => {
+    const next = draft.trim() || DEFAULT_LEDGER_NAME
+    saveSettings({ name: next })
+    toast('名字已更新')
+    onClose()
+  }
+
+  return (
+    <Sheet open={open} onClose={onClose} title="账本名字">
+      <div className="sheet-body form">
+        <label className="field">
+          <span>名字</span>
+          <input
+            className="name-input"
+            value={draft}
+            maxLength={20}
+            placeholder={DEFAULT_LEDGER_NAME}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') save()
+            }}
+          />
+        </label>
+        <p className="field-note">最多 20 个字；首页大标题会同步显示，问候语按手机时间自动变。</p>
+        <button className="btn-primary" type="button" disabled={!draft.trim()} onClick={save}>
+          保存
+        </button>
+      </div>
+    </Sheet>
   )
 }
 

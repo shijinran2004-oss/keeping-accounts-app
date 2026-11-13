@@ -3,6 +3,8 @@ import type { Category, LedgerApi, LedgerState, NewCategory, Settings, Tx, TxDra
 import { isAccentKey, isThemeMode } from '../utils/theme'
 import { DEFAULT_CATEGORIES } from './categories'
 
+export const DEFAULT_LEDGER_NAME = '使劲燃的钱'
+
 const STORAGE_KEY = 'shijinran.money.v1'
 /** 旧版本（小满账本）用过的键，读取时做一次性迁移 */
 const LEGACY_KEY = 'xiaoman.ledger.v1'
@@ -17,7 +19,7 @@ export function freshState(): LedgerState {
     version: 1,
     txs: [],
     categories: DEFAULT_CATEGORIES.map((c) => ({ ...c })),
-    settings: { salary: 0, fixedCost: 0, onboarded: false },
+    settings: { salary: 0, fixedCost: 0, onboarded: false, name: DEFAULT_LEDGER_NAME },
   }
 }
 
@@ -54,6 +56,7 @@ function normalize(raw: unknown): LedgerState | null {
       salary: Math.max(0, Math.round(Number(s.salary) || 0)),
       fixedCost: Math.max(0, Math.round(Number(s.fixedCost) || 0)),
       onboarded: !!s.onboarded,
+      name: typeof s.name === 'string' ? s.name.trim().slice(0, 20) : DEFAULT_LEDGER_NAME,
       avatar: typeof s.avatar === 'string' && /^data:image\//.test(s.avatar) ? s.avatar : undefined,
       theme: isThemeMode(s.theme) ? s.theme : 'dark',
       accent: isAccentKey(s.accent) ? s.accent : 'lime',

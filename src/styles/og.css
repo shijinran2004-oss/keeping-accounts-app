@@ -1083,12 +1083,15 @@ button {
 
 .home-hero h1 {
   margin: 3px 0 6px;
+  max-width: 100%;
+  overflow: hidden;
   font-size: clamp(23px, 6.9vw, 28px);
   line-height: 1.08;
   font-weight: 700;
   letter-spacing: -0.035em;
   color: var(--ink);
   white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .home-hero-state {
@@ -1676,4 +1679,21 @@ button {
   color: var(--ink-3);
   font-size: 11px;
   text-align: center;
+}
+
+
+.name-input {
+  width: 100%;
+  height: 46px;
+  padding: 0 13px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface-2);
+  color: var(--ink);
+  font-size: 16px;
+  letter-spacing: 0.01em;
+}
+
+.name-input::placeholder {
+  color: var(--ink-3);
 }

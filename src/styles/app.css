@@ -1840,11 +1840,36 @@ textarea:focus-visible {
   min-width: 0;
 }
 
-.profile-main h2 {
+.profile-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
   font-family: var(--display);
   font-size: 17px;
   font-weight: 600;
   letter-spacing: 0.04em;
+  text-align: left;
+  cursor: pointer;
+}
+
+.profile-name span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-name svg {
+  flex: none;
+  opacity: 0.45;
+}
+
+.profile-name:active {
+  opacity: 0.72;
 }
 
 .profile-main p {

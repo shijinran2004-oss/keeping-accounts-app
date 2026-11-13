@@ -1,15 +1,16 @@
 import { useEffect, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { Bookmark, ChevronRight, ReceiptText, Settings, Target } from 'lucide-react'
-import { useLedger } from '../data'
+import { DEFAULT_LEDGER_NAME, useLedger } from '../data'
 import {
   categoryBreakdown,
   formatDay,
   formatMonth,
   formatPercent,
+  greeting,
   moneyFlow,
   stateMonthTxs,
-  todayStr,
+  toDateStr,
   weekdayLabel,
 } from '../utils'
 import { EXPENSE_CATEGORIES, findCategory } from '../data'
@@ -32,7 +33,21 @@ export function Home({
   onQuickAdd: (categoryId: string) => void
 }) {
   const { state } = useLedger()
-  const today = todayStr()
+  const [now, setNow] = useState(() => new Date())
+  useEffect(() => {
+    const tick = () => setNow(new Date())
+    const timer = window.setInterval(tick, 30_000)
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') tick()
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      window.clearInterval(timer)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
+  }, [])
+  const today = toDateStr(now)
+  const ledgerName = state.settings.name?.trim() || DEFAULT_LEDGER_NAME
   const monthTxs = stateMonthTxs(state, today)
   const flow = moneyFlow(state.settings, monthTxs, today)
   const recent = [...state.txs]
@@ -75,8 +90,10 @@ export function Home({
           <Doghouse mood={dogMood} onClick={() => setDancing(true)} />
         </div>
         <div className="home-hero-copy">
-          <span className="home-hero-date">{todayLabel}</span>
-          <h1>使劲燃的钱</h1>
+          <span className="home-hero-date">
+            {greeting(now)} · {todayLabel}
+          </span>
+          <h1 title={ledgerName}>{ledgerName}</h1>
           <span className={`home-hero-state is-${dogMood}`}>
             <i />
             {dogLine}

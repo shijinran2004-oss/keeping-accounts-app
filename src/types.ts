@@ -65,6 +65,8 @@ export interface Settings {
   fixedCost: number
   /** 是否完成首次引导 */
   onboarded: boolean
+  /** 账本名字，首页与「我的」共用；空值时回落到「使劲燃的钱」 */
+  name?: string
   /** 自定义头像，data:image/... 的 data URL；为空时显示默认小狗印章 */
   avatar?: string
   /** 外观：深色 / 浅色 / 跟随系统（参考 openGym 的主题系统） */
