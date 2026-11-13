@@ -15,3 +15,14 @@ export {
   exportBackupFile,
   readBackupFile,
 } from './backup'
+export {
+  ACCENTS,
+  THEME_OPTIONS,
+  accentName,
+  applyTheme,
+  applyThemeFromStorage,
+  isAccentKey,
+  isThemeMode,
+  resolveTheme,
+  themeName,
+} from './theme'

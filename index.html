@@ -4,6 +4,26 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no" />
     <meta name="theme-color" content="#000000" />
+    <script>
+      // 首屏前恢复主题，避免深色默认值闪一下（与 src/utils/theme.ts 同源逻辑）
+      (function () {
+        try {
+          var raw = localStorage.getItem('shijinran.money.v1');
+          var settings = raw ? (JSON.parse(raw).settings || {}) : {};
+          var mode = settings.theme === 'light' || settings.theme === 'system' ? settings.theme : 'dark';
+          var theme = mode === 'system'
+            ? (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark')
+            : mode;
+          var accent = settings.accent || 'lime';
+          var root = document.documentElement;
+          root.dataset.theme = theme;
+          root.dataset.accent = accent;
+          root.style.colorScheme = theme;
+          var meta = document.querySelector('meta[name="theme-color"]');
+          if (meta) meta.setAttribute('content', theme === 'light' ? '#F2F2F7' : '#000000');
+        } catch (e) {}
+      })();
+    </script>
     <link rel="icon" type="image/png" sizes="64x64" href="/favicon.png" />
     <link rel="apple-touch-icon" href="/favicon-192.png" />
     <meta name="description" content="使劲燃的钱 —— 每一笔，都算数。" />

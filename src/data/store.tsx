@@ -1,5 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import type { Category, LedgerApi, LedgerState, NewCategory, Settings, Tx, TxDraft } from '../types'
+import { isAccentKey, isThemeMode } from '../utils/theme'
 import { DEFAULT_CATEGORIES } from './categories'
 
 const STORAGE_KEY = 'shijinran.money.v1'
@@ -54,6 +55,8 @@ function normalize(raw: unknown): LedgerState | null {
       fixedCost: Math.max(0, Math.round(Number(s.fixedCost) || 0)),
       onboarded: !!s.onboarded,
       avatar: typeof s.avatar === 'string' && /^data:image\//.test(s.avatar) ? s.avatar : undefined,
+      theme: isThemeMode(s.theme) ? s.theme : 'dark',
+      accent: isAccentKey(s.accent) ? s.accent : 'lime',
     },
   }
 }

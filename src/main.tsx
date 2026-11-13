@@ -6,12 +6,14 @@ import App from './App'
 import { Capacitor } from '@capacitor/core'
 import { StatusBar, Style } from '@capacitor/status-bar'
 import { SplashScreen } from '@capacitor/splash-screen'
+import { applyThemeFromStorage } from './utils'
 
 async function initNative() {
   if (!Capacitor.isNativePlatform()) return
+  const light = document.documentElement.dataset.theme === 'light'
   try {
-    await StatusBar.setStyle({ style: Style.Dark })
-    await StatusBar.setBackgroundColor({ color: '#000000' })
+    await StatusBar.setStyle({ style: light ? Style.Dark : Style.Light })
+    await StatusBar.setBackgroundColor({ color: light ? '#F2F2F7' : '#000000' })
   } catch {
     /* plugin unavailable */
   }
@@ -22,6 +24,7 @@ async function initNative() {
   }
 }
 
+applyThemeFromStorage()
 void initNative()
 
 ReactDOM.createRoot(document.getElementById('root')!).render(

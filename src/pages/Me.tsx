@@ -7,9 +7,13 @@ import {
   FileJson,
   FolderOpen,
   Info,
+  MonitorSmartphone,
+  Moon,
+  Palette,
   Plus,
   ReceiptText,
   ShieldCheck,
+  Sun,
   Tags,
   Trash2,
   Upload,
@@ -18,6 +22,9 @@ import {
 import { useLedger } from '../data'
 import { COLOR_CHOICES, ICON_CHOICES } from '../data'
 import {
+  ACCENTS,
+  THEME_OPTIONS,
+  accentName,
   backupBytes,
   backupFileName,
   backupJson,
@@ -28,6 +35,7 @@ import {
   formatMoney,
   parseYuan,
   readBackupFile,
+  themeName,
   todayStr,
 } from '../utils'
 import { formatDay } from '../utils'
@@ -49,6 +57,8 @@ export function Me() {
 
   const days = new Set(state.txs.map((t) => t.date)).size
   const first = [...state.txs].sort((a, b) => a.date.localeCompare(b.date))[0]
+  const theme = state.settings.theme ?? 'dark'
+  const accent = state.settings.accent ?? 'lime'
 
   return (
     <div className="page me">
@@ -110,6 +120,51 @@ export function Me() {
       </section>
 
       <section className="section">
+        <SectionTitle>外观</SectionTitle>
+        <div className="card theme-card">
+          <div className="theme-head">
+            <span className="theme-label"><Palette size={17} strokeWidth={1.7} /> 主题</span>
+            <span className="theme-value">{themeName(theme)} · {accentName(accent)}</span>
+          </div>
+          <div className="theme-modes">
+            {THEME_OPTIONS.map((option) => {
+              const OptionIcon =
+                option.key === 'light' ? Sun : option.key === 'system' ? MonitorSmartphone : Moon
+              return (
+                <button
+                  key={option.key}
+                  type="button"
+                  className={`theme-mode${theme === option.key ? ' is-on' : ''}`}
+                  onClick={() => saveSettings({ theme: option.key })}
+                >
+                  <OptionIcon size={14} strokeWidth={1.8} />
+                  {option.name}
+                </button>
+              )
+            })}
+          </div>
+          <div className="accent-head">
+            <span>强调色</span>
+            <span className="theme-value">{accentName(accent)}</span>
+          </div>
+          <div className="accent-grid">
+            {ACCENTS.map((item) => (
+              <button
+                key={item.key}
+                type="button"
+                className={`accent-swatch${accent === item.key ? ' is-on' : ''}`}
+                style={{ '--sw': item.hex } as CSSProperties}
+                aria-label={`强调色：${item.name}`}
+                aria-pressed={accent === item.key}
+                onClick={() => saveSettings({ accent: item.key })}
+              />
+            ))}
+          </div>
+          <p className="field-note">主题与强调色参考 openGym：深/浅色、跟随系统，8 个 Apple 系统色。</p>
+        </div>
+      </section>
+
+      <section className="section">
         <SectionTitle>收入与预算</SectionTitle>
         <div className="card settings-card">
           <Row
@@ -151,7 +206,7 @@ export function Me() {
       <footer className="me-foot">
         <img className="me-brand-icon" src={appIcon} alt="使劲燃的钱" />
         <div>
-          <b>使劲燃的钱 v1.1.7</b>
+          <b>使劲燃的钱 v1.1.8</b>
           <p><ShieldCheck size={13} strokeWidth={1.6} /> 数据只保存在这台手机上，不上传</p>
         </div>
         <button

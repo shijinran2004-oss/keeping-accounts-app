@@ -67,7 +67,17 @@ export interface Settings {
   onboarded: boolean
   /** 自定义头像，data:image/... 的 data URL；为空时显示默认小狗印章 */
   avatar?: string
+  /** 外观：深色 / 浅色 / 跟随系统（参考 openGym 的主题系统） */
+  theme?: ThemeMode
+  /** 强调色预设，默认青柠绿 */
+  accent?: AccentKey
 }
+
+/** 深色 / 浅色 / 跟随系统 */
+export type ThemeMode = 'dark' | 'light' | 'system'
+
+/** 参考 openGym 的 8 个 Apple 系统强调色 */
+export type AccentKey = 'lime' | 'sky' | 'orange' | 'violet' | 'pink' | 'red' | 'teal' | 'gold'
 
 /** 本地持久化的完整账本状态 */
 export interface LedgerState {

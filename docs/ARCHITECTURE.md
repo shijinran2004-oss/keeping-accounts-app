@@ -7,7 +7,7 @@ shijinran-money/
 ├─ src/
 │  ├─ types.ts            全项目唯一的类型文件（领域模型 + 数据接口 + 组件契约）
 │  ├─ App.tsx             应用外壳：Tab 切换、弹层调度、Android 返回键
-│  ├─ main.tsx            入口：样式、状态栏与启动屏
+│  ├─ main.tsx            入口：样式、启动前恢复主题、状态栏与启动屏
 │  ├─ data/               数据层
 │  │  ├─ index.ts         对外唯一入口（页面只从这里 import）
 │  │  ├─ store.tsx        LedgerProvider / useLedger / 本地持久化 / 导入导出
@@ -33,13 +33,14 @@ shijinran-money/
 │  │  ├─ date.ts          本地日期运算（周一为周首）
 │  │  ├─ stats.ts         区间筛选、分类汇总、资金口径 moneyFlow、连续记账天数 streakDays
 │  │  ├─ backup.ts        备份文件的生成 / 写入 / 分享 / 读取（文件名、JSON、字节数）
+│  │  ├─ theme.ts         主题 / 强调色：data-theme / data-accent、系统偏好、本地恢复
 │  │  ├─ haptics.ts       触感反馈（Capacitor）
 │  │  └─ modalStack.ts    弹层栈，供返回键关闭
 │  ├─ assets/fonts/       随包分发的中文字体子集（鸿蒙 Sans SC ×3 字重 + Nunito）
 │  ├─ assets/mascot.png 印章用的小图（由 build_brand.py 生成）
 │  ├─ vite-env.d.ts       只为 png / woff2 等打包资源提供类型，不放业务类型
 │  ├─ styles/app.css      结构、组件与基础样式（文件头有分区目录）
-│  └─ styles/og.css       深色皮肤：token 覆盖、首页 / 底栏 / 各页面深色化，后加载覆盖
+│  └─ styles/og.css       主题皮肤：深/浅两套 token、8 个强调色、首页 / 底栏 / 各页面覆盖
 ├─ android/               Capacitor 生成的 Android 工程（SDK 35 / AGP 8.7.2）
 ├─ design/build_icon.py   桌面图标：抠白底、5 密度、圆形 / 自适应 / 单色层、favicon
 ├─ design/build_brand.py  启动图 / App 内印章：抠白底、各密度启动图
@@ -54,9 +55,15 @@ shijinran-money/
 ## 视觉层
 
 `main.tsx` 先 import `styles/app.css`，再 import `styles/og.css`。前者是组件与布局的「结构层」，
-后者只做两件事：在 `:root` 覆盖颜色 / 圆角 / 字体 token，以及针对具体页面补深色规则。
+后者只做两件事：在 `:root` 覆盖颜色 / 圆角 / 字体 token，以及针对具体页面补主题规则。
 同样的选择器，后者因为后加载而生效；所以**换整套配色只改 `og.css` 顶部的 token 区**，
-不要在页面里写死颜色（`#30d158` 这类值只应出现在 token 与 SVG 渐变里）。
+不要在页面里写死颜色（`#30d158` 这类值只应出现在 token、强调色预设与 SVG 渐变里）。
+
+主题分三层：
+
+1. `:root` 是深色默认值；`:root[data-theme="light"]` 覆盖同一组语义 token（`--paper` / `--card` / `--ink` / `--line` / `--moss`…）。
+2. 8 组 `:root[data-accent="…"]` 覆盖 `--accent` / `--accent-deep` / `--on-accent`；浅色下再叠一层 `[data-theme="light"][data-accent="…"]`，换成白底可读的深色版本。
+3. `utils/theme.ts` 负责把用户选择写成 `data-theme` / `data-accent`、跟随 `prefers-color-scheme`、在首屏前从 localStorage 恢复；`index.html` 里还有一段等价的内联脚本，避免 JS 加载前闪一下深色。页面里只存 `settings.theme` / `settings.accent`，不存具体色值。
 
 当前视觉参考 openGym 的移动端版式：纯黑底、`#1c1c1e` 卡片、16px 间距、全宽卡片、底部通栏五项导航。
 openGym 是 AGPL-3.0，这里只借鉴版式与间距，没有复制它的代码或素材。
@@ -80,6 +87,7 @@ openGym 是 AGPL-3.0，这里只借鉴版式与间距，没有复制它的代码
 | 加一个计算口径（如年统计） | `src/utils/stats.ts` |
 | 改备份文件名或导出方式 | `src/utils/backup.ts`（页面只调 `exportBackupFile` / `readBackupFile`） |
 | 改头像裁剪尺寸或格式 | `src/utils/avatar.ts` 的 `fileToAvatar` |
+| 改主题 / 强调色预设 | `src/utils/theme.ts` 的 `ACCENTS`，配色值在 `styles/og.css` 顶部 |
 | 加一个持久化字段 | `src/types.ts` 的 `LedgerState` + `store.tsx` 的 `freshState` / `normalize` |
 | 加内置分类 | `src/data/categories.ts` |
 

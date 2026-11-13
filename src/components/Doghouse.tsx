@@ -42,7 +42,7 @@ export function Doghouse({ mood = 'peaceful', className = '', onClick }: Doghous
       )}
 
       <svg viewBox="0 0 120 108" fill="none" xmlns="http://www.w3.org/2000/svg" className="dh-svg">
-        <ellipse cx="58" cy="102" rx="44" ry="4" fill="#E2E8F0" />
+        <ellipse className="dh-ground" cx="58" cy="102" rx="44" ry="4" fill="#E2E8F0" />
 
         {mood === 'peaceful' && (
           <g>

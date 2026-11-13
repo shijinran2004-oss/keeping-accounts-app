@@ -18,10 +18,11 @@
   --line-soft: rgba(84, 84, 88, 0.34);
   --accent: #30d158;
   --accent-deep: #248a3d;
-  --accent-soft: rgba(48, 209, 88, 0.16);
+  --accent-soft: color-mix(in srgb, var(--accent) 16%, transparent);
   --on-accent: #000000;
   --moss: #30d158;
   --moss-soft: rgba(48, 209, 88, 0.14);
+  --theme-ring: #ffffff;
   --gold: #ff9f0a;
   --orange: #ff9f0a;
   --blue: #0a84ff;
@@ -33,12 +34,90 @@
     'Microsoft YaHei', system-ui, sans-serif;
 }
 
+/* ===== openGym 浅色主题：同一套语义 token，换一组值 ===== */
+:root[data-theme="light"] {
+  --paper: #f2f2f7;
+  --paper-deep: #eaeaef;
+  --card: #ffffff;
+  --surface: #ffffff;
+  --surface-2: #ececef;
+  --surface-3: #e3e3e8;
+  --ink: #000000;
+  --ink-2: rgba(60, 60, 67, 0.75);
+  --ink-3: rgba(60, 60, 67, 0.3);
+  --line: rgba(60, 60, 67, 0.29);
+  --line-soft: rgba(60, 60, 67, 0.18);
+  --moss: #1a7f37;
+  --moss-soft: rgba(26, 127, 55, 0.12);
+  --gold: #a85200;
+  --orange: #ff9500;
+  --blue: #007aff;
+  --theme-ring: #000000;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+/* ===== openGym 的强调色预设（深色用亮色填充，浅色用可读的深色文字版） ===== */
+:root[data-accent="lime"]   { --accent: #30d158; --accent-deep: #248a3d; --on-accent: #000000; }
+:root[data-accent="sky"]    { --accent: #0a84ff; --accent-deep: #0060df; --on-accent: #ffffff; }
+:root[data-accent="orange"] { --accent: #ff9f0a; --accent-deep: #c76b00; --on-accent: #000000; }
+:root[data-accent="violet"] { --accent: #bf5af2; --accent-deep: #8944ab; --on-accent: #ffffff; }
+:root[data-accent="pink"]   { --accent: #ff375f; --accent-deep: #d70036; --on-accent: #ffffff; }
+:root[data-accent="red"]    { --accent: #ff453a; --accent-deep: #d70015; --on-accent: #ffffff; }
+:root[data-accent="teal"]   { --accent: #40c8e0; --accent-deep: #0071a4; --on-accent: #000000; }
+:root[data-accent="gold"]   { --accent: #ffd60a; --accent-deep: #b25000; --on-accent: #000000; }
+
+:root[data-theme="light"][data-accent="lime"]   { --accent: #1a7f37; --accent-deep: #146c2e; --on-accent: #ffffff; }
+:root[data-theme="light"][data-accent="sky"]    { --accent: #0062cc; --accent-deep: #004fa8; --on-accent: #ffffff; }
+:root[data-theme="light"][data-accent="orange"] { --accent: #a85200; --accent-deep: #8a4300; --on-accent: #ffffff; }
+:root[data-theme="light"][data-accent="violet"] { --accent: #8944ab; --accent-deep: #71378d; --on-accent: #ffffff; }
+:root[data-theme="light"][data-accent="pink"]   { --accent: #d70036; --accent-deep: #b3002d; --on-accent: #ffffff; }
+:root[data-theme="light"][data-accent="red"]    { --accent: #d70015; --accent-deep: #b30012; --on-accent: #ffffff; }
+:root[data-theme="light"][data-accent="teal"]   { --accent: #0071a4; --accent-deep: #005c86; --on-accent: #ffffff; }
+:root[data-theme="light"][data-accent="gold"]   { --accent: #8f5e00; --accent-deep: #744c00; --on-accent: #ffffff; }
+
+:root[data-theme="light"] .tabbar {
+  background: rgba(247, 247, 250, 0.9);
+  border-top-color: rgba(60, 60, 67, 0.16);
+}
+
+:root[data-theme="light"] .tabbar .tab:not(.is-active) {
+  color: var(--ink-3);
+}
+
+:root[data-theme="light"] .sheet {
+  border-color: rgba(60, 60, 67, 0.12);
+  box-shadow: 0 -20px 48px rgba(0, 0, 0, 0.18);
+}
+
+:root[data-theme="light"] .sheet-backdrop {
+  background: rgba(0, 0, 0, 0.38);
+}
+
+:root[data-theme="light"] .og-avatar {
+  border-color: rgba(60, 60, 67, 0.12);
+}
+
+:root[data-theme="light"] .profile-card::after,
+:root[data-theme="light"] .stats-summary::after {
+  display: none;
+}
+
+:root[data-theme="light"] .dh-ground {
+  fill: rgba(60, 60, 67, 0.12);
+}
+
+@media (min-width: 600px) {
+  :root[data-theme="light"] .app {
+    box-shadow: 0 0 0 0.5px rgba(60, 60, 67, 0.12);
+  }
+}
+
 html {
-  background: #000;
+  background: var(--paper);
 }
 
 body {
-  background: #000;
+  background: var(--paper);
   color: var(--ink);
   overscroll-behavior-y: contain;
   -webkit-overflow-scrolling: touch;
@@ -46,7 +125,7 @@ body {
 
 .app {
   max-width: 560px;
-  background: #000;
+  background: var(--paper);
   background-image: none;
   min-height: 100dvh;
 }
@@ -391,7 +470,7 @@ body {
 }
 
 .og-pill:active {
-  background: rgba(48, 209, 88, 0.24);
+  background: color-mix(in srgb, var(--accent) 24%, transparent);
 }
 
 .og-ghost-row {
@@ -603,7 +682,7 @@ body {
 }
 
 .profile-card::after {
-  background: radial-gradient(circle, rgba(48, 209, 88, 0.2), transparent 70%);
+  background: radial-gradient(circle, color-mix(in srgb, var(--accent) 20%, transparent), transparent 70%);
 }
 
 .profile-main p,
@@ -618,7 +697,7 @@ body {
 
 /* 记一笔面板：沿用炭黑底，强调色统一到 iOS 绿 */
 .morph-panel {
-  --mint: #30d158;
+  --mint: var(--accent);
 }
 
 .qa-seg button.is-active {
@@ -719,7 +798,7 @@ body {
   border: 0;
   background: var(--accent);
   color: var(--on-accent);
-  box-shadow: 0 6px 18px -4px rgba(48, 209, 88, 0.55);
+  box-shadow: 0 6px 18px -4px color-mix(in srgb, var(--accent) 55%, transparent);
   transform: translateY(-18px);
 }
 
@@ -730,7 +809,7 @@ body {
 }
 
 .tab-add:active {
-  background: #28b74c;
+  background: var(--accent-deep);
   transform: translateY(-17px) scale(0.96);
 }
 
@@ -809,7 +888,7 @@ body {
 }
 
 .stats-summary::after {
-  background: radial-gradient(circle, rgba(48, 209, 88, 0.16), transparent 68%);
+  background: radial-gradient(circle, color-mix(in srgb, var(--accent) 16%, transparent), transparent 68%);
 }
 
 .card-head {
@@ -831,7 +910,7 @@ body {
 }
 
 .btn-primary:active {
-  background: #28b74c;
+  background: var(--accent-deep);
 }
 
 .btn-primary:disabled {
@@ -874,7 +953,7 @@ body {
 /* ---------- 引导页 ---------- */
 
 .onboarding {
-  background: #000;
+  background: var(--paper);
 }
 
 .ob-sub,
@@ -1027,7 +1106,7 @@ button {
   height: 5px;
   border-radius: 50%;
   background: var(--accent);
-  box-shadow: 0 0 0 2.5px rgba(48, 209, 88, 0.12);
+  box-shadow: 0 0 0 2.5px color-mix(in srgb, var(--accent) 12%, transparent);
 }
 
 .home-hero-state.is-alert i {
@@ -1328,7 +1407,7 @@ button {
 
 .home-hero-state.is-dance i {
   background: var(--accent);
-  box-shadow: 0 0 0 2.5px rgba(48, 209, 88, 0.16);
+  box-shadow: 0 0 0 2.5px color-mix(in srgb, var(--accent) 16%, transparent);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1340,4 +1419,109 @@ button {
   .dh-notes span {
     animation: none !important;
   }
+}
+
+/* ---------- 外观：主题模式 + 强调色（参考 openGym） ---------- */
+
+.theme-card {
+  display: grid;
+  gap: 12px;
+  padding: 8px 14px 14px;
+}
+
+.theme-head,
+.accent-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.theme-head {
+  padding-top: 4px;
+}
+
+.theme-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink-2);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.theme-value {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--ink-3);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.theme-modes {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+  padding: 3px;
+  border-radius: 11px;
+  background: var(--surface-2);
+}
+
+.theme-mode {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  height: 33px;
+  border-radius: 8px;
+  color: var(--ink-2);
+  font-size: 11.5px;
+  font-weight: 500;
+  transition: background 0.16s ease, color 0.16s ease, transform 0.16s ease;
+}
+
+.theme-mode:active {
+  transform: scale(0.97);
+}
+
+.theme-mode.is-on {
+  background: var(--surface-3);
+  color: var(--ink);
+}
+
+.accent-head {
+  color: var(--ink-2);
+  font-size: 12.5px;
+  font-weight: 600;
+  padding-top: 2px;
+}
+
+.accent-grid {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  flex-wrap: wrap;
+  padding: 2px 1px 4px;
+}
+
+.accent-swatch {
+  position: relative;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--sw);
+  transition: transform 0.16s ease;
+}
+
+.accent-swatch:active {
+  transform: scale(0.9);
+}
+
+.accent-swatch.is-on::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border: 1.5px solid var(--theme-ring);
+  border-radius: 50%;
 }
