@@ -11,7 +11,7 @@ import { Onboarding } from './pages/Onboarding'
 import { AddSheet } from './pages/AddSheet'
 import type { Tab, Tx, TxType } from './types'
 import { applyTheme, closeTopModal } from './utils'
-import { TabBar, ToastProvider, TxDetailSheet } from './components'
+import { LaunchScreen, TabBar, ToastProvider, TxDetailSheet } from './components'
 
 function Shell() {
   const { state } = useLedger()
@@ -97,11 +97,18 @@ function Shell() {
 }
 
 export default function App() {
+  const [launching, setLaunching] = useState(
+    () => Capacitor.isNativePlatform() || new URLSearchParams(window.location.search).has('launch'),
+  )
+
   return (
-    <LedgerProvider>
-      <ToastProvider>
-        <Shell />
-      </ToastProvider>
-    </LedgerProvider>
+    <>
+      <LedgerProvider>
+        <ToastProvider>
+          <Shell />
+        </ToastProvider>
+      </LedgerProvider>
+      {launching && <LaunchScreen onDone={() => setLaunching(false)} />}
+    </>
   )
 }

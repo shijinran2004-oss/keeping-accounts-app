@@ -17,11 +17,10 @@ async function initNative() {
   } catch {
     /* plugin unavailable */
   }
-  try {
-    await SplashScreen.hide()
-  } catch {
-    /* plugin unavailable */
-  }
+  // LaunchScreen 会在首帧后主动 hide；这里只做兜底，避免插件异常时卡在启动图
+  window.setTimeout(() => {
+    SplashScreen.hide().catch(() => {})
+  }, 2400)
 }
 
 applyThemeFromStorage()

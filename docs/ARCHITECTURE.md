@@ -23,6 +23,7 @@ shijinran-money/
 │  │  ├─ SparkSummary.tsx 明细页趋势横条（裁剪展开 + 面积淡入 + 末点呼吸光斑）
 │  │  ├─ MonthCalendar.tsx 明细页月历（金额/圆点、周视图折叠、跨月选中）
 │  │  ├─ SuccessReceipt.tsx 记账成功小票（金币落槽 → 出票 → 砸章）
+│  │  ├─ LaunchScreen.tsx 冷启动接力（图标 → 海报展开对焦 → 虚化交首页）
 │  │  ├─ TxDetailSheet.tsx  点流水后的详情卡，修改时复用记账框
 │  │  ├─ MorphSheet.tsx   形变弹层容器（从 + 号按钮长成面板，收起时缩回）
 │  │  ├─ Seal.tsx         小狗印章（页头 / 我的 / 引导页 / 小票共用，尺寸三档）
