@@ -258,6 +258,15 @@ export interface SparkSummaryProps {
   comparePct: number | null
 }
 
+/** 流水详情弹层 */
+export interface TxDetailSheetProps {
+  /** 当前查看的记录；null 表示关闭 */
+  tx: Tx | null
+  onClose: () => void
+  /** 打开复用的记账框 */
+  onEdit: (tx: Tx) => void
+}
+
 /** 记账成功小票上的数据 */
 export interface ReceiptData {
   /** 金额，单位：分 */

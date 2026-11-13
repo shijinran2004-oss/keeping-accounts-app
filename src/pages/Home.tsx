@@ -18,14 +18,14 @@ import { CategoryIcon, Doghouse, Empty, Money, TxRow } from '../components'
 
 export function Home({
   onAdd,
-  onEdit,
+  onOpenTx,
   onGoLedger,
   onGoStats,
   onGoMe,
   onQuickAdd,
 }: {
   onAdd: () => void
-  onEdit: (tx: Tx) => void
+  onOpenTx: (tx: Tx) => void
   onGoLedger: () => void
   onGoStats: () => void
   onGoMe: () => void
@@ -191,7 +191,7 @@ export function Home({
               tx={tx}
               category={findCategory(state.categories, tx.categoryId)}
               showDate
-              onClick={() => onEdit(tx)}
+              onClick={() => onOpenTx(tx)}
             />
           ))
         ) : (

@@ -25,7 +25,7 @@ import {
 import type { CalendarCell, CalendarMode, Tx } from '../types'
 import { Empty, Money, MonthCalendar, SparkSummary, TxRow } from '../components'
 
-export function Ledger({ onEdit, onAdd }: { onEdit: (tx: Tx) => void; onAdd: () => void }) {
+export function Ledger({ onOpenTx, onAdd }: { onOpenTx: (tx: Tx) => void; onAdd: () => void }) {
   const { state } = useLedger()
   const [anchor, setAnchor] = useState(todayStr())
   const [selected, setSelected] = useState(todayStr())
@@ -174,7 +174,7 @@ export function Ledger({ onEdit, onAdd }: { onEdit: (tx: Tx) => void; onAdd: () 
                 key={tx.id}
                 tx={tx}
                 category={findCategory(state.categories, tx.categoryId)}
-                onClick={() => onEdit(tx)}
+                onClick={() => onOpenTx(tx)}
               />
             ))}
           </div>

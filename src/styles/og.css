@@ -1525,3 +1525,107 @@ button {
   border: 1.5px solid var(--theme-ring);
   border-radius: 50%;
 }
+
+/* ---------- 流水详情弹层 ---------- */
+
+.tx-detail {
+  display: grid;
+  gap: 14px;
+  padding-bottom: 8px;
+}
+
+.tx-detail-hero {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px;
+  border-radius: 14px;
+  background: var(--surface-2);
+}
+
+.tx-detail-hero .cat-tile {
+  width: 44px;
+  height: 44px;
+  border-radius: 13px;
+}
+
+.tx-detail-main {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  flex: 1;
+}
+
+.tx-detail-main b {
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tx-detail-main span {
+  color: var(--ink-2);
+  font-size: 11.5px;
+}
+
+.tx-detail-amount {
+  color: var(--ink);
+  font-family: var(--num);
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+}
+
+.tx-detail-amount.is-income {
+  color: var(--moss);
+}
+
+.tx-detail-rows {
+  padding: 2px 14px;
+  border-radius: 14px;
+  background: var(--surface-2);
+}
+
+.tx-detail-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 11px 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.tx-detail-row:last-child {
+  border-bottom: 0;
+}
+
+.tx-detail-row span {
+  flex: none;
+  color: var(--ink-2);
+  font-size: 12.5px;
+}
+
+.tx-detail-row b {
+  min-width: 0;
+  color: var(--ink);
+  font-size: 12.5px;
+  font-weight: 500;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.tx-detail-edit {
+  width: 100%;
+  margin-top: 2px;
+}
+
+.tx-detail-hint {
+  margin: -4px 0 0;
+  color: var(--ink-3);
+  font-size: 11px;
+  text-align: center;
+}

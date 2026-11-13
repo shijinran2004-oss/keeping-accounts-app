@@ -11,7 +11,7 @@ import { Onboarding } from './pages/Onboarding'
 import { AddSheet } from './pages/AddSheet'
 import type { Tab, Tx, TxType } from './types'
 import { applyTheme, closeTopModal } from './utils'
-import { TabBar, ToastProvider } from './components'
+import { TabBar, ToastProvider, TxDetailSheet } from './components'
 
 function Shell() {
   const { state } = useLedger()
@@ -19,6 +19,7 @@ function Shell() {
   const [addOpen, setAddOpen] = useState(false)
   const [editing, setEditing] = useState<Tx | null>(null)
   const [seed, setSeed] = useState<{ type?: TxType; categoryId?: string } | null>(null)
+  const [detailTx, setDetailTx] = useState<Tx | null>(null)
   const theme = state.settings.theme ?? 'dark'
   const accent = state.settings.accent ?? 'lime'
 
@@ -42,6 +43,11 @@ function Shell() {
     setEditing(tx ?? null)
     setSeed(nextSeed ?? null)
     setAddOpen(true)
+  }
+
+  const editFromDetail = (tx: Tx) => {
+    setDetailTx(null)
+    window.setTimeout(() => openAdd(tx), 180)
   }
 
   useEffect(() => {
@@ -72,18 +78,19 @@ function Shell() {
         {tab === 'home' && (
           <Home
             onAdd={() => openAdd()}
-            onEdit={(tx) => openAdd(tx)}
+            onOpenTx={(tx) => setDetailTx(tx)}
             onGoLedger={() => setTab('ledger')}
             onGoStats={() => setTab('stats')}
             onGoMe={() => setTab('me')}
             onQuickAdd={(categoryId) => openAdd(undefined, { type: 'expense', categoryId })}
           />
         )}
-        {tab === 'ledger' && <Ledger onEdit={(tx) => openAdd(tx)} onAdd={() => openAdd()} />}
+        {tab === 'ledger' && <Ledger onOpenTx={(tx) => setDetailTx(tx)} onAdd={() => openAdd()} />}
         {tab === 'stats' && <Stats onGoMe={() => setTab('me')} />}
         {tab === 'me' && <Me />}
       </main>
       <TabBar tab={tab} onChange={setTab} onAdd={() => openAdd()} />
+      <TxDetailSheet tx={detailTx} onClose={() => setDetailTx(null)} onEdit={editFromDetail} />
       <AddSheet open={addOpen} onClose={() => setAddOpen(false)} editing={editing} seed={seed} />
     </div>
   )
