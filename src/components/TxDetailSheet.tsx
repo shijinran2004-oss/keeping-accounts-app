@@ -1,19 +1,43 @@
-import type { CSSProperties } from 'react'
-import { PencilLine } from 'lucide-react'
+import { useEffect, useState, type CSSProperties } from 'react'
+import { AlertTriangle, PencilLine, Trash2 } from 'lucide-react'
 import type { TxDetailSheetProps } from '../types'
 import { findCategory, useLedger } from '../data'
 import { formatDayLong, formatMoney, relativeDay } from '../utils'
 import { CategoryIcon } from './Icon'
 import { Sheet } from './Sheet'
+import { useToast } from './Toast'
 
 /** 点流水后先看详情，再决定要不要改；修改会打开复用的记账框。 */
 export function TxDetailSheet({ tx, onClose, onEdit }: TxDetailSheetProps) {
-  const { state } = useLedger()
+  const { state, deleteTx } = useLedger()
+  const toast = useToast()
+  const [confirming, setConfirming] = useState(false)
+
+  useEffect(() => {
+    setConfirming(false)
+  }, [tx?.id])
+
+  useEffect(() => {
+    if (!confirming) return
+    const timer = window.setTimeout(() => setConfirming(false), 3200)
+    return () => window.clearTimeout(timer)
+  }, [confirming])
+
   if (!tx) return null
 
   const category = findCategory(state.categories, tx.categoryId)
   const income = tx.type === 'income'
   const title = tx.note.trim() || category.name
+  const remove = () => {
+    if (!confirming) {
+      setConfirming(true)
+      return
+    }
+    deleteTx(tx.id)
+    toast('已删除这笔记录')
+    onClose()
+  }
+
   const time =
     tx.createdAt > 0
       ? new Date(tx.createdAt).toLocaleTimeString('zh-CN', {
@@ -71,11 +95,29 @@ export function TxDetailSheet({ tx, onClose, onEdit }: TxDetailSheetProps) {
           ) : null}
         </div>
 
-        <button className="btn-primary tx-detail-edit" type="button" onClick={() => onEdit(tx)}>
-          <PencilLine size={16} strokeWidth={1.9} />
-          修改金额
-        </button>
-        <p className="tx-detail-hint">会打开记账框，金额、分类、备注都能改。</p>
+        <div className="tx-detail-actions">
+          <button className="btn-primary tx-detail-edit" type="button" onClick={() => onEdit(tx)}>
+            <PencilLine size={16} strokeWidth={1.9} />
+            修改金额
+          </button>
+          <button
+            className={`tx-detail-delete${confirming ? ' is-confirming' : ''}`}
+            type="button"
+            onClick={remove}
+          >
+            {confirming ? (
+              <AlertTriangle size={16} strokeWidth={1.9} />
+            ) : (
+              <Trash2 size={16} strokeWidth={1.9} />
+            )}
+            {confirming ? '确认删除' : '删除'}
+          </button>
+        </div>
+        <p className="tx-detail-hint">
+          {confirming
+            ? '再点一次确认删除，删掉后无法恢复。'
+            : '修改会打开记账框；删除需要再点一次确认。'}
+        </p>
       </div>
     </Sheet>
   )
