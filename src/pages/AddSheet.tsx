@@ -158,6 +158,7 @@ export function AddSheet({
         date,
       ),
       mode: editing ? 'edit' : 'create',
+      avatar: state.settings.avatar,
     })
   }
 

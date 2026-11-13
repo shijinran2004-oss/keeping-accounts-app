@@ -273,6 +273,8 @@ export interface ReceiptData {
   streak: number
   /** 新增还是编辑 */
   mode: 'create' | 'edit'
+  /** 个人头像（data URL），没设置时小票用小狗印章 */
+  avatar?: string
 }
 
 /** 轻提示样式 */
