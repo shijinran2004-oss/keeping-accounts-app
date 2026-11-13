@@ -1813,3 +1813,115 @@ button {
   .launch-out { animation-duration: 180ms; }
   .launch-out .launch-poster { animation: none; opacity: 0; }
 }
+
+/* ---------- 发薪日账期 ---------- */
+.og-cycle {
+  margin: -6px 0 12px;
+  font-size: 11px;
+  color: var(--ink-3);
+  letter-spacing: 0.01em;
+}
+
+.cal-caption {
+  margin: -4px 2px 9px;
+  font-size: 10.5px;
+  color: var(--ink-3);
+  letter-spacing: 0.01em;
+}
+
+.pay-lag {
+  width: 100%;
+}
+
+.pay-lag button {
+  flex: 1;
+}
+
+.pay-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: var(--surface-2);
+}
+
+.pay-preview span {
+  font-size: 10px;
+  color: var(--ink-3);
+  letter-spacing: 0.04em;
+}
+
+.pay-preview b {
+  font-family: var(--num);
+  font-size: 15px;
+  color: var(--ink);
+}
+
+.pay-preview em {
+  font-style: normal;
+  font-size: 11px;
+  color: var(--ink-2);
+}
+
+.money-input i.is-suffix {
+  margin-left: auto;
+  font-style: normal;
+  font-family: var(--num);
+  font-size: 13px;
+  color: var(--ink-3);
+}
+
+/* ---------- 引导页发薪日 ---------- */
+.ob-split {
+  display: grid;
+  grid-template-columns: 0.78fr 1.22fr;
+  gap: 14px;
+  align-items: end;
+}
+
+.ob-split .ob-field input {
+  font-size: 25px;
+}
+
+.ob-field i.is-suffix {
+  margin-left: auto;
+  font-style: normal;
+  font-family: var(--num);
+  font-size: 12px;
+  color: var(--ink-3);
+}
+
+.ob-field .ob-seg {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface-2);
+}
+
+.ob-seg button {
+  flex: 1;
+  padding: 8px 3px;
+  border-radius: 9px;
+  font-size: 10.5px;
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+
+.ob-seg button.is-active {
+  background: var(--accent);
+  color: var(--on-accent);
+  font-weight: 600;
+}
+
+.ob-hint {
+  margin: -10px 0 0;
+  font-size: 9px;
+  line-height: 1.6;
+  color: var(--ink-3);
+}

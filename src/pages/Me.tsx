@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import {
+  CalendarClock,
   Camera,
   ChevronRight,
   Clipboard,
@@ -30,12 +31,16 @@ import {
   backupFileName,
   backupJson,
   centsToYuanInput,
+  cycleRange,
+  cycleRangeLabel,
+  daysBetween,
   fileToAvatar,
   exportBackupFile,
   formatBytes,
   formatMoney,
   parseYuan,
   readBackupFile,
+  salaryMonthLabel,
   themeName,
   todayStr,
 } from '../utils'
@@ -51,6 +56,7 @@ export function Me() {
   const { state, saveSettings, clearTxs, resetAll } = useLedger()
   const toast = useToast()
   const [budgetOpen, setBudgetOpen] = useState(false)
+  const [payOpen, setPayOpen] = useState(false)
   const [categoryOpen, setCategoryOpen] = useState(false)
   const [dataOpen, setDataOpen] = useState(false)
   const [nameOpen, setNameOpen] = useState(false)
@@ -192,8 +198,15 @@ export function Me() {
             value={`¥${formatMoney(state.settings.fixedCost)}`}
             onClick={() => setBudgetOpen(true)}
           />
+          <Row
+            icon={CalendarClock}
+            label="发薪日与账期"
+            sub={(state.settings.salaryLag ?? 0) === 1 ? '次月发上月，按到账日切账期' : '当月发，按到账日切账期'}
+            value={`${state.settings.payday ?? 1} 号`}
+            onClick={() => setPayOpen(true)}
+          />
         </div>
-        <p className="field-note">固定支出会先从工资里扣掉，再算每天能花多少。</p>
+        <p className="field-note">预算从发薪日开始，到下次发薪日前一天结束；不再按自然月重置。</p>
       </section>
 
       <section className="section">
@@ -217,7 +230,7 @@ export function Me() {
       <footer className="me-foot">
         <img className="me-brand-icon" src={appIcon} alt="使劲燃的钱" />
         <div>
-          <b>使劲燃的钱 v1.1.13</b>
+          <b>使劲燃的钱 v1.1.14</b>
           <p><ShieldCheck size={13} strokeWidth={1.6} /> 数据只保存在这台手机上，不上传</p>
         </div>
         <button
@@ -236,6 +249,7 @@ export function Me() {
 
       <NameSheet open={nameOpen} onClose={() => setNameOpen(false)} />
       <BudgetSheet open={budgetOpen} onClose={() => setBudgetOpen(false)} />
+      <PaydaySheet open={payOpen} onClose={() => setPayOpen(false)} />
       <CategorySheet open={categoryOpen} onClose={() => setCategoryOpen(false)} />
       <DataSheet
         open={dataOpen}
@@ -372,6 +386,94 @@ function BudgetSheet({ open, onClose }: { open: boolean; onClose: () => void }) 
           onClick={() => {
             saveSettings({ salary: parseYuan(salary), fixedCost: parseYuan(fixed) })
             toast('预算已更新', 'success')
+            onClose()
+          }}
+        >
+          保存
+        </button>
+      </div>
+    </Sheet>
+  )
+}
+
+function PaydaySheet({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const { state, saveSettings } = useLedger()
+  const toast = useToast()
+  const [day, setDay] = useState('1')
+  const [lag, setLag] = useState<0 | 1>(0)
+
+  useEffect(() => {
+    if (!open) return
+    setDay(String(state.settings.payday ?? 1))
+    setLag(state.settings.salaryLag === 1 ? 1 : 0)
+  }, [open, state.settings.payday, state.settings.salaryLag])
+
+  const cleanDay = (v: string) => v.replace(/\D/g, '').slice(0, 2)
+  const safeDay = Math.min(31, Math.max(1, Number(day) || 1))
+  const cycle = cycleRange(todayStr(), safeDay, lag)
+  const cycleDays = daysBetween(cycle.start, cycle.end) + 1
+
+  return (
+    <Sheet open={open} onClose={onClose} title="发薪日与账期">
+      <div className="sheet-body form">
+        <label className="field">
+          <span>每月发薪日</span>
+          <div className="money-input">
+            <input
+              value={day}
+              onChange={(e) => setDay(cleanDay(e.target.value))}
+              inputMode="numeric"
+              placeholder="15"
+              aria-label="每月发薪日"
+            />
+            <i className="is-suffix">号</i>
+          </div>
+          <small>1–31 号；29/30/31 遇到短月会自动按当月最后一天算。</small>
+        </label>
+
+        <div className="field">
+          <span>工资归属</span>
+          <div className="segmented pay-lag" role="tablist" aria-label="工资归属">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={lag === 0}
+              className={lag === 0 ? 'is-active' : ''}
+              onClick={() => setLag(0)}
+            >
+              当月发
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={lag === 1}
+              className={lag === 1 ? 'is-active' : ''}
+              onClick={() => setLag(1)}
+            >
+              次月发上月
+            </button>
+          </div>
+          <small>
+            {lag === 1
+              ? '例如 11 月 15 日到账的是 10 月工资；预算从 11/15 用到 12/14。'
+              : '例如 11 月 15 日到账的是 11 月工资；预算从 11/15 用到 12/14。'}
+          </small>
+        </div>
+
+        <div className="pay-preview">
+          <span>按这个设置，今天在</span>
+          <b>{cycleRangeLabel(cycle.start, cycle.end)}</b>
+          <em>
+            {salaryMonthLabel(cycle.salaryMonth)} · 共 {cycleDays} 天
+          </em>
+        </div>
+
+        <button
+          type="button"
+          className="btn-primary"
+          onClick={() => {
+            saveSettings({ payday: safeDay, salaryLag: lag })
+            toast('账期已更新', 'success')
             onClose()
           }}
         >

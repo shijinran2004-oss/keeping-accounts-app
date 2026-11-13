@@ -3,14 +3,14 @@ import { ArrowDownRight, ArrowUpRight, ChevronLeft, ChevronRight, Minus, PieChar
 import { useLedger } from '../data'
 import {
   addDays,
-  addMonths,
+  cycleRange,
   daysBetween,
   eachDay,
   endOfWeek,
   formatDay,
   formatMonth,
-  monthRange,
   parseDate,
+  shiftCycle,
   startOfWeek,
   todayStr,
   weekdayLabel,
@@ -22,7 +22,6 @@ import {
   inRange,
   moneyFlow,
   previousRange,
-  stateMonthTxs,
   summarize,
 } from '../utils'
 import { formatMoneyShort, formatPercent } from '../utils'
@@ -35,16 +34,23 @@ export function Stats({ onGoMe }: { onGoMe: () => void }) {
   const [kind, setKind] = useState<StatsRange>('month')
   const [anchor, setAnchor] = useState(t)
 
+  const payday = state.settings.payday ?? 1
+  const salaryLag = state.settings.salaryLag ?? 0
+  const cycle = cycleRange(anchor, payday, salaryLag)
+
   const range =
     kind === 'day'
       ? { start: anchor, end: anchor }
       : kind === 'week'
         ? { start: startOfWeek(anchor), end: endOfWeek(anchor) }
-        : monthRange(anchor)
+        : { start: cycle.start, end: cycle.end }
 
   const list = inRange(state.txs, range.start, range.end)
   const sum = summarize(list)
-  const prev = previousRange(kind, anchor)
+  const prev =
+    kind === 'month'
+      ? cycleRange(addDays(cycle.start, -1), payday, salaryLag)
+      : previousRange(kind, anchor)
   const prevSum = summarize(inRange(state.txs, prev.start, prev.end))
   const cats = categoryBreakdown(list, state.categories, 'expense')
 
@@ -87,26 +93,26 @@ export function Stats({ onGoMe }: { onGoMe: () => void }) {
   ]
   const topCat = cats[0]
 
-  const monthTxs = stateMonthTxs(state, t)
-  const flow = moneyFlow(state.settings, monthTxs, t)
+  const flowDate = anchor >= cycle.start && anchor <= cycle.end ? anchor : cycle.end
+  const flow = moneyFlow(state.settings, list, flowDate, cycle)
   const parts = Math.max(1, flow.spent + flow.fixedCost + Math.max(0, flow.remaining))
   const spentW = (flow.spent / parts) * 100
   const fixedW = (flow.fixedCost / parts) * 100
   const remainW = (Math.max(0, flow.remaining) / parts) * 100
   const maxExpense = list.reduce((m, tx) => (tx.type === 'expense' ? Math.max(m, tx.amount) : m), 0)
-  const prevLabel = kind === 'day' ? '昨天' : kind === 'week' ? '上周' : '上月'
+  const prevLabel = kind === 'day' ? '昨天' : kind === 'week' ? '上周' : '上期'
 
   const label =
     kind === 'day'
       ? `${formatDay(anchor)} ${weekdayLabel(anchor)}`
       : kind === 'week'
         ? `${formatDay(range.start)} – ${formatDay(range.end)}`
-        : formatMonth(anchor)
+        : `${formatMonth(cycle.start)}账期`
 
   const shift = (dir: number) => {
     if (kind === 'day') setAnchor(addDays(anchor, dir))
     else if (kind === 'week') setAnchor(addDays(anchor, 7 * dir))
-    else setAnchor(addMonths(anchor, dir))
+    else setAnchor(shiftCycle(cycle.start, dir, payday))
   }
 
   return (
@@ -173,7 +179,7 @@ export function Stats({ onGoMe }: { onGoMe: () => void }) {
 
       <section className="card chart-card">
         <div className="card-head">
-          <h3>{kind === 'day' ? '近 7 天' : kind === 'week' ? '本周每日' : '本月每日'}</h3>
+          <h3>{kind === 'day' ? '近 7 天' : kind === 'week' ? '本周每日' : '本期每日'}</h3>
           <span>单位：元</span>
         </div>
         <BarChart data={chart} height={156} />
@@ -221,11 +227,11 @@ export function Stats({ onGoMe }: { onGoMe: () => void }) {
 
       {kind === 'month' && (
       <section className="section">
-        <SectionTitle>这个月的盘子</SectionTitle>
+        <SectionTitle>这个账期的盘子</SectionTitle>
         {flow.salary > 0 ? (
           <div className="card budget-card">
             <div className="budget-top">
-              <span>本月到手</span>
+              <span>本期到手</span>
               <b><Money cents={flow.income} decimals="never" /></b>
             </div>
             <div className="stack-bar" aria-hidden="true">

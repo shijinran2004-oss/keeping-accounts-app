@@ -73,6 +73,18 @@ export interface Settings {
   theme?: ThemeMode
   /** 强调色预设，默认青柠绿 */
   accent?: AccentKey
+  /** 每月发薪日 1–31；29/30/31 在短月自动取最后一天 */
+  payday?: number
+  /** 工资归属：0 = 当月发，1 = 次月发上月 */
+  salaryLag?: 0 | 1
+}
+
+/** 一个账期（发薪日到下次发薪日前一天） */
+export interface CycleRange {
+  start: string
+  end: string
+  /** 这笔工资归属的月份，YYYY-MM-01 */
+  salaryMonth: string
 }
 
 /** 深色 / 浅色 / 跟随系统 */
@@ -227,7 +239,7 @@ export interface CalendarCell {
 
 /** 明细页的月历卡片 */
 export interface MonthCalendarProps {
-  /** 当前浏览的月份，任意一天即可（内部只看年月） */
+  /** 当前浏览的账期起始日（旧调用也可传月份任意一天） */
   month: string
   /** 选中的日期 YYYY-MM-DD */
   selected: string
@@ -241,6 +253,10 @@ export interface MonthCalendarProps {
   onToday: () => void
   onMode: (mode: CalendarMode) => void
   onToggleWeek: () => void
+  /** 账期标题，默认 formatMonth(month) */
+  title?: string
+  /** 标题下的小字，例如 11/15–12/14 · 10 月工资 */
+  caption?: string
 }
 
 /** 明细页顶部迷你趋势卡（横条） */

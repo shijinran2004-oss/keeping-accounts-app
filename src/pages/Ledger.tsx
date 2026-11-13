@@ -3,22 +3,21 @@ import { CalendarDays, ReceiptText } from 'lucide-react'
 import { findCategory, useLedger } from '../data'
 import {
   addDays,
-  addMonths,
+  cycleRange,
+  cycleRangeLabel,
   dailySeries,
   daysBetween,
-  daysInMonth,
   eachDay,
   formatDay,
   formatMonth,
   inRange,
   moneyFlow,
-  monthKey,
-  monthRange,
   parseDate,
+  salaryMonthLabel,
+  shiftCycle,
   startOfWeek,
   sumAmount,
   summarize,
-  toDateStr,
   todayStr,
   weekdayLabel,
 } from '../utils'
@@ -32,24 +31,32 @@ export function Ledger({ onOpenTx, onAdd }: { onOpenTx: (tx: Tx) => void; onAdd:
   const [mode, setMode] = useState<CalendarMode>('amount')
   const [weekOnly, setWeekOnly] = useState(false)
 
-  const range = monthRange(anchor)
+  const payday = state.settings.payday ?? 1
+  const salaryLag = state.settings.salaryLag ?? 0
+  const today = todayStr()
+  const range = cycleRange(anchor, payday, salaryLag)
   const monthTxs = inRange(state.txs, range.start, range.end)
   const sum = summarize(monthTxs)
-  const today = todayStr()
-  const isCurrent = monthKey(anchor) === monthKey(today)
+  const isCurrent = range.start <= today && today <= range.end
 
-  // 迷你趋势：本月每天的支出（当月只画到今天），和上月同期做个对比
-  const flow = moneyFlow(state.settings, monthTxs, anchor)
+  // 迷你趋势：本期每天的支出（当前账期只画到今天），和上期同期对比
+  const flow = moneyFlow(state.settings, monthTxs, isCurrent ? today : range.end, range)
   const points = dailySeries(monthTxs, range.start, isCurrent ? today : range.end).map((d) => d.amount)
-  const prevStart = monthRange(addMonths(anchor, -1)).start
-  const prevDays = isCurrent ? Math.min(parseDate(today).getDate(), daysInMonth(prevStart)) : daysInMonth(prevStart)
-  const prevSpent = sumAmount(inRange(state.txs, prevStart, addDays(prevStart, prevDays - 1)), 'expense')
+  const prevRange = cycleRange(addDays(range.start, -1), payday, salaryLag)
+  const prevDays = isCurrent
+    ? Math.min(daysBetween(range.start, today) + 1, daysBetween(prevRange.start, prevRange.end) + 1)
+    : daysBetween(prevRange.start, prevRange.end) + 1
+  const prevSpent = sumAmount(
+    inRange(state.txs, prevRange.start, addDays(prevRange.start, prevDays - 1)),
+    'expense',
+  )
   const comparePct = prevSpent > 0 ? ((sum.expense - prevSpent) / prevSpent) * 100 : null
 
-  // 日历格子：从 1 号所在周的周一开始，补满整周（5 或 6 行）
+  // 日历格子：从账期第一天所在周的周一开始，补满整周
   const gridStart = startOfWeek(range.start)
   const lead = daysBetween(gridStart, range.start)
-  const gridEnd = addDays(gridStart, Math.ceil((lead + daysInMonth(anchor)) / 7) * 7 - 1)
+  const totalDays = daysBetween(range.start, range.end) + 1
+  const gridEnd = addDays(gridStart, Math.ceil((lead + totalDays) / 7) * 7 - 1)
 
   const cells = useMemo<CalendarCell[]>(() => {
     const stats = new Map<string, { expense: number; income: number; count: number }>()
@@ -65,13 +72,13 @@ export function Ledger({ onOpenTx, onAdd }: { onOpenTx: (tx: Tx) => void; onAdd:
       return {
         date,
         day: parseDate(date).getDate(),
-        inMonth: monthKey(date) === monthKey(anchor),
+        inMonth: date >= range.start && date <= range.end,
         expense: row?.expense ?? 0,
         income: row?.income ?? 0,
         count: row?.count ?? 0,
       }
     })
-  }, [state.txs, gridStart, gridEnd, anchor])
+  }, [state.txs, gridStart, gridEnd, range.start, range.end])
 
   const dayTxs = useMemo(
     () => state.txs.filter((t) => t.date === selected).sort((a, b) => b.createdAt - a.createdAt),
@@ -82,17 +89,18 @@ export function Ledger({ onOpenTx, onAdd }: { onOpenTx: (tx: Tx) => void; onAdd:
   const badge = selected === today ? '今天' : selected === addDays(today, -1) ? '昨天' : ''
 
   function shiftMonth(delta: number) {
-    const next = addMonths(anchor, delta)
-    const nextDay = Math.min(parseDate(selected).getDate(), daysInMonth(next))
-    const d = parseDate(next)
-    d.setDate(nextDay)
-    setAnchor(next)
-    setSelected(toDateStr(d))
+    const nextStart = shiftCycle(range.start, delta, payday)
+    const nextRange = cycleRange(nextStart, payday, salaryLag)
+    const offset = Math.max(0, daysBetween(range.start, selected))
+    const nextSelected = addDays(nextRange.start, Math.min(offset, daysBetween(nextRange.start, nextRange.end)))
+    setAnchor(nextStart)
+    setSelected(nextSelected)
   }
 
   function pickDate(date: string) {
     setSelected(date)
-    if (monthKey(date) !== monthKey(anchor)) setAnchor(date)
+    const next = cycleRange(date, payday, salaryLag)
+    if (next.start !== range.start) setAnchor(date)
   }
 
   function goToday() {
@@ -110,7 +118,7 @@ export function Ledger({ onOpenTx, onAdd }: { onOpenTx: (tx: Tx) => void; onAdd:
       </header>
 
       <SparkSummary
-        label={isCurrent ? '本月支出' : `${parseDate(anchor).getMonth() + 1} 月支出`}
+        label={isCurrent ? '本期支出' : `${parseDate(range.start).getMonth() + 1} 月支出`}
         spent={sum.expense}
         income={sum.income}
         balance={sum.income - sum.expense}
@@ -120,7 +128,9 @@ export function Ledger({ onOpenTx, onAdd }: { onOpenTx: (tx: Tx) => void; onAdd:
       />
 
       <MonthCalendar
-        month={anchor}
+        month={range.start}
+        title={`${formatMonth(range.start)}账期`}
+        caption={`${cycleRangeLabel(range.start, range.end)} · ${salaryMonthLabel(range.salaryMonth)}`}
         selected={selected}
         cells={cells}
         mode={mode}

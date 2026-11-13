@@ -1,3 +1,5 @@
+import type { CycleRange } from '../types'
+
 const pad = (n: number) => String(n).padStart(2, '0')
 
 export function toDateStr(d: Date): string {
@@ -97,6 +99,47 @@ export function eachDay(start: string, end: string): string[] {
     guard++
   }
   return out
+}
+
+/** 某月的发薪日；29/30/31 在短月自动夹到最后一天 */
+function paydayDate(year: number, month: number, payday: number): Date {
+  const max = new Date(year, month + 1, 0).getDate()
+  const day = Math.min(Math.max(1, Math.round(payday || 1)), max)
+  return new Date(year, month, day)
+}
+
+/** 当前日期所在的账期：发薪日到下次发薪日前一天 */
+export function cycleRange(s: string, payday = 1, salaryLag = 0): CycleRange {
+  const d = parseDate(s)
+  const thisPay = paydayDate(d.getFullYear(), d.getMonth(), payday)
+  let start = thisPay
+  if (toDateStr(d) < toDateStr(thisPay)) {
+    start = paydayDate(d.getFullYear(), d.getMonth() - 1, payday)
+  }
+  const nextPay = paydayDate(start.getFullYear(), start.getMonth() + 1, payday)
+  const salaryMonth = toDateStr(new Date(start.getFullYear(), start.getMonth() - (salaryLag ? 1 : 0), 1))
+  return {
+    start: toDateStr(start),
+    end: addDays(toDateStr(nextPay), -1),
+    salaryMonth,
+  }
+}
+
+/** 把账期起始日往前/后挪 n 个发薪周期 */
+export function shiftCycle(s: string, n: number, payday = 1): string {
+  const d = parseDate(s)
+  const base = new Date(d.getFullYear(), d.getMonth() + n, 1)
+  return toDateStr(paydayDate(base.getFullYear(), base.getMonth(), payday))
+}
+
+/** 例如「10 月工资」 */
+export function salaryMonthLabel(salaryMonth: string): string {
+  return `${parseDate(salaryMonth).getMonth() + 1} 月工资`
+}
+
+/** 账期范围小字，例如「11 月 15 日 – 12 月 14 日」 */
+export function cycleRangeLabel(start: string, end: string): string {
+  return `${formatDay(start)} – ${formatDay(end)}`
 }
 
 export function greeting(now: Date = new Date()): string {

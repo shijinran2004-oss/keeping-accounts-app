@@ -1,6 +1,6 @@
 import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp } from 'lucide-react'
 import type { CalendarCell, MonthCalendarProps } from '../types'
-import { formatCompactAmount, formatMonth, monthKey, todayStr } from '../utils'
+import { formatCompactAmount, formatMonth, todayStr } from '../utils'
 import type { CSSProperties } from 'react'
 
 const WEEKDAYS = ['一', '二', '三', '四', '五', '六', '日']
@@ -28,6 +28,8 @@ export function MonthCalendar({
   onToday,
   onMode,
   onToggleWeek,
+  title,
+  caption,
 }: MonthCalendarProps) {
   const today = todayStr()
   const selectedRow = Math.max(0, Math.floor(cells.findIndex((c) => c.date === selected) / 7))
@@ -37,11 +39,11 @@ export function MonthCalendar({
     <section className="cal-card" aria-label="账单日历">
       <div className="cal-head">
         <div className="cal-month">
-          <button type="button" className="cal-nav" onClick={() => onChangeMonth(-1)} aria-label="上个月">
+          <button type="button" className="cal-nav" onClick={() => onChangeMonth(-1)} aria-label="上一个账期">
             <ChevronLeft size={17} strokeWidth={1.9} />
           </button>
-          <span className="cal-title">{formatMonth(month)}</span>
-          <button type="button" className="cal-nav" onClick={() => onChangeMonth(1)} aria-label="下个月">
+          <span className="cal-title">{title ?? formatMonth(month)}</span>
+          <button type="button" className="cal-nav" onClick={() => onChangeMonth(1)} aria-label="下一个账期">
             <ChevronRight size={17} strokeWidth={1.9} />
           </button>
           <button type="button" className="cal-today-jump" onClick={onToday}>
@@ -68,6 +70,7 @@ export function MonthCalendar({
           </button>
         </div>
       </div>
+      {caption && <div className="cal-caption">{caption}</div>}
 
       <div className="cal-weekdays" aria-hidden="true">
         {WEEKDAYS.map((w, i) => (
@@ -77,7 +80,7 @@ export function MonthCalendar({
         ))}
       </div>
 
-      <div className="cal-grid" key={monthKey(month)}>
+      <div className="cal-grid" key={month}>
         {shown.map((cell) => {
           const net = cell.income - cell.expense
           const isSelected = cell.date === selected

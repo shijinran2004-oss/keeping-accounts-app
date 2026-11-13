@@ -9,6 +9,8 @@ export function Onboarding() {
   const { saveSettings } = useLedger()
   const [salary, setSalary] = useState('')
   const [fixed, setFixed] = useState('')
+  const [payday, setPayday] = useState('1')
+  const [lag, setLag] = useState<0 | 1>(0)
 
   const clean = (v: string) => {
     const s = v.replace(/[^\d.]/g, '')
@@ -20,6 +22,8 @@ export function Onboarding() {
     saveSettings({
       salary: skip ? 0 : parseYuan(salary),
       fixedCost: skip ? 0 : parseYuan(fixed),
+      payday: skip ? 1 : Math.min(31, Math.max(1, Number(payday) || 1)),
+      salaryLag: skip ? 0 : lag,
       onboarded: true,
     })
     tapSuccess()
@@ -74,6 +78,50 @@ export function Onboarding() {
             </div>
             <small>房租、房贷、订阅等，每个月都要付的那部分。</small>
           </label>
+
+          <div className="ob-split">
+            <label className="ob-field">
+              <span>每月几号发工资</span>
+              <div>
+                <input
+                  value={payday}
+                  onChange={(e) => setPayday(e.target.value.replace(/\D/g, '').slice(0, 2))}
+                  inputMode="numeric"
+                  placeholder="15"
+                  aria-label="每月发薪日"
+                />
+                <i className="is-suffix">号</i>
+              </div>
+            </label>
+            <div className="ob-field">
+              <span>到账的是</span>
+              <div className="segmented ob-seg" role="tablist" aria-label="工资归属">
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={lag === 0}
+                  className={lag === 0 ? 'is-active' : ''}
+                  onClick={() => setLag(0)}
+                >
+                  当月工资
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={lag === 1}
+                  className={lag === 1 ? 'is-active' : ''}
+                  onClick={() => setLag(1)}
+                >
+                  上月工资
+                </button>
+              </div>
+            </div>
+          </div>
+          <p className="ob-hint">
+            {lag === 1
+              ? '例如 11 月 15 日到账的是 10 月工资，预算从 11/15 用到 12/14。'
+              : '预算从发薪日开始，到下次发薪日前一天结束。'}
+          </p>
         </div>
       </div>
 

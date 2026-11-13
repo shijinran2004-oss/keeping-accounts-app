@@ -1,5 +1,5 @@
 import type { Category, CategorySlice, LedgerState, MoneyFlow, Settings, Tx } from '../types'
-import { daysBetween, daysInMonth, monthRange, parseDate, todayStr } from './date'
+import { cycleRange, daysBetween, monthRange, parseDate, todayStr } from './date'
 
 export function inRange(txs: Tx[], start: string, end: string): Tx[] {
   return txs.filter((t) => t.date >= start && t.date <= end)
@@ -49,7 +49,12 @@ export function groupByDay(txs: Tx[]): Map<string, Tx[]> {
   return map
 }
 
-export function moneyFlow(settings: Settings, monthTxs: Tx[], date: string): MoneyFlow {
+export function moneyFlow(
+  settings: Settings,
+  monthTxs: Tx[],
+  date: string,
+  cycle?: { start: string; end: string },
+): MoneyFlow {
   const salary = settings.salary
   const fixedCost = settings.fixedCost
   const extraIncome = sumAmount(monthTxs, 'income')
@@ -57,10 +62,12 @@ export function moneyFlow(settings: Settings, monthTxs: Tx[], date: string): Mon
   const available = Math.max(0, income - fixedCost)
   const spent = sumAmount(monthTxs, 'expense')
   const remaining = available - spent
-  const dim = daysInMonth(date)
-  const day = parseDate(date).getDate()
-  const daysElapsed = Math.min(dim, day)
-  const daysLeft = dim - day + 1
+  const start = cycle?.start ?? monthRange(date).start
+  const end = cycle?.end ?? monthRange(date).end
+  const totalDays = Math.max(1, daysBetween(start, end) + 1)
+  const offset = Math.max(0, Math.min(totalDays - 1, daysBetween(start, date)))
+  const daysElapsed = offset + 1
+  const daysLeft = Math.max(1, totalDays - offset)
   const totalOutflow = fixedCost + spent
   return {
     salary,
@@ -85,6 +92,14 @@ export function moneyFlow(settings: Settings, monthTxs: Tx[], date: string): Mon
 
 export function stateMonthTxs(state: LedgerState, date: string): Tx[] {
   const { start, end } = monthRange(date)
+  return inRange(state.txs, start, end)
+}
+
+/** 当前日期所在账期的流水（按发薪日切账期） */
+export function stateCycleTxs(state: LedgerState, date: string): Tx[] {
+  const payday = state.settings.payday ?? 1
+  const lag = state.settings.salaryLag ?? 0
+  const { start, end } = cycleRange(date, payday, lag)
   return inRange(state.txs, start, end)
 }
 
