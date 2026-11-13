@@ -36,6 +36,7 @@ import type { CSSProperties } from 'react'
 import type { LucideIcon } from 'lucide-react'
 import { Clipboard as CapClipboard } from '@capacitor/clipboard'
 import { CategoryIcon, Seal, SectionTitle, Sheet, useToast } from '../components'
+import appIcon from '../assets/app-icon.png'
 
 export function Me() {
   const { state, saveSettings, clearTxs, resetAll } = useLedger()
@@ -148,13 +149,9 @@ export function Me() {
       </section>
 
       <footer className="me-foot">
-        {state.settings.avatar ? (
-          <img className="me-foot-avatar" src={state.settings.avatar} alt="" />
-        ) : (
-          <Seal size="mini" />
-        )}
+        <img className="me-brand-icon" src={appIcon} alt="使劲燃的钱" />
         <div>
-          <b>使劲燃的钱 v1.1.5</b>
+          <b>使劲燃的钱 v1.1.6</b>
           <p><ShieldCheck size={13} strokeWidth={1.6} /> 数据只保存在这台手机上，不上传</p>
         </div>
         <button

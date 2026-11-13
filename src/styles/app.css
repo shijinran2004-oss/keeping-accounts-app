@@ -1891,15 +1891,6 @@ textarea:focus-visible {
   padding: 1px 14px;
 }
 
-.me-foot-avatar {
-  flex: none;
-  width: 27px;
-  height: 27px;
-  border-radius: 8px;
-  object-fit: cover;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
-}
-
 .setting-row {
   display: flex;
   align-items: center;
@@ -1967,6 +1958,14 @@ textarea:focus-visible {
   font-size: 9px;
   color: var(--ink-3);
   line-height: 1.5;
+}
+
+.me-brand-icon {
+  flex: none;
+  width: 27px;
+  height: 27px;
+  border-radius: 8px;
+  object-fit: cover;
 }
 
 .me-foot {
