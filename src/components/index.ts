@@ -3,6 +3,7 @@
  */
 export { Money } from './Money'
 export { Seal } from './Seal'
+export { Doghouse } from './Doghouse'
 export { TxRow } from './TxRow'
 export { Empty } from './Empty'
 export { SectionTitle } from './SectionTitle'

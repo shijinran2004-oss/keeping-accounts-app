@@ -1,5 +1,5 @@
 import type { CSSProperties } from 'react'
-import { Bookmark, ChevronRight, ReceiptText, Target } from 'lucide-react'
+import { Bookmark, ChevronRight, ReceiptText, Settings, Target } from 'lucide-react'
 import { useLedger } from '../data'
 import {
   categoryBreakdown,
@@ -13,7 +13,7 @@ import {
 } from '../utils'
 import { EXPENSE_CATEGORIES, findCategory } from '../data'
 import type { Tx } from '../types'
-import { CategoryIcon, Empty, Money, Seal, TxRow } from '../components'
+import { CategoryIcon, Doghouse, Empty, Money, TxRow } from '../components'
 
 export function Home({
   onAdd,
@@ -51,16 +51,30 @@ export function Home({
   const fixedPct = flow.salary > 0 ? (flow.fixedCost / flow.salary) * 100 : 0
   const remainPct = flow.available > 0 ? (Math.max(0, flow.remaining) / flow.available) * 100 : 0
   const todayLabel = `${formatDay(today)} · ${weekdayLabel(today)}`
+  const dogMood = spentPct >= 86 ? 'panic' : spentPct >= 50 ? 'alert' : 'peaceful'
+  const dogLine =
+    dogMood === 'panic'
+      ? '余额告急 · 狗屋在晃'
+      : dogMood === 'alert'
+        ? '预算过半 · 坐着盯账'
+        : '预算充裕 · 屋顶好眠'
 
   return (
     <div className="page home">
-      <header className="og-head">
-        <div>
-          <h1>使劲燃的钱</h1>
-          <p>{todayLabel}</p>
+      <header className="home-hero">
+        <div className="home-hero-art">
+          <Doghouse mood={dogMood} />
         </div>
-        <button className="og-avatar" onClick={onGoMe} aria-label="我的" type="button">
-          <Seal />
+        <div className="home-hero-copy">
+          <span className="home-hero-date">{todayLabel}</span>
+          <h1>使劲燃的钱</h1>
+          <span className={`home-hero-state is-${dogMood}`}>
+            <i />
+            {dogLine}
+          </span>
+        </div>
+        <button className="home-hero-gear" onClick={onGoMe} aria-label="我的" type="button">
+          <Settings size={16} strokeWidth={1.9} />
         </button>
       </header>
 

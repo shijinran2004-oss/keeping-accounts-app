@@ -180,6 +180,16 @@ export interface SealProps {
   className?: string
 }
 
+/** 首页表头的狗屋守卫：按本月预算消耗切换姿态 */
+export type DogMood = 'peaceful' | 'alert' | 'panic'
+
+/** 手绘狗屋 + 屋顶小狗，纯内联 SVG */
+export interface DoghouseProps {
+  mood?: DogMood
+  /** 额外类名，便于在页头做尺寸微调 */
+  className?: string
+}
+
 /** 明细页日历的两种显示方式：金额 / 圆点 */
 export type CalendarMode = 'amount' | 'dot'
 
