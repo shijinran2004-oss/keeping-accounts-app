@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { Bookmark, ChevronRight, ReceiptText, Settings, Target } from 'lucide-react'
 import { useLedger } from '../data'
@@ -12,7 +13,7 @@ import {
   weekdayLabel,
 } from '../utils'
 import { EXPENSE_CATEGORIES, findCategory } from '../data'
-import type { Tx } from '../types'
+import type { DogMood, Tx } from '../types'
 import { CategoryIcon, Doghouse, Empty, Money, TxRow } from '../components'
 
 export function Home({
@@ -51,11 +52,19 @@ export function Home({
   const fixedPct = flow.salary > 0 ? (flow.fixedCost / flow.salary) * 100 : 0
   const remainPct = flow.available > 0 ? (Math.max(0, flow.remaining) / flow.available) * 100 : 0
   const todayLabel = `${formatDay(today)} · ${weekdayLabel(today)}`
-  const dogMood = spentPct >= 86 ? 'panic' : spentPct >= 50 ? 'alert' : 'peaceful'
-  const dogLine =
-    dogMood === 'panic'
+  const [dancing, setDancing] = useState(false)
+  useEffect(() => {
+    if (!dancing) return
+    const timer = window.setTimeout(() => setDancing(false), 2600)
+    return () => window.clearTimeout(timer)
+  }, [dancing])
+  const baseMood: DogMood = spentPct >= 86 ? 'panic' : spentPct >= 50 ? 'alert' : 'peaceful'
+  const dogMood: DogMood = dancing ? 'dance' : baseMood
+  const dogLine = dancing
+    ? '小金库回血 · 屋顶跳舞'
+    : baseMood === 'panic'
       ? '余额告急 · 狗屋在晃'
-      : dogMood === 'alert'
+      : baseMood === 'alert'
         ? '预算过半 · 坐着盯账'
         : '预算充裕 · 屋顶好眠'
 
@@ -63,7 +72,7 @@ export function Home({
     <div className="page home">
       <header className="home-hero">
         <div className="home-hero-art">
-          <Doghouse mood={dogMood} />
+          <Doghouse mood={dogMood} onClick={() => setDancing(true)} />
         </div>
         <div className="home-hero-copy">
           <span className="home-hero-date">{todayLabel}</span>
