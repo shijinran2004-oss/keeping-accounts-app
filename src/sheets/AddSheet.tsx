@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { CalendarDays, Delete, Trash2, X } from 'lucide-react'
+import { CalendarDays, Delete, ScanLine, Trash2, X } from 'lucide-react'
 import { useLedger } from '../data'
-import type { AmountSeed, ReceiptData, Tx, TxType } from '../types'
+import type { AmountSeed, OcrDraft, ReceiptData, Tx, TxType } from '../types'
 import {
   centsToYuanInput,
   expressionParts,
@@ -12,7 +12,13 @@ import {
   streakDays,
   sumExpression,
   tap,
+  tapSuccess,
   todayStr,
+  warmUpOcr,
+  fileToOcrDataUrl,
+  ocrAvailable,
+  parseReceipt,
+  recognizeReceipt,
 } from '../lib'
 import { CategoryIcon, useToast } from '../ui'
 import { MorphSheet } from './MorphSheet'
@@ -44,6 +50,10 @@ export function AddSheet({
   const [date, setDate] = useState(todayStr())
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [receipt, setReceipt] = useState<ReceiptData | null>(null)
+  const [scanning, setScanning] = useState(false)
+  const [ocrDraft, setOcrDraft] = useState<OcrDraft | null>(null)
+  const fileRef = useRef<HTMLInputElement>(null)
+  const [canScan] = useState(() => ocrAvailable())
 
   // 数字跳跃：每次敲键让金额整体上跳一下再落回，连打时重跑而不是叠加
   const figureRef = useRef<HTMLDivElement>(null)
@@ -84,6 +94,7 @@ export function AddSheet({
     if (!open) return
     setReceipt(null)
     setConfirmDelete(false)
+    setOcrDraft(null)
     if (editing) {
       setType(editing.type)
       setExpr(centsToYuanInput(editing.amount))
@@ -139,6 +150,41 @@ export function AddSheet({
     })
   }
 
+  // 页面打开时先把模型读进内存，第一次识别能少等几秒
+  useEffect(() => {
+    if (open && canScan) void warmUpOcr()
+  }, [open, canScan])
+
+  const scanReceipt = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+    if (file.size > 12 * 1024 * 1024) {
+      toast('这张图太大了，换一张试试', 'error')
+      return
+    }
+    setScanning(true)
+    setOcrDraft(null)
+    try {
+      const dataUrl = await fileToOcrDataUrl(file)
+      const result = await recognizeReceipt(dataUrl)
+      const draft = parseReceipt(result.lines)
+      setOcrDraft(draft)
+      if (draft.amountCents) setExpr(centsToYuanInput(draft.amountCents))
+      if (draft.date) setDate(draft.date)
+      if (draft.merchant) setNote(draft.merchant.slice(0, 30))
+      if (draft.categoryId && state.categories.some((c) => c.id === draft.categoryId && c.type === 'expense')) {
+        if (type !== 'expense') setType('expense')
+        setCategoryId(draft.categoryId)
+      }
+      if (draft.amountCents) tapSuccess()
+      else toast('金额没认出来，手动补一下', 'error')
+    } catch (error) {
+      toast(error instanceof Error ? error.message : '识别失败了，手动记吧', 'error')
+    } finally {
+      setScanning(false)
+    }
+  }
   const submit = () => {
     if (receipt) return
     if (!cents || !current) {
@@ -272,6 +318,20 @@ export function AddSheet({
           </div>
         </div>
 
+        {ocrDraft && (
+          <div className="qa-ocr">
+            <ScanLine size={13} strokeWidth={1.9} />
+            <span>
+              小票：{ocrDraft.amountCents ? `¥${formatMoney(ocrDraft.amountCents)}` : '金额没认出来'}
+              {ocrDraft.date ? ` · ${relativeDay(ocrDraft.date)}` : ''}
+              {ocrDraft.merchant ? ` · ${ocrDraft.merchant}` : ''}
+            </span>
+            <button type="button" className="qa-ocr-x" onClick={() => setOcrDraft(null)} aria-label="忽略识别结果">
+              ×
+            </button>
+          </div>
+        )}
+
         <div className="qa-meta">
           <label className="qa-date">
             <CalendarDays size={13} strokeWidth={1.9} />
@@ -287,6 +347,27 @@ export function AddSheet({
           <span className="qa-tip">
             {editing ? '改完点「保存」' : '可以按 + − 连着算，比如 128+45'}
           </span>
+          {canScan && (
+            <>
+              <button
+                type="button"
+                className={`qa-scan ${scanning ? 'is-busy' : ''}`}
+                onClick={() => fileRef.current?.click()}
+                disabled={scanning}
+              >
+                {scanning ? <span className="spin" /> : <ScanLine size={13} strokeWidth={1.9} />}
+                {scanning ? '识别中' : '拍小票'}
+              </button>
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/*"
+                className="qa-file"
+                onChange={scanReceipt}
+                aria-label="选择小票图片"
+              />
+            </>
+          )}
         </div>
 
         <div className="qa-cats" role="tablist" aria-label="分类">

@@ -451,3 +451,47 @@ export interface ImportOutcome {
   total: number
 }
 
+/* ============================================================
+ * 9. 小票识别（端上 OCR）
+ * ========================================================== */
+
+/** OCR 文字块的一个角点 */
+export interface OcrPoint {
+  x: number
+  y: number
+}
+
+/** OCR 出来的一行文字 */
+export interface OcrLine {
+  text: string
+  /** 0–1 的置信度 */
+  score: number
+  /** 文字块四角，按检测顺序 */
+  box: OcrPoint[]
+}
+
+/** 原生插件 recognize 的返回 */
+export interface OcrNativeResult {
+  lines: OcrLine[]
+  /** 按行拼接的纯文本 */
+  text: string
+  width: number
+  height: number
+  /** 识别耗时（毫秒） */
+  ms: number
+}
+
+/** 从小票抽出来的预填草稿：只用来填表，不直接入库 */
+export interface OcrDraft {
+  /** 金额，单位：分 */
+  amountCents: number | null
+  /** YYYY-MM-DD */
+  date: string | null
+  /** 商户名（通常就是备注的默认值） */
+  merchant: string | null
+  categoryId: string | null
+  /** 0–1，几个字段的综合置信度 */
+  confidence: number
+  lines: OcrLine[]
+  text: string
+}

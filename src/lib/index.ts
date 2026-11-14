@@ -27,3 +27,12 @@ export {
   resolveTheme,
   themeName,
 } from './theme'
+export {
+  fileToOcrDataUrl,
+  ocrAvailable,
+  parseReceipt,
+  recognizeReceipt,
+  warmUpOcr,
+  OCR_MAX_SIDE,
+} from './ocr'
+export type { AmountCandidate, DateCandidate, MerchantCandidate, ParseOptions } from './ocr'

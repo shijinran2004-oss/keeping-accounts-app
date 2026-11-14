@@ -32,6 +32,14 @@ shijinran-money/
 │  │  ├─ date.ts          本地日期、账期、发薪日
 │  │  ├─ stats.ts         区间汇总、moneyFlow、连续记账
 │  │  ├─ backup.ts        备份文件生成 / 分享 / 读取
+│  │  ├─ ocr/             小票识别：原生插件 + 字段抽取
+│  │  │  ├─ plugin.ts     Ocr 插件封装、预热、可用性判断
+│  │  │  ├─ image.ts      图片压到 1600px 再交给原生
+│  │  │  ├─ text.ts       全角转半角、清洗、噪声屏蔽
+│  │  │  ├─ amount.ts     金额（实付 > 合计，排找零 / 优惠）
+│  │  │  ├─ date.ts       日期（缺年份补全、排除未来）
+│  │  │  ├─ merchant.ts   商户名
+│  │  │  └─ parse.ts      汇总成 OcrDraft 并猜分类
 │  │  ├─ avatar.ts        头像读取与裁剪
 │  │  ├─ theme.ts         主题 / 强调色的 data-* 与本地恢复
 │  │  ├─ haptics.ts       触感反馈
@@ -130,6 +138,7 @@ App / main
 | 加一个持久化字段 | `types.ts` 的 `LedgerState` + `data/normalize.ts` 的 `freshState` / `normalize` |
 | 改存储引擎 / 迁移校验 | `src/data/db/migrate.ts`；临时回退旧存储：`localStorage['shijinran.storage.engine']='ls'` |
 | 改备份格式 / 导入规则 | `src/data/backup/`（format / parse / apply / snapshot）；`DataSheet.tsx` 只负责界面 |
+| 改小票识别规则 | `src/lib/ocr/`（amount / date / merchant / parse）；原生插件在 `android/app/src/main/java/com/shijinran/money/ocr/OcrPlugin.java` |
 | 加内置分类 | `src/data/categories.ts` |
 | 改分类图标 | 设置 → 分类管理；`store.tsx` 的 `updateCategoryIcon`，图标库是 `data/categories.ts` 的 `ICON_CHOICES` |
 
@@ -165,9 +174,11 @@ App / main
 
 ## 版本与构建
 
-- `versionCode 37` / `versionName 1.2.0`（`android/app/build.gradle`）
+- `versionCode 39` / `versionName 1.3.0`（`android/app/build.gradle`）
 - 数据版本 `LedgerState.version = 1`，`normalize()` 读取时补全新增分类与设置
 - 存储：IndexedDB（库 `shijinran`，`txs` / `meta` / `snapshots` 三个 store），首次启动从 `localStorage` 一次性迁移；`localStorage['shijinran.storage.engine']='ls'` 可强制回退旧引擎
 - 备份：v2 容器带 `schema` / `checksum`，默认 gzip；导入先预览，支持覆盖 / 合并 / 仅设置与分类；导入、清空、恢复前自动快照（保留 5 份）
 - 打包：`npm run build && npx cap copy android`，再 `gradle assembleDebug`
+- 小票识别：RapidOcrAndroidOnnx 1.3.0（Apache-2.0，PP-OCRv3 det + rec + cls）的 AAR 放在 `android/app/libs/`，39MB 不入库；缺失时 `fetchOcrAar` 任务从 GitHub Release 下载。默认只打 `arm64-v8a,armeabi-v7a`，模拟器用 `-PocrAbi=x86_64`
+- 识别流程：`fileToOcrDataUrl()` 压到 1600px → `Ocr.recognize` 在原生线程跑模型、返回行与坐标 → `parseReceipt()` 抽金额 / 日期 / 商户 / 分类 → `AddSheet` 回填，用户确认后才写库
 - 检查：`npm run check`（tsc + 分层检查）、`npm test`（vitest）

@@ -6,7 +6,7 @@
 
 - 纯本地存储，不联网、不上传、无广告、无账号
 - 深色 / 浅色 / 跟随系统 + 8 个强调色的可换主题，新装默认浅色；炭灰卡片、16px 间距、鸿蒙 Sans 中文 + Nunito 圆体数字；版式与主题系统参考 openGym，代码全部重写
-- 安装包：见 GitHub Releases（1.2.0，约 5.0 MB，minSdk 23 / targetSdk 35）
+- 安装包：见 GitHub Releases（1.3.0，约 44 MB——内置离线 OCR 模型与 onnxruntime，minSdk 23 / targetSdk 35）
 
 ## 功能
 
@@ -14,7 +14,7 @@
 | --- | --- |
 | 启动 | 原生 splash 用纯色空白（不显示图标）；进入后 `LaunchScreen` 让海报从透明 + 10px 模糊渐显并拉焦，停留 1.3s 后虚化淡出，首页接手 |
 | 首页 | 狗屋表头（按预算换睡觉/警惕/告急，点一下跳舞）、按手机时间问候、账本名字、本月预算三条进度、常记分类、最近流水 |
-| 记一笔 | 自研 4×4 算式键盘（+ / − 实时合计）、金额分位显示、18 个内置分类（12 支出 / 6 收入）、备注、日期 |
+| 记一笔 | 自研 4×4 算式键盘（+ / − 实时合计）、金额分位显示、18 个内置分类（12 支出 / 6 收入）、备注、日期；「拍小票」用手机拍或选一张小票照片，端上 OCR（模型在安装包里，不联网）自动填金额、日期、备注和分类，确认后才记账 |
 | 明细 | 月历（每天带净额，可切金额/圆点、收起成周视图）；发薪日金币角标，今天到下次发薪日之间用当前强调色的四级渐变填充，并显示到账日；上/下月与「今」、点日期看当天流水；点任意一笔先看详情，再选修改或删除 |
 | 统计 | 日 / 周 / 月三档；总支出与环比；每日柱状图；分类环形图与排行；月度预算占用 |
 | 我的 | 头像（从手机相册选图，本地裁成 384×384；底部品牌角标固定用 App 默认图标，不跟头像变）、账本名字（点名字改，同步首页）、外观（深色 / 浅色 / 跟随系统、8 个强调色）、月工资、固定支出、分类管理、数据备份（压缩导出 / 导入预览与三种模式 / 自动快照恢复）、清空、重置 |
@@ -46,7 +46,7 @@
 
 ## 技术选型
 
-React 18 + TypeScript + Vite 5，用 Capacitor 6 打包成原生 Android 壳，数据存 IndexedDB（库名 `shijinran`，首次启动自动迁移旧 localStorage 并保留镜像），备份是带版本号与校验和的 v2 容器（默认 gzip），图表是手写 SVG，不引入图表库。
+React 18 + TypeScript + Vite 5，用 Capacitor 6 打包成原生 Android 壳，数据存 IndexedDB（库名 `shijinran`，首次启动自动迁移旧 localStorage 并保留镜像），备份是带版本号与校验和的 v2 容器（默认 gzip），图表是手写 SVG，不引入图表库。小票识别用自写的 Capacitor 插件接 RapidOcrAndroidOnnx（Apache-2.0，PP-OCRv3 det + rec + cls），模型与 onnxruntime 随 APK 一起装到手机上，识别不联网。
 
 ```
 src/
@@ -58,6 +58,7 @@ src/
   sheets/               AddSheet、TxDetailSheet、Name / Budget / Payday / Category / Data 弹层
   ui/                   Money、TxRow、Charts、SparkSummary、MonthCalendar、Sheet、TabBar、Toast、Icon
   lib/                  money、date、stats、theme、backup、avatar、haptics、modal（纯函数 / 平台能力）
+  lib/ocr/              小票字段抽取：amount / date / merchant / parse，插件封装在 plugin.ts
   styles/app.css        结构、组件与基础样式
   styles/og.css         主题皮肤：深/浅 token、8 组强调色、页面覆盖（后加载）
 android/                Capacitor 生成的 Android 工程（已配好 SDK 35 / AGP 8.7.2）
@@ -76,7 +77,7 @@ release/                本地构建的 APK（已 gitignore；安装包见 GitHu
 npm install          # 依赖（国内可用已写入的 npmmirror 源）
 npm run dev          # 浏览器调试
 npm run build        # 产出 dist/
-npm test             # 单元测试（vitest，30 例）
+npm test             # 单元测试（vitest，43 例）
 npm run check        # tsc --noEmit + 分层检查
 npx cap copy android # 同步到原生工程
 ```
@@ -89,6 +90,8 @@ JAVA_HOME='C:\Program Files\Java\jdk-17' /c/Android/gradle-8.9/bin/gradle.bat -p
 ```
 
 产物：`android/app/build/outputs/apk/debug/app-debug.apk`，`adb install -r` 即可装机。一条命令打包：`npm run cap:build`（build + cap sync + assembleDebug）；版本号在 `android/app/build.gradle`。
+
+小票识别的引擎 AAR（39MB，含 PP-OCR 模型与 onnxruntime）不入库：`android/app/libs/OcrLibrary-1.3.0-release.aar` 不存在时 Gradle 的 `fetchOcrAar` 任务会从 [RapidOcrAndroidOnnx 1.3.0 Release](https://github.com/RapidAI/RapidOcrAndroidOnnx/releases/tag/1.3.0) 下载。默认只打 `arm64-v8a,armeabi-v7a` 两个 ABI；模拟器（x86_64）用 `cd android && ./gradlew assembleDebug -PocrAbi=x86_64`。
 
 > 当前为 debug 签名，可直接侧载安装；上架应用商店需要换成自己的 release keystore。
 
