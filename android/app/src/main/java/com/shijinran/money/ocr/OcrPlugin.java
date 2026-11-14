@@ -6,7 +6,6 @@ import android.graphics.Canvas;
 import android.graphics.Paint;
 import android.util.Base64;
 
-import com.benjaminwan.ocrlibrary.OcrEngine;
 import com.benjaminwan.ocrlibrary.OcrResult;
 import com.benjaminwan.ocrlibrary.Point;
 import com.benjaminwan.ocrlibrary.TextBlock;
@@ -33,37 +32,9 @@ import java.util.concurrent.Executors;
 @CapacitorPlugin(name = "Ocr")
 public class OcrPlugin extends Plugin {
 
-    private static final String DET = "ch_PP-OCRv3_det_infer.onnx";
-    private static final String CLS = "ch_ppocr_mobile_v2.0_cls_infer.onnx";
-    private static final String REC = "ch_PP-OCRv3_rec_infer.onnx";
-    private static final String KEYS = "ppocr_keys_v1.txt";
     private static final int MAX_SIDE_DEFAULT = 1600;
 
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
-    private volatile OcrEngine engine;
-    private volatile String initError;
-
-    private OcrEngine ensureEngine() {
-        if (engine != null) return engine;
-        synchronized (this) {
-            if (engine != null) return engine;
-            if (initError != null) throw new IllegalStateException(initError);
-            try {
-                OcrEngine created = new OcrEngine(getContext());
-                created.setPadding(50);
-                created.setBoxScoreThresh(0.5f);
-                created.setBoxThresh(0.3f);
-                created.setUnClipRatio(1.6f);
-                created.setDoAngle(true);
-                created.setMostAngle(true);
-                engine = created;
-                return created;
-            } catch (Throwable t) {
-                initError = t.getMessage() == null ? t.getClass().getSimpleName() : t.getMessage();
-                throw new IllegalStateException(initError);
-            }
-        }
-    }
 
     /** 提前把模型读进内存，首张图就不用等加载。 */
     @PluginMethod
@@ -71,7 +42,7 @@ public class OcrPlugin extends Plugin {
         worker.execute(() -> {
             try {
                 long t0 = System.currentTimeMillis();
-                ensureEngine();
+                OcrEngineHolder.warmUp(getContext());
                 JSObject ret = new JSObject();
                 ret.put("ready", true);
                 ret.put("ms", System.currentTimeMillis() - t0);
@@ -101,10 +72,9 @@ public class OcrPlugin extends Plugin {
                 }
                 Bitmap input = shrink(source, maxSide);
                 long t0 = System.currentTimeMillis();
-                OcrEngine e = ensureEngine();
                 Bitmap box = Bitmap.createBitmap(input.getWidth(), input.getHeight(), Bitmap.Config.ARGB_8888);
                 new Canvas(box).drawColor(0x00000000);
-                OcrResult result = e.detect(input, box, maxSide);
+                OcrResult result = OcrEngineHolder.detect(getContext(), input, box, maxSide);
                 long ms = System.currentTimeMillis() - t0;
 
                 List<TextBlock> blocks = result != null && result.getTextBlocks() != null

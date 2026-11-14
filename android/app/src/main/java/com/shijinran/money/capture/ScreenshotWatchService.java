@@ -23,11 +23,11 @@ import android.util.Log;
 
 import androidx.core.app.NotificationCompat;
 
-import com.benjaminwan.ocrlibrary.OcrEngine;
 import com.benjaminwan.ocrlibrary.OcrResult;
 import com.benjaminwan.ocrlibrary.TextBlock;
 import com.shijinran.money.MainActivity;
 import com.shijinran.money.R;
+import com.shijinran.money.ocr.OcrEngineHolder;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -59,7 +59,6 @@ public class ScreenshotWatchService extends Service {
 
     private final ExecutorService io = Executors.newSingleThreadExecutor();
     private ContentObserver observer;
-    private OcrEngine engine;
     private long startedAt;
 
     @Override
@@ -96,7 +95,6 @@ public class ScreenshotWatchService extends Service {
             observer = null;
         }
         io.shutdownNow();
-        engine = null;
         super.onDestroy();
     }
 
@@ -282,9 +280,8 @@ public class ScreenshotWatchService extends Service {
 
     private String ocrAmount(Bitmap bitmap) {
         try {
-            OcrEngine e = ensureEngine();
             Bitmap box = Bitmap.createBitmap(bitmap.getWidth(), bitmap.getHeight(), Bitmap.Config.ARGB_8888);
-            OcrResult result = e.detect(bitmap, box, MAX_SIDE);
+            OcrResult result = OcrEngineHolder.detect(getApplicationContext(), bitmap, box, MAX_SIDE);
             StringBuilder text = new StringBuilder();
             if (result != null && result.getTextBlocks() != null) {
                 for (TextBlock block : result.getTextBlocks()) {
@@ -295,19 +292,6 @@ public class ScreenshotWatchService extends Service {
         } catch (Throwable t) {
             return null;
         }
-    }
-
-    private OcrEngine ensureEngine() {
-        if (engine != null) return engine;
-        OcrEngine created = new OcrEngine(getApplicationContext());
-        created.setPadding(50);
-        created.setBoxScoreThresh(0.5f);
-        created.setBoxThresh(0.3f);
-        created.setUnClipRatio(1.6f);
-        created.setDoAngle(true);
-        created.setMostAngle(true);
-        engine = created;
-        return created;
     }
 
     /** 只用来判断「值不值得提醒」，正式解析仍在 src/lib/ocr 里做。 */
