@@ -521,6 +521,4 @@ export interface WatchStatus {
   running: boolean
   /** 相册权限：未申请 / 已拒绝 / 已允许 */
   permission: 'prompt' | 'denied' | 'granted'
-  /** 悬浮窗权限：有它截屏后才能像微信一样直接弹卡片，没有就退回通知 */
-  overlay: 'granted' | 'denied'
 }

@@ -39,7 +39,6 @@ export type { AmountCandidate, DateCandidate, MerchantCandidate, ParseOptions } 
 export {
   WATCH_OFF,
   captureAvailable,
-  requestOverlay,
   consumeCapture,
   disableWatch,
   enableWatch,

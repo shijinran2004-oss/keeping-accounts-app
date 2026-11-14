@@ -199,11 +199,11 @@ export function AddSheet({
   }
 
   // 分享进来、或从截图通知点进来的图：打开弹层后立刻认一次，同一张不重复认
-  const usedCapture = useRef<string | null>(null)
+  const usedCapture = useRef<CaptureImage | null>(null)
   useEffect(() => {
     if (!open || !capture) return
-    if (usedCapture.current === capture.dataUrl) return
-    usedCapture.current = capture.dataUrl
+    if (usedCapture.current === capture) return
+    usedCapture.current = capture
     void runOcr(capture.dataUrl)
     onCaptureUsed?.()
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -4,7 +4,6 @@ import {
   Camera,
   ChevronRight,
   Download,
-  Layers,
   MonitorSmartphone,
   Moon,
   Palette,
@@ -27,7 +26,6 @@ import {
   fileToAvatar,
   formatDay,
   formatMoney,
-  requestOverlay,
   themeName,
   todayStr,
   watchStatus,
@@ -70,14 +68,9 @@ export function Me() {
         enabled: next.enabled,
         running: next.running,
         permission: next.permission ?? prev?.permission ?? 'prompt',
-        overlay: next.overlay ?? prev?.overlay ?? 'denied',
       }))
       if (next.enabled) {
-        toast(
-          next.overlay === 'granted'
-            ? '截图记账已开启，截屏后立刻弹卡片'
-            : '截图记账已开启，截屏后会通知你确认',
-        )
+        toast('截图记账已开启，截屏后会弹出通知让你确认')
       } else {
         toast('截图记账已关闭')
       }
@@ -85,15 +78,6 @@ export function Me() {
       toast(error instanceof Error ? error.message : '没开启成功，看看是不是没给相册权限', 'error')
     } finally {
       setWatchBusy(false)
-    }
-  }
-
-  const openOverlay = async () => {
-    try {
-      await requestOverlay()
-      toast('在系统设置里允许「显示在其他应用上层」，回来就能弹卡片')
-    } catch (error) {
-      toast(error instanceof Error ? error.message : '没打开设置，可以手动去系统里允许', 'error')
     }
   }
 
@@ -270,27 +254,16 @@ export function Me() {
               label="截图记账"
               sub={
                 watch?.enabled
-                  ? watch.overlay === 'granted'
-                    ? '已开启：截屏后立刻弹卡片确认'
-                    : '已开启：截屏后通知确认'
+                  ? '已开启：截屏后弹出通知，点「确认记录」才入账'
                   : '默认关闭；开启后下拉栏会常驻一条通知'
               }
               value={watchBusy ? '…' : watch?.enabled ? '已开启' : '已关闭'}
               onClick={toggleWatch}
             />
           )}
-          {canWatch && watch?.enabled && watch.overlay !== 'granted' && (
-            <Row
-              icon={Layers}
-              label="截屏弹卡片"
-              sub="允许「显示在其他应用上层」，截屏后就像微信一样弹出来"
-              value="去允许"
-              onClick={openOverlay}
-            />
-          )}
         </div>
         {canWatch && (
-          <p className="field-note">截图只在这台手机上识别，认出的金额也只是弹卡片让你确认，不会自己入账。</p>
+          <p className="field-note">截图只在这台手机上识别；通知里点「确认记录」才会入账，点「取消」就直接丢掉。</p>
         )}
       </section>
 

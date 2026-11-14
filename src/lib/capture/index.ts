@@ -8,6 +8,5 @@ export {
   disableWatch,
   enableWatch,
   onCapture,
-  requestOverlay,
   watchStatus,
 } from './plugin'

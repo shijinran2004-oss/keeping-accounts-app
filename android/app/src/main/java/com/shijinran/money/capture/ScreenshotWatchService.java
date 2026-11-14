@@ -49,8 +49,11 @@ import java.util.regex.Pattern;
 public class ScreenshotWatchService extends Service {
 
     static final String CHANNEL_WATCH = "screenshot_watch";
-    static final String CHANNEL_FOUND = "screenshot_found";
+    // 渠道创建后重要性不能再改；换 id 才能让 1.4.4 的高优先级（顶部横幅）真正生效
+    static final String CHANNEL_FOUND = "screenshot_found_v2";
+    private static final String CHANNEL_FOUND_LEGACY = "screenshot_found";
     static final int FOREGROUND_ID = 4101;
+    static final int NOTIFY_FOUND_ID = 4301;
     static volatile boolean running = false;
 
     private static final String TAG = "SnoopyCapture";
@@ -106,10 +109,10 @@ public class ScreenshotWatchService extends Service {
         Notification notice = new NotificationCompat.Builder(this, CHANNEL_WATCH)
                 .setSmallIcon(R.mipmap.ic_launcher)
                 .setContentTitle("截图记账已开启")
-                .setContentText("截屏后会自动认出金额，点通知确认")
+                .setContentText("截屏后弹出通知，点「确认记录」才入账")
                 .setOngoing(true)
                 .setPriority(NotificationCompat.PRIORITY_MIN)
-                .setContentIntent(openApp(null))
+                .setContentIntent(openApp(null, 10))
                 .build();
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             startForeground(FOREGROUND_ID, notice, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE);
@@ -127,9 +130,14 @@ public class ScreenshotWatchService extends Service {
         watch.setDescription("保持截图监听时显示的常驻通知");
         watch.setShowBadge(false);
         nm.createNotificationChannel(watch);
+        // IMPORTANCE_HIGH 才会像 QQ 消息那样从顶部弹出来
+        // 老渠道是默认重要性，留着也不会再弹横幅，直接删掉
+        nm.deleteNotificationChannel(CHANNEL_FOUND_LEGACY);
         NotificationChannel found = new NotificationChannel(
-                CHANNEL_FOUND, "识别到截图", NotificationManager.IMPORTANCE_DEFAULT);
+                CHANNEL_FOUND, "截图记账提醒", NotificationManager.IMPORTANCE_HIGH);
         found.setDescription("截图里认出金额时提醒你确认记账");
+        found.enableVibration(true);
+        found.setShowBadge(true);
         nm.createNotificationChannel(found);
     }
 
@@ -235,44 +243,21 @@ public class ScreenshotWatchService extends Service {
                 Log.w(TAG, "cache write failed " + id);
                 return;
             }
-            boolean card = CaptureOverlay.permitted(this);
-            if (card) {
-                // 先把卡片弹出来，别让用户盯着通知栏等识别
-                CaptureOverlay.show(this, saved.getAbsolutePath(), thumb(bitmap));
-            }
             CaptureStore.setPendingPath(this, saved.getAbsolutePath());
             CaptureStore.setPendingSource(this, "screenshot");
             String amount = ocrAmount(bitmap);
             if (amount == null) {
                 // 聊天、网页之类没有金额的截图，静默跳过
-                if (card) CaptureOverlay.dismiss();
                 saved.delete();
                 CaptureStore.clearPendingPath(this);
                 return;
             }
-            if (card) {
-                CaptureOverlay.update("¥" + amount, "点「去记账」核对金额和分类");
-            } else {
-                notifyFound(amount, saved.getAbsolutePath());
-            }
+            notifyFound(amount, saved.getAbsolutePath());
             CaptureStore.setLastNoticeAt(this, System.currentTimeMillis());
         } catch (Throwable t) {
             Log.w(TAG, "handleShot failed: " + id, t);
             if (saved != null) saved.delete();
-            CaptureOverlay.dismiss();
-        }
-    }
-
-    /** 卡片上的小缩略图，别拿整张原图去占内存。 */
-    private Bitmap thumb(Bitmap bitmap) {
-        try {
-            int side = Math.min(bitmap.getWidth(), bitmap.getHeight());
-            int left = (bitmap.getWidth() - side) / 2;
-            int top = (bitmap.getHeight() - side) / 2;
-            Bitmap square = Bitmap.createBitmap(bitmap, left, top, side, side);
-            return Bitmap.createScaledBitmap(square, 132, 132, true);
-        } catch (Throwable t) {
-            return null;
+            CaptureStore.clearPendingPath(this);
         }
     }
 
@@ -363,26 +348,45 @@ public class ScreenshotWatchService extends Service {
         return null;
     }
 
+    /**
+     * 认到金额就发一条能直接操作的通知：系统会把它当成高优先级消息从顶部弹出来，
+     * 卡片上带「确认记录」「取消」两个按钮，不用先切回 App。
+     */
     private void notifyFound(String amount, String path) {
+        String text = "点「确认记录」记账，点「取消」忽略这张截图";
         NotificationCompat.Builder builder = new NotificationCompat.Builder(this, CHANNEL_FOUND)
                 .setSmallIcon(R.mipmap.ic_launcher)
                 .setContentTitle("识别到 ¥" + amount)
-                .setContentText("点开确认金额和分类，保存后才会记账")
+                .setContentText(text)
+                .setStyle(new NotificationCompat.BigTextStyle().bigText(text))
+                .setCategory(NotificationCompat.CATEGORY_MESSAGE)
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setDefaults(NotificationCompat.DEFAULT_VIBRATE)
                 .setAutoCancel(true)
-                .setPriority(NotificationCompat.PRIORITY_DEFAULT)
-                .setContentIntent(openApp(path));
+                .setContentIntent(openApp(path, 11))
+                .addAction(0, "确认记录", openApp(path, 12))
+                .addAction(0, "取消", cancelIntent(13));
         try {
             NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
-            if (nm != null) nm.notify((int) (System.currentTimeMillis() % 100000), builder.build());
+            // 固定 id：新截图直接替换上一条，通知栏不会堆一串旧提醒
+            if (nm != null) nm.notify(NOTIFY_FOUND_ID, builder.build());
         } catch (Throwable ignored) {
         }
     }
 
-    private PendingIntent openApp(String path) {
+    /** 「取消」按钮：把待确认的截图丢掉，再把通知收起来 */
+    private PendingIntent cancelIntent(int requestCode) {
+        Intent intent = new Intent(this, CaptureCancelReceiver.class);
+        intent.setAction(CaptureCancelReceiver.ACTION_CANCEL);
+        return PendingIntent.getBroadcast(this, requestCode, intent,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+    }
+
+    private PendingIntent openApp(String path, int requestCode) {
         Intent intent = new Intent(this, MainActivity.class);
         intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
         if (path != null) intent.putExtra(CapturePlugin.EXTRA_PENDING, path);
-        return PendingIntent.getActivity(this, path == null ? 11 : (int) (System.currentTimeMillis() % 100000),
-                intent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        return PendingIntent.getActivity(this, requestCode, intent,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
     }
 }
