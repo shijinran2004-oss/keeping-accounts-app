@@ -11,6 +11,7 @@ interface CaptureApi {
   watchStatus(): Promise<WatchStatus>
   enableWatch(): Promise<WatchStatus>
   disableWatch(): Promise<WatchStatus>
+  requestOverlay(): Promise<{ overlay?: string }>
   addListener(
     event: 'capture',
     listener: (data: { source?: string }) => void,
@@ -32,6 +33,7 @@ export const WATCH_OFF: WatchStatus = {
   enabled: false,
   running: false,
   permission: 'prompt',
+  overlay: 'denied',
 }
 
 /** 这台设备能不能走分享/截图记账 */
@@ -69,6 +71,12 @@ export async function watchStatus(): Promise<WatchStatus> {
 export async function enableWatch(): Promise<WatchStatus> {
   if (!captureAvailable()) throw new Error('这台设备不支持截图记账')
   return capture().enableWatch()
+}
+
+/** 去系统设置里允许「显示在其他应用上层」：有了它截屏后可以直接弹卡片 */
+export async function requestOverlay(): Promise<void> {
+  if (!captureAvailable()) return
+  await capture().requestOverlay()
 }
 
 /** 关闭截图监听并停掉常驻通知 */

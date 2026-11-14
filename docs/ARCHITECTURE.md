@@ -158,7 +158,7 @@ App / main
 校验失败清空 IDB 并回退旧存储（旧键保持只读，不删）。`localStorage['shijinran.storage.engine']='ls'` 可强制回退。每次写入成功后同步刷新 localStorage 镜像，回退时能读到最新账本。
 ```
 
-分享 / 截图进来时走另一条入口：原生层把图缩到 1600px 存成 dataUrl（分享读 `ACTION_SEND` 的 `content://`，截图由前台服务监听 MediaStore 新增），前端 `lib/capture` 取出后交给 `AddSheet`，与「拍小票」共用 `recognizeReceipt → parseReceipt → 回填`，仍然由用户点保存才写库。截图监听默认关闭，开关状态存在原生 `SharedPreferences('shijinran.capture')`；服务只对 `_ID` 比上次大、文件名像截图、时间在开启之后的图片识别，认出金额才发通知。
+分享 / 截图进来时走另一条入口：原生层把图缩到 1600px 存成 dataUrl（分享读 `ACTION_SEND` 的 `content://`，截图由前台服务监听 MediaStore 新增），前端 `lib/capture` 取出后交给 `AddSheet`，与「拍小票」共用 `recognizeReceipt → parseReceipt → 回填`，仍然由用户点保存才写库。截图监听默认关闭，开关状态存在原生 `SharedPreferences('shijinran.capture')`；服务只对 `_ID` 比上次大、文件名像截图、时间在开启之后的图片识别，认出金额后优先弹悬浮卡片确认（没有悬浮窗权限时退回发通知）。
 
 读的时候反过来：`useLedger().state` → `lib/stats.ts` 按区间汇总 → 页面渲染。
 
@@ -180,7 +180,7 @@ App / main
 
 ## 版本与构建
 
-- `versionCode 42` / `versionName 1.4.2`（`android/app/build.gradle`）
+- `versionCode 43` / `versionName 1.4.3`（`android/app/build.gradle`）
 - 数据版本 `LedgerState.version = 1`，`normalize()` 读取时补全新增分类与设置
 - 存储：IndexedDB（库 `shijinran`，`txs` / `meta` / `snapshots` 三个 store），首次启动从 `localStorage` 一次性迁移；`localStorage['shijinran.storage.engine']='ls'` 可强制回退旧引擎
 - 备份：v2 容器带 `schema` / `checksum`，默认 gzip；导入先预览，支持覆盖 / 合并 / 仅设置与分类；导入、清空、恢复前自动快照（保留 5 份）
@@ -189,6 +189,6 @@ App / main
 - 识别流程：`fileToOcrDataUrl()` 压到 1600px → `Ocr.recognize` 在原生线程跑模型、返回行与坐标 → `parseReceipt()` 抽金额 / 日期 / 商户 / 分类 → `AddSheet` 回填，用户确认后才写库
 - OCR 引擎：全进程只有一个，由 `android/app/src/main/java/com/shijinran/money/ocr/OcrEngineHolder.java` 提供。RapidOcr 的 native 层不是多实例安全的，截图监听服务和 `Ocr` 插件如果在同一进程各建一个引擎，后来那个实例的识别结果会变成字形相近的乱码；`detect` 也加了锁，两个线程同时调用不会互相踩
 - 金额口径（`lib/ocr/amount.ts`）：每个金额只认它左边紧邻的标签（实付 / 实收 / 应付 8，付款 / 支付金额 7，合计 / 总计 / 应收 6，本次消费 5，通用「金额」3，找零 / 优惠 / 折扣 / 原价 / 余额 −9），同行多个金额各算各的；没有小数点且 ≥100 时用商品金额合计反推是「分」还是「元」，都不像就按分记并在 `OcrDraft.warnings` 里提示核对
-- 权限：`AndroidManifest.xml` 只申请 `READ_MEDIA_IMAGES`（13+）/ `READ_EXTERNAL_STORAGE`（≤32）、`POST_NOTIFICATIONS`、`FOREGROUND_SERVICE(_SPECIAL_USE)`；不申请 `INTERNET`，安装包无法联网
-- 分享 / 截图：`CapturePlugin` 收 `ACTION_SEND`、启停前台服务；`ScreenshotWatchService`（`foregroundServiceType="specialUse"`）用 ContentObserver 监听 MediaStore 新图，只认开启后新增且文件名像截图的，识别到金额才发通知；点通知通过 `capture_pending` extra 带图进 `AddSheet`，冷启动也生效
+- 权限：`AndroidManifest.xml` 只申请 `READ_MEDIA_IMAGES`（13+）/ `READ_EXTERNAL_STORAGE`（≤32）、`POST_NOTIFICATIONS`、`FOREGROUND_SERVICE(_SPECIAL_USE)`，以及可选的 `SYSTEM_ALERT_WINDOW`（悬浮窗，用来截屏后弹卡片；不给就退回通知）；不申请 `INTERNET`，安装包无法联网
+- 分享 / 截图：`CapturePlugin` 收 `ACTION_SEND`、启停前台服务；`ScreenshotWatchService`（`foregroundServiceType="specialUse"`）用 ContentObserver 监听 MediaStore 新图，只认开启后新增且文件名像截图的，识别到金额后由 `CaptureOverlay` 通过 `WindowManager`（`TYPE_APPLICATION_OVERLAY`）在屏幕底部弹卡片（缩略图 + 金额 + 去记账/忽略，20 秒自动收起），没有悬浮窗权限时退回通知；两条路径都用 `capture_pending` extra 带图进 `AddSheet`，冷启动也生效
 - 检查：`npm run check`（tsc + 分层检查）、`npm test`（vitest）

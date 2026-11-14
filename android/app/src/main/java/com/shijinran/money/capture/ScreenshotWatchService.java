@@ -54,7 +54,7 @@ public class ScreenshotWatchService extends Service {
     static volatile boolean running = false;
 
     private static final String TAG = "SnoopyCapture";
-    private static final int MAX_SIDE = 1600;
+    private static final int MAX_SIDE = 1280;
     private static final long HISTORY_GUARD_MS = 10_000L;
 
     private final ExecutorService io = Executors.newSingleThreadExecutor();
@@ -70,7 +70,11 @@ public class ScreenshotWatchService extends Service {
         startForegroundCompat();
         primeCursor();
         registerObserver();
-        io.execute(this::scanNewShots);
+        io.execute(() -> {
+            // 先把 OCR 模型加载好，第一张截图就不用等初始化
+            OcrEngineHolder.warmUp(this);
+            scheduleScan(0);
+        });
     }
 
     @Override
@@ -133,15 +137,17 @@ public class ScreenshotWatchService extends Service {
         observer = new ContentObserver(new Handler(Looper.getMainLooper())) {
             @Override
             public void onChange(boolean selfChange, Uri uri) {
-                io.execute(ScreenshotWatchService.this::scanNewShots);
+                Log.d(TAG, "observer change " + uri);
+                scheduleScan(0);
             }
         };
         getContentResolver().registerContentObserver(
                 MediaStore.Images.Media.EXTERNAL_CONTENT_URI, true, observer);
     }
 
-    private void scanNewShots() {
+    private boolean scanNewShots() {
         long last = CaptureStore.lastId(this);
+        int handled = 0;
         ContentResolver resolver = getContentResolver();
         String[] projection = new String[] {
                 MediaStore.Images.Media._ID,
@@ -154,7 +160,7 @@ public class ScreenshotWatchService extends Service {
         try {
             cursor = resolver.query(MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
                     projection, selection, args, MediaStore.Images.Media._ID + " ASC");
-            if (cursor == null) return;
+            if (cursor == null) return false;
             int idCol = cursor.getColumnIndexOrThrow(MediaStore.Images.Media._ID);
             int dateCol = cursor.getColumnIndexOrThrow(MediaStore.Images.Media.DATE_ADDED);
             int nameCol = cursor.getColumnIndexOrThrow(MediaStore.Images.Media.DISPLAY_NAME);
@@ -166,11 +172,24 @@ public class ScreenshotWatchService extends Service {
                 if (addedMs < startedAt - HISTORY_GUARD_MS) continue;
                 if (!looksLikeScreenshot(name)) continue;
                 handleShot(id);
+                handled++;
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable t) {
+            Log.w(TAG, "scan failed", t);
         } finally {
             if (cursor != null) cursor.close();
         }
+        if (handled > 0) Log.d(TAG, "scanned " + handled + " new shot(s)");
+        return handled > 0;
+    }
+
+    /** MediaStore 的插入偶尔比系统广播晚一点，第一次没扫到就再试两次。 */
+    private void scheduleScan(int attempt) {
+        io.execute(() -> {
+            if (scanNewShots()) return;
+            if (attempt >= 10 || io.isShutdown()) return;
+            new Handler(Looper.getMainLooper()).postDelayed(() -> scheduleScan(attempt + 1), 400);
+        });
     }
 
     /** 第一次开启时先记下当前最大的 _ID，避免把以前的截图全部过一遍。 */
@@ -210,18 +229,48 @@ public class ScreenshotWatchService extends Service {
                 return;
             }
             saved = saveCache(bitmap, id);
-            String amount = ocrAmount(bitmap);
-            if (amount == null || saved == null) {
-                // 聊天、网页之类没有金额的截图，静默跳过；缓存写不出来也不提醒（点开没图）
-                if (saved != null) saved.delete();
+            if (saved == null) {
+                Log.w(TAG, "cache write failed " + id);
                 return;
             }
+            boolean card = CaptureOverlay.permitted(this);
+            if (card) {
+                // 先把卡片弹出来，别让用户盯着通知栏等识别
+                CaptureOverlay.show(this, saved.getAbsolutePath(), thumb(bitmap));
+            }
             CaptureStore.setPendingPath(this, saved.getAbsolutePath());
-            notifyFound(amount, saved.getAbsolutePath());
+            CaptureStore.setPendingSource(this, "screenshot");
+            String amount = ocrAmount(bitmap);
+            if (amount == null) {
+                // 聊天、网页之类没有金额的截图，静默跳过
+                if (card) CaptureOverlay.dismiss();
+                saved.delete();
+                CaptureStore.clearPendingPath(this);
+                return;
+            }
+            if (card) {
+                CaptureOverlay.update("¥" + amount, "点「去记账」核对金额和分类");
+            } else {
+                notifyFound(amount, saved.getAbsolutePath());
+            }
             CaptureStore.setLastNoticeAt(this, System.currentTimeMillis());
         } catch (Throwable t) {
             Log.w(TAG, "handleShot failed: " + id, t);
             if (saved != null) saved.delete();
+            CaptureOverlay.dismiss();
+        }
+    }
+
+    /** 卡片上的小缩略图，别拿整张原图去占内存。 */
+    private Bitmap thumb(Bitmap bitmap) {
+        try {
+            int side = Math.min(bitmap.getWidth(), bitmap.getHeight());
+            int left = (bitmap.getWidth() - side) / 2;
+            int top = (bitmap.getHeight() - side) / 2;
+            Bitmap square = Bitmap.createBitmap(bitmap, left, top, side, side);
+            return Bitmap.createScaledBitmap(square, 132, 132, true);
+        } catch (Throwable t) {
+            return null;
         }
     }
 

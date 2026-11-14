@@ -121,7 +121,24 @@ public class CapturePlugin extends Plugin {
         ret.put("enabled", CaptureStore.isEnabled(getContext()));
         ret.put("running", ScreenshotWatchService.running);
         ret.put("permission", imagePermission());
+        ret.put("overlay", CaptureOverlay.permitted(getContext()) ? "granted" : "denied");
         call.resolve(ret);
+    }
+
+    /** 去系统里给「显示在其他应用上层」权限，有它截屏后才能直接弹卡片。 */
+    @PluginMethod
+    public void requestOverlay(PluginCall call) {
+        if (CaptureOverlay.permitted(getContext())) {
+            call.resolve(new JSObject().put("overlay", "granted"));
+            return;
+        }
+        try {
+            getActivity().startActivity(CaptureOverlay.permissionIntent(getContext()));
+        } catch (Throwable t) {
+            call.reject("打不开系统设置，请手动到设置里允许「显示在其他应用上层」", "capture_overlay_failed");
+            return;
+        }
+        call.resolve(new JSObject().put("overlay", "prompt"));
     }
 
     @PluginMethod
