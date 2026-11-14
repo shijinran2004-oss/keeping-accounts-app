@@ -120,6 +120,8 @@ export interface LedgerApi {
   saveSettings: (patch: Partial<Settings>) => void
   addCategory: (category: NewCategory) => void
   deleteCategory: (id: string) => void
+  /** 只换图标，内置分类也允许改 */
+  updateCategoryIcon: (id: string, icon: Category['icon']) => void
   /** 导入 JSON 备份，返回是否成功及原因 */
   importState: (json: string) => { ok: boolean; error?: string }
   clearTxs: () => void

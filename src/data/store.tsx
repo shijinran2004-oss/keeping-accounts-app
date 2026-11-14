@@ -131,6 +131,13 @@ export function LedgerProvider({ children }: { children: React.ReactNode }) {
     setState((s) => ({ ...s, categories: [...s.categories, next] }))
   }, [])
 
+  const updateCategoryIcon = useCallback((id: string, icon: Category['icon']) => {
+    setState((s) => ({
+      ...s,
+      categories: s.categories.map((c) => (c.id === id ? { ...c, icon } : c)),
+    }))
+  }, [])
+
   const deleteCategory = useCallback((id: string) => {
     setState((s) => {
       const target = s.categories.find((c) => c.id === id)
@@ -173,11 +180,12 @@ export function LedgerProvider({ children }: { children: React.ReactNode }) {
       saveSettings,
       addCategory,
       deleteCategory,
+      updateCategoryIcon,
       importState,
       clearTxs,
       resetAll,
     }),
-    [state, addTx, updateTx, deleteTx, saveSettings, addCategory, deleteCategory, importState, clearTxs, resetAll],
+    [state, addTx, updateTx, deleteTx, saveSettings, addCategory, deleteCategory, updateCategoryIcon, importState, clearTxs, resetAll],
   )
 
   return <LedgerContext.Provider value={value}>{children}</LedgerContext.Provider>

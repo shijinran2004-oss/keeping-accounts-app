@@ -1,18 +1,20 @@
-import { useEffect, useState, type CSSProperties } from 'react'
-import { Plus, Trash2 } from 'lucide-react'
-import { COLOR_CHOICES, ICON_CHOICES, useLedger } from '../data'
+import { Fragment, useEffect, useState, type CSSProperties } from 'react'
+import { Check, Pencil, Plus, RotateCcw, Trash2 } from 'lucide-react'
+import { COLOR_CHOICES, DEFAULT_CATEGORIES, ICON_CHOICES, useLedger } from '../data'
 import type { Category, TxType } from '../types'
 import { CategoryIcon, Sheet, useToast } from '../ui'
 
 /** 分类管理：内置分类只读，自定义分类可删除；新建时选图标与颜色。 */
 export function CategorySheet({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const { state, addCategory, deleteCategory } = useLedger()
+  const { state, addCategory, deleteCategory, updateCategoryIcon } = useLedger()
   const toast = useToast()
   const [adding, setAdding] = useState(false)
   const [name, setName] = useState('')
   const [type, setType] = useState<TxType>('expense')
   const [icon, setIcon] = useState<Category['icon']>('coffee')
   const [color, setColor] = useState(COLOR_CHOICES[0])
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editInitial, setEditInitial] = useState<Category['icon']>('coffee')
 
   useEffect(() => {
     if (!open) return
@@ -21,6 +23,7 @@ export function CategorySheet({ open, onClose }: { open: boolean; onClose: () =>
     setType('expense')
     setIcon('coffee')
     setColor(COLOR_CHOICES[0])
+    setEditingId(null)
   }, [open])
 
   const groups: { label: string; type: TxType }[] = [
@@ -31,6 +34,7 @@ export function CategorySheet({ open, onClose }: { open: boolean; onClose: () =>
   return (
     <Sheet open={open} onClose={onClose} title="分类管理" full>
       <div className="sheet-body cat-manage">
+        <p className="cat-manage-hint">点分类左侧的图标就能更换，内置分类也可以改。</p>
         {groups.map((g) => (
           <div className="cat-manage-group" key={g.type}>
             <h3>{g.label}<span>{state.categories.filter((c) => c.type === g.type).length}</span></h3>
@@ -38,27 +42,88 @@ export function CategorySheet({ open, onClose }: { open: boolean; onClose: () =>
               {state.categories
                 .filter((c) => c.type === g.type)
                 .map((c) => (
-                  <div className="manage-row" key={c.id}>
-                    <span className="cat-tile" style={{ ['--cat' as string]: c.color } as CSSProperties}>
-                      <CategoryIcon name={c.icon} size={17} />
-                    </span>
-                    <span className="manage-name">{c.name}</span>
-                    {c.builtin ? (
-                      <span className="manage-tag">内置</span>
-                    ) : (
+                  <Fragment key={c.id}>
+                    <div className={`manage-row ${editingId === c.id ? 'is-editing' : ''}`}>
                       <button
                         type="button"
-                        className="manage-del"
-                        aria-label={`删除${c.name}`}
+                        className="manage-icon"
+                        aria-label={`更换${c.name}的图标`}
+                        aria-expanded={editingId === c.id}
                         onClick={() => {
-                          deleteCategory(c.id)
-                          toast('分类已删除，相关记录归入其他')
+                          setEditingId(editingId === c.id ? null : c.id)
+                          setEditInitial(c.icon)
                         }}
                       >
-                        <Trash2 size={16} strokeWidth={1.6} />
+                        <span className="cat-tile" style={{ ['--cat' as string]: c.color } as CSSProperties}>
+                          <CategoryIcon name={c.icon} size={17} />
+                        </span>
+                        <span className="manage-icon-badge" aria-hidden="true">
+                          <Pencil size={8} strokeWidth={2.4} />
+                        </span>
                       </button>
+                      <span className="manage-name">{c.name}</span>
+                      {c.builtin ? (
+                        <span className="manage-tag">内置</span>
+                      ) : (
+                        <button
+                          type="button"
+                          className="manage-del"
+                          aria-label={`删除${c.name}`}
+                          onClick={() => {
+                            deleteCategory(c.id)
+                            toast('分类已删除，相关记录归入其他')
+                          }}
+                        >
+                          <Trash2 size={16} strokeWidth={1.6} />
+                        </button>
+                      )}
+                    </div>
+
+                    {editingId === c.id && (
+                      <div className="icon-editor">
+                        <div className="icon-editor-head">
+                          <b>更换「{c.name}」图标</b>
+                          <span>{ICON_CHOICES.length} 个可选</span>
+                        </div>
+                        <div className="icon-grid" role="group" aria-label={`${c.name}图标`}>
+                          {ICON_CHOICES.map((ic) => (
+                            <button
+                              key={ic.key}
+                              type="button"
+                              className={`icon-badge ${c.icon === ic.key ? 'is-active' : ''}`}
+                              style={{ ['--tint' as string]: c.color } as CSSProperties}
+                              aria-label={ic.label}
+                              aria-pressed={c.icon === ic.key}
+                              title={ic.label}
+                              onClick={() => updateCategoryIcon(c.id, ic.key)}
+                            >
+                              <CategoryIcon name={ic.key} size={17} />
+                            </button>
+                          ))}
+                        </div>
+                        <div className="icon-editor-actions">
+                          <button
+                            type="button"
+                            className="btn-ghost"
+                            onClick={() => {
+                              const factory = DEFAULT_CATEGORIES.find((d) => d.id === c.id)?.icon
+                              updateCategoryIcon(c.id, factory ?? editInitial)
+                              toast(factory ? '已恢复默认图标' : '已恢复原来的图标')
+                            }}
+                          >
+                            <RotateCcw size={13} strokeWidth={1.8} /> 恢复默认
+                          </button>
+                          <button
+                            type="button"
+                            className="btn-primary"
+                            onClick={() => setEditingId(null)}
+                          >
+                            <Check size={14} strokeWidth={2.1} /> 完成
+                          </button>
+                        </div>
+                      </div>
                     )}
-                  </div>
+                  </Fragment>
                 ))}
             </div>
           </div>
@@ -91,16 +156,19 @@ export function CategorySheet({ open, onClose }: { open: boolean; onClose: () =>
                 </button>
               ))}
             </div>
-            <div className="icon-picker">
+            <div className="icon-grid" role="group" aria-label="分类图标">
               {ICON_CHOICES.map((ic) => (
                 <button
                   key={ic.key}
                   type="button"
-                  className={`icon-choice ${icon === ic.key ? 'is-active' : ''}`}
+                  className={`icon-badge ${icon === ic.key ? 'is-active' : ''}`}
+                  style={{ ['--tint' as string]: color } as CSSProperties}
                   onClick={() => setIcon(ic.key)}
                   aria-label={ic.label}
+                  aria-pressed={icon === ic.key}
+                  title={ic.label}
                 >
-                  <CategoryIcon name={ic.key} size={18} />
+                  <CategoryIcon name={ic.key} size={17} />
                 </button>
               ))}
             </div>
