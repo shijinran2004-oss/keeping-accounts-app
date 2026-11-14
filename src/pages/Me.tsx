@@ -1,4 +1,4 @@
-import { useRef, useState, type CSSProperties } from 'react'
+import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import {
   CalendarClock,
   Camera,
@@ -16,9 +16,23 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import { APP_VERSION, DEFAULT_LEDGER_NAME, useLedger } from '../data'
-import { ACCENTS, THEME_OPTIONS, accentName, fileToAvatar, formatDay, formatMoney, themeName, todayStr } from '../lib'
+import {
+  ACCENTS,
+  THEME_OPTIONS,
+  accentName,
+  captureAvailable,
+  disableWatch,
+  enableWatch,
+  fileToAvatar,
+  formatDay,
+  formatMoney,
+  themeName,
+  todayStr,
+  watchStatus,
+} from '../lib'
 import { Seal, SectionTitle, useToast } from '../ui'
 import { BudgetSheet, CategorySheet, DataSheet, NameSheet, PaydaySheet } from '../sheets'
+import type { WatchStatus } from '../types'
 import appIcon from '../assets/app-icon.png'
 
 /**
@@ -34,7 +48,34 @@ export function Me() {
   const [dataOpen, setDataOpen] = useState(false)
   const [nameOpen, setNameOpen] = useState(false)
   const [avatarBusy, setAvatarBusy] = useState(false)
+  const [canWatch] = useState(() => captureAvailable())
+  const [watch, setWatch] = useState<WatchStatus | null>(null)
+  const [watchBusy, setWatchBusy] = useState(false)
   const avatarInput = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (!canWatch) return
+    void watchStatus().then(setWatch)
+  }, [canWatch])
+
+  const toggleWatch = async () => {
+    if (watchBusy) return
+    setWatchBusy(true)
+    try {
+      const next = watch?.enabled ? await disableWatch() : await enableWatch()
+      setWatch((prev) => ({
+        supported: true,
+        enabled: next.enabled,
+        running: next.running,
+        permission: next.permission ?? prev?.permission ?? 'prompt',
+      }))
+      toast(next.enabled ? '截图记账已开启，截屏后会自动认出金额' : '截图记账已关闭')
+    } catch (error) {
+      toast(error instanceof Error ? error.message : '没开启成功，看看是不是没给相册权限', 'error')
+    } finally {
+      setWatchBusy(false)
+    }
+  }
 
   const days = new Set(state.txs.map((t) => t.date)).size
   const first = [...state.txs].sort((a, b) => a.date.localeCompare(b.date))[0]
@@ -203,7 +244,23 @@ export function Me() {
             sub="导出、导入或清空本机数据"
             onClick={() => setDataOpen(true)}
           />
+          {canWatch && (
+            <Row
+              icon={Camera}
+              label="截图记账"
+              sub={
+                watch?.enabled
+                  ? '已开启：截屏后自动认金额，点通知确认'
+                  : '默认关闭；开启后下拉栏会常驻一条通知'
+              }
+              value={watchBusy ? '…' : watch?.enabled ? '已开启' : '已关闭'}
+              onClick={toggleWatch}
+            />
+          )}
         </div>
+        {canWatch && (
+          <p className="field-note">截图只在这台手机上识别，识别出金额才提醒你确认，不会自己入账。</p>
+        )}
       </section>
 
       <footer className="me-foot">

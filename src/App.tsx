@@ -5,8 +5,8 @@ import { StatusBar, Style } from '@capacitor/status-bar'
 import { LedgerProvider, useLedger } from './data'
 import { Home, Ledger, Me, Onboarding, Stats } from './pages'
 import { AddSheet, TxDetailSheet } from './sheets'
-import type { Tab, Tx, TxType } from './types'
-import { applyTheme, closeTopModal } from './lib'
+import type { CaptureImage, Tab, Tx, TxType } from './types'
+import { applyTheme, captureAvailable, closeTopModal, consumeCapture, onCapture } from './lib'
 import { AlertTriangle } from 'lucide-react'
 import { LaunchScreen, TabBar, ToastProvider } from './ui'
 
@@ -20,6 +20,7 @@ function Shell() {
   const [editing, setEditing] = useState<Tx | null>(null)
   const [seed, setSeed] = useState<{ type?: TxType; categoryId?: string } | null>(null)
   const [detailTx, setDetailTx] = useState<Tx | null>(null)
+  const [capture, setCapture] = useState<CaptureImage | null>(null)
   const theme = state.settings.theme ?? 'light'
   const accent = state.settings.accent ?? 'lime'
 
@@ -49,6 +50,29 @@ function Shell() {
     setDetailTx(null)
     window.setTimeout(() => openAdd(tx), 180)
   }
+
+  // 分享进来或点截图通知：先取走那张图，再直接打开记账弹层；识别交给 AddSheet
+  useEffect(() => {
+    if (!captureAvailable()) return
+    let alive = true
+    let off: (() => void) | undefined
+    const take = (image: CaptureImage | null) => {
+      if (!alive || !image) return
+      setEditing(null)
+      setSeed(null)
+      setCapture(image)
+      setAddOpen(true)
+    }
+    void onCapture(take).then((stop) => {
+      off = stop
+      if (!alive) stop()
+    })
+    void consumeCapture().then(take)
+    return () => {
+      alive = false
+      off?.()
+    }
+  }, [])
 
   useEffect(() => {
     window.scrollTo(0, 0)
@@ -100,7 +124,14 @@ function Shell() {
       </main>
       <TabBar tab={tab} onChange={setTab} onAdd={() => openAdd()} />
       <TxDetailSheet tx={detailTx} onClose={() => setDetailTx(null)} onEdit={editFromDetail} />
-      <AddSheet open={addOpen} onClose={() => setAddOpen(false)} editing={editing} seed={seed} />
+      <AddSheet
+        open={addOpen}
+        onClose={() => setAddOpen(false)}
+        editing={editing}
+        seed={seed}
+        capture={capture}
+        onCaptureUsed={() => setCapture(null)}
+      />
     </div>
   )
 }

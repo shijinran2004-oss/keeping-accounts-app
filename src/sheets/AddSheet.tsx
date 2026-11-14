@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { CalendarDays, Delete, ScanLine, Trash2, X } from 'lucide-react'
 import { useLedger } from '../data'
-import type { AmountSeed, OcrDraft, ReceiptData, Tx, TxType } from '../types'
+import type { AmountSeed, CaptureImage, OcrDraft, ReceiptData, Tx, TxType } from '../types'
 import {
   centsToYuanInput,
   expressionParts,
@@ -35,11 +35,16 @@ export function AddSheet({
   onClose,
   editing,
   seed,
+  capture,
+  onCaptureUsed,
 }: {
   open: boolean
   onClose: () => void
   editing?: Tx | null
   seed?: AmountSeed | null
+  /** 分享或截图进来的图：打开弹层时自动识别一次 */
+  capture?: CaptureImage | null
+  onCaptureUsed?: () => void
 }) {
   const { state, addTx, updateTx, deleteTx } = useLedger()
   const toast = useToast()
@@ -155,18 +160,10 @@ export function AddSheet({
     if (open && canScan) void warmUpOcr()
   }, [open, canScan])
 
-  const scanReceipt = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    event.target.value = ''
-    if (!file) return
-    if (file.size > 12 * 1024 * 1024) {
-      toast('这张图太大了，换一张试试', 'error')
-      return
-    }
+  const runOcr = async (dataUrl: string) => {
     setScanning(true)
     setOcrDraft(null)
     try {
-      const dataUrl = await fileToOcrDataUrl(file)
       const result = await recognizeReceipt(dataUrl)
       const draft = parseReceipt(result.lines)
       setOcrDraft(draft)
@@ -185,6 +182,32 @@ export function AddSheet({
       setScanning(false)
     }
   }
+
+  const scanReceipt = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+    if (file.size > 12 * 1024 * 1024) {
+      toast('这张图太大了，换一张试试', 'error')
+      return
+    }
+    try {
+      await runOcr(await fileToOcrDataUrl(file))
+    } catch {
+      toast('这张图片读不了，换一张试试', 'error')
+    }
+  }
+
+  // 分享进来、或从截图通知点进来的图：打开弹层后立刻认一次，同一张不重复认
+  const usedCapture = useRef<string | null>(null)
+  useEffect(() => {
+    if (!open || !capture) return
+    if (usedCapture.current === capture.dataUrl) return
+    usedCapture.current = capture.dataUrl
+    void runOcr(capture.dataUrl)
+    onCaptureUsed?.()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, capture])
   const submit = () => {
     if (receipt) return
     if (!cents || !current) {
@@ -322,7 +345,7 @@ export function AddSheet({
           <div className="qa-ocr">
             <ScanLine size={13} strokeWidth={1.9} />
             <span>
-              小票：{ocrDraft.amountCents ? `¥${formatMoney(ocrDraft.amountCents)}` : '金额没认出来'}
+              已识别：{ocrDraft.amountCents ? `¥${formatMoney(ocrDraft.amountCents)}` : '金额没认出来'}
               {ocrDraft.date ? ` · ${relativeDay(ocrDraft.date)}` : ''}
               {ocrDraft.merchant ? ` · ${ocrDraft.merchant}` : ''}
             </span>

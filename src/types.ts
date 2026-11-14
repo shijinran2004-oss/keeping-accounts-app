@@ -495,3 +495,28 @@ export interface OcrDraft {
   lines: OcrLine[]
   text: string
 }
+
+/* ============================================================
+ * 10. 分享进来 / 截图监听到的图
+ * ========================================================== */
+
+/** 图的来源：别人分享过来的，或是截图监听认出来的 */
+export type CaptureSource = 'share' | 'screenshot'
+
+/** 等待记一笔的一张图，dataUrl 已经缩到 1600px 以内 */
+export interface CaptureImage {
+  dataUrl: string
+  source: CaptureSource
+}
+
+/** 截图监听的开关状态，来自原生 Capture 插件 */
+export interface WatchStatus {
+  /** 系统版本够不够（Android 6+） */
+  supported: boolean
+  /** 用户是否打开过开关 */
+  enabled: boolean
+  /** 常驻服务是否真的在跑 */
+  running: boolean
+  /** 相册权限：未申请 / 已拒绝 / 已允许 */
+  permission: 'prompt' | 'denied' | 'granted'
+}

@@ -36,3 +36,12 @@ export {
   OCR_MAX_SIDE,
 } from './ocr'
 export type { AmountCandidate, DateCandidate, MerchantCandidate, ParseOptions } from './ocr'
+export {
+  WATCH_OFF,
+  captureAvailable,
+  consumeCapture,
+  disableWatch,
+  enableWatch,
+  onCapture,
+  watchStatus,
+} from './capture'

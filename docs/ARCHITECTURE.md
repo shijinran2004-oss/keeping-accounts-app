@@ -32,6 +32,9 @@ shijinran-money/
 │  │  ├─ date.ts          本地日期、账期、发薪日
 │  │  ├─ stats.ts         区间汇总、moneyFlow、连续记账
 │  │  ├─ backup.ts        备份文件生成 / 分享 / 读取
+│  │  ├─ capture/         分享 / 截屏拿图：原生插件封装
+│  │  │  ├─ plugin.ts     Capture 插件、可用性、开关与事件
+│  │  │  └─ index.ts      对外唯一入口
 │  │  ├─ ocr/             小票识别：原生插件 + 字段抽取
 │  │  │  ├─ plugin.ts     Ocr 插件封装、预热、可用性判断
 │  │  │  ├─ image.ts      图片压到 1600px 再交给原生
@@ -139,6 +142,7 @@ App / main
 | 改存储引擎 / 迁移校验 | `src/data/db/migrate.ts`；临时回退旧存储：`localStorage['shijinran.storage.engine']='ls'` |
 | 改备份格式 / 导入规则 | `src/data/backup/`（format / parse / apply / snapshot）；`DataSheet.tsx` 只负责界面 |
 | 改小票识别规则 | `src/lib/ocr/`（amount / date / merchant / parse）；原生插件在 `android/app/src/main/java/com/shijinran/money/ocr/OcrPlugin.java` |
+| 改分享入口 / 截图监听 | `src/lib/capture/` 与 `android/app/src/main/java/com/shijinran/money/capture/`（`CapturePlugin` 收分享与开关、`ScreenshotWatchService` 监听 MediaStore、`CaptureStore` 记状态） |
 | 加内置分类 | `src/data/categories.ts` |
 | 改分类图标 | 设置 → 分类管理；`store.tsx` 的 `updateCategoryIcon`，图标库是 `data/categories.ts` 的 `ICON_CHOICES` |
 
@@ -153,6 +157,8 @@ App / main
 首次启动：openLedger() 打开 IndexedDB → 若库为空且有旧 localStorage 账本，整份迁移并校验条数与抽样 id；
 校验失败清空 IDB 并回退旧存储（旧键保持只读，不删）。`localStorage['shijinran.storage.engine']='ls'` 可强制回退。每次写入成功后同步刷新 localStorage 镜像，回退时能读到最新账本。
 ```
+
+分享 / 截图进来时走另一条入口：原生层把图缩到 1600px 存成 dataUrl（分享读 `ACTION_SEND` 的 `content://`，截图由前台服务监听 MediaStore 新增），前端 `lib/capture` 取出后交给 `AddSheet`，与「拍小票」共用 `recognizeReceipt → parseReceipt → 回填`，仍然由用户点保存才写库。截图监听默认关闭，开关状态存在原生 `SharedPreferences('shijinran.capture')`；服务只对 `_ID` 比上次大、文件名像截图、时间在开启之后的图片识别，认出金额才发通知。
 
 读的时候反过来：`useLedger().state` → `lib/stats.ts` 按区间汇总 → 页面渲染。
 
@@ -174,11 +180,13 @@ App / main
 
 ## 版本与构建
 
-- `versionCode 39` / `versionName 1.3.0`（`android/app/build.gradle`）
+- `versionCode 40` / `versionName 1.4.0`（`android/app/build.gradle`）
 - 数据版本 `LedgerState.version = 1`，`normalize()` 读取时补全新增分类与设置
 - 存储：IndexedDB（库 `shijinran`，`txs` / `meta` / `snapshots` 三个 store），首次启动从 `localStorage` 一次性迁移；`localStorage['shijinran.storage.engine']='ls'` 可强制回退旧引擎
 - 备份：v2 容器带 `schema` / `checksum`，默认 gzip；导入先预览，支持覆盖 / 合并 / 仅设置与分类；导入、清空、恢复前自动快照（保留 5 份）
 - 打包：`npm run build && npx cap copy android`，再 `gradle assembleDebug`
 - 小票识别：RapidOcrAndroidOnnx 1.3.0（Apache-2.0，PP-OCRv3 det + rec + cls）的 AAR 放在 `android/app/libs/`，39MB 不入库；缺失时 `fetchOcrAar` 任务从 GitHub Release 下载。默认只打 `arm64-v8a,armeabi-v7a`，模拟器用 `-PocrAbi=x86_64`
 - 识别流程：`fileToOcrDataUrl()` 压到 1600px → `Ocr.recognize` 在原生线程跑模型、返回行与坐标 → `parseReceipt()` 抽金额 / 日期 / 商户 / 分类 → `AddSheet` 回填，用户确认后才写库
+- 权限：`AndroidManifest.xml` 只申请 `READ_MEDIA_IMAGES`（13+）/ `READ_EXTERNAL_STORAGE`（≤32）、`POST_NOTIFICATIONS`、`FOREGROUND_SERVICE(_SPECIAL_USE)`；不申请 `INTERNET`，安装包无法联网
+- 分享 / 截图：`CapturePlugin` 收 `ACTION_SEND`、启停前台服务；`ScreenshotWatchService`（`foregroundServiceType="specialUse"`）用 ContentObserver 监听 MediaStore 新图，只认开启后新增且文件名像截图的，识别到金额才发通知；点通知通过 `capture_pending` extra 带图进 `AddSheet`，冷启动也生效
 - 检查：`npm run check`（tsc + 分层检查）、`npm test`（vitest）
