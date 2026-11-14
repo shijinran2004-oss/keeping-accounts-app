@@ -41,6 +41,10 @@ function buildGeometry(points: number[]) {
   }
 }
 
+/**
+ * 明细页「本期小计」：大数字 + 迷你趋势线。
+ * 线用 clipPath 从左到右展开；空月份不画线，只显示提示文字。
+ */
 export function SparkSummary({
   label,
   spent,

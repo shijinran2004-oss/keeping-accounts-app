@@ -4,6 +4,7 @@ import { COLOR_CHOICES, ICON_CHOICES, useLedger } from '../data'
 import type { Category, TxType } from '../types'
 import { CategoryIcon, Sheet, useToast } from '../ui'
 
+/** 分类管理：内置分类只读，自定义分类可删除；新建时选图标与颜色。 */
 export function CategorySheet({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { state, addCategory, deleteCategory } = useLedger()
   const toast = useToast()

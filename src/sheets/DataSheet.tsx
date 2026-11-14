@@ -13,6 +13,10 @@ import {
 } from '../lib'
 import { Sheet, useToast } from '../ui'
 
+/**
+ * 数据备份：导出 JSON、选文件或粘贴导入、清空记录。
+ * 导入会整份覆盖当前账本，导出会弹系统分享面板或直接下载。
+ */
 export function DataSheet({
   open,
   onClose,

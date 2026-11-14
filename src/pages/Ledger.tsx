@@ -26,6 +26,10 @@ import {
 import type { CalendarCell, CalendarMode, Tx } from '../types'
 import { Empty, Money, MonthCalendar, SparkSummary, TxRow } from '../ui'
 
+/**
+ * 明细：本期趋势、月历、选中日流水。
+ * 点某笔流水只回调 onOpenTx，详情弹层由 App 统一挂载。
+ */
 export function Ledger({ onOpenTx, onAdd }: { onOpenTx: (tx: Tx) => void; onAdd: () => void }) {
   const { state } = useLedger()
   const [anchor, setAnchor] = useState(todayStr())

@@ -5,6 +5,10 @@ import type { DoghouseProps } from '../types'
  * 四套姿态与动画完全按参考稿的 SnoopyDoghouseSVG 复刻：
  * peaceful 屋顶睡觉、alert 坐起盯账、panic 余额告急、dance 点击彩蛋。
  */
+/**
+ * 首页预算守卫：按 mood 切四种 SVG 姿态（睡觉/盯账/报警/跳舞）。
+ * 纯展示组件，预算比例由 Home 算好传入；点击只是彩蛋，不修改数据。
+ */
 export function Doghouse({ mood = 'peaceful', className = '', onClick }: DoghouseProps) {
   const cls = ['dh', `dh-${mood}`, className].filter(Boolean).join(' ')
   return (

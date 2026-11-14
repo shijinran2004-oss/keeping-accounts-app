@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { DEFAULT_LEDGER_NAME, useLedger } from '../data'
 import { Sheet, useToast } from '../ui'
 
+/** 修改账本名字；空值回落到默认名，保存后首页大标题同步。 */
 export function NameSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { state, saveSettings } = useLedger()
   const toast = useToast()

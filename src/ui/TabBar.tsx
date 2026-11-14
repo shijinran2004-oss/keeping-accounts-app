@@ -8,6 +8,7 @@ const TABS: { key: Tab; label: string; icon: typeof House }[] = [
   { key: 'me', label: '我的', icon: UserRound },
 ]
 
+/** 底部导航：四个 tab + 中间凸起的「记一笔」按钮；只负责切换，不保存状态。 */
 export function TabBar({ tab, onChange, onAdd }: { tab: Tab; onChange: (t: Tab) => void; onAdd: () => void }) {
   return (
     <nav className="tabbar" aria-label="主导航">
@@ -26,6 +27,7 @@ export function TabBar({ tab, onChange, onAdd }: { tab: Tab; onChange: (t: Tab) 
   )
 }
 
+/** 单个 tab：激活时图标线宽略粗，并标记 aria-current。 */
 function TabButton({
   tab,
   active,

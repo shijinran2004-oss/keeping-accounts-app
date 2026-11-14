@@ -31,6 +31,10 @@ const MAP: Record<IconKey, LucideIcon> = {
   receipt: ReceiptText,
 }
 
+/**
+ * 把领域里的 IconKey 映射成 lucide 图标，分类数据因此不必依赖 React 组件。
+ */
+/** 把领域里的 IconKey 映射成 lucide 图标，分类数据因此不必依赖 React 组件。 */
 export function CategoryIcon({
   name,
   size = 20,

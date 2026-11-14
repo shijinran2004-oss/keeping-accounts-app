@@ -20,6 +20,10 @@ import {
 import type { DogMood, Tx } from '../types'
 import { CategoryIcon, Doghouse, Empty, Money, TxRow } from '../ui'
 
+/**
+ * 首页：账本名 + 问候、狗屋预算守卫、本月预算、常记分类和最近流水。
+ * 只做布局与导航，新增/编辑统一交给 App 打开弹层。
+ */
 export function Home({
   onAdd,
   onOpenTx,

@@ -9,6 +9,9 @@ import type { Tab, Tx, TxType } from './types'
 import { applyTheme, closeTopModal } from './lib'
 import { LaunchScreen, TabBar, ToastProvider } from './ui'
 
+/**
+ * 应用壳：四个 tab、记账/详情弹层、Android 返回键和主题/状态栏同步。
+ */
 function Shell() {
   const { state } = useLedger()
   const [tab, setTab] = useState<Tab>('home')
@@ -92,6 +95,7 @@ function Shell() {
   )
 }
 
+/** 根组件：数据 Provider、Toast，以及冷启动海报。 */
 export default function App() {
   const [launching, setLaunching] = useState(
     () => Capacitor.isNativePlatform() || new URLSearchParams(window.location.search).has('launch'),

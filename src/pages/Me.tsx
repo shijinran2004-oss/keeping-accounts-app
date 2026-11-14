@@ -21,6 +21,10 @@ import { Seal, SectionTitle, useToast } from '../ui'
 import { BudgetSheet, CategorySheet, DataSheet, NameSheet, PaydaySheet } from '../sheets'
 import appIcon from '../assets/app-icon.png'
 
+/**
+ * 我的：头像、主题、收入预算、发薪日、分类、备份和重置。
+ * 页面只负责打开对应弹层，具体保存在各 Sheet 内完成。
+ */
 export function Me() {
   const { state, saveSettings, clearTxs, resetAll } = useLedger()
   const toast = useToast()
@@ -239,6 +243,7 @@ export function Me() {
   )
 }
 
+/** 设置行：图标 + 标题/副标题 + 右侧值 + 箭头，整行可点。 */
 function Row({
   icon: Icon,
   label,

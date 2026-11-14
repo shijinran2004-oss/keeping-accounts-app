@@ -18,6 +18,10 @@ type Stage = 'coin' | 'printing' | 'done' | 'out'
  * 记账成功小票：金币落槽 → 小票从出票口升起 → 砸章 → 收起。
  * 面板本身就是那台机器（炭黑），票据是纸，颜色沿用纸/朱砂。
  */
+/**
+ * 记账成功小票：金币落槽 → 打印小票 → 盖章 → 自动收起。
+ * data 是一次性快照，组件不读也不写账本。
+ */
 export function SuccessReceipt({ data, onDone }: { data: ReceiptData; onDone: () => void }) {
   const [stage, setStage] = useState<Stage>('coin')
 

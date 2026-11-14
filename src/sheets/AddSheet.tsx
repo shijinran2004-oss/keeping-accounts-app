@@ -20,6 +20,10 @@ import { SuccessReceipt } from './SuccessReceipt'
 
 const PAD: string[] = ['7', '8', '9', '+', '4', '5', '6', '-', '1', '2', '3', 'back', '.', '0']
 
+/**
+ * 记一笔 / 编辑弹层：算式键盘、分类胶囊、日期与备注都在这里。
+ * 保存后把一次性快照交给 SuccessReceipt 出票；编辑时预填原记录。
+ */
 export function AddSheet({
   open,
   onClose,

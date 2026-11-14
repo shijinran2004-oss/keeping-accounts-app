@@ -1,5 +1,9 @@
 import { formatMoney } from '../lib'
 
+/**
+ * 金额展示：内部一律是「分」，这里只负责拆成整数/小数、弱化小数位、处理负号。
+ * decimals="auto" 时只有存在角分才显示两位；tone 只影响颜色，不参与计算。
+ */
 export function Money({
   cents,
   className = '',

@@ -27,6 +27,10 @@ import {
 import type { BarDatum, DonutSlice, StatsRange } from '../types'
 import { BarChart, Donut, Empty, Money, SectionTitle } from '../ui'
 
+/**
+ * 统计：日/周/月三种范围，收支总览、分类占比和每日柱状图。
+ * 月范围按自然月；切范围只改本地 anchor，不写账本。
+ */
 export function Stats({ onGoMe }: { onGoMe: () => void }) {
   const { state } = useLedger()
   const t = todayStr()

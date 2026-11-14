@@ -41,6 +41,10 @@ function measure(): Geometry {
   }
 }
 
+/**
+ * 形变容器：从底部 + 按钮的矩形原地长成面板，收起时缩回。
+ * 只负责动画、遮罩、关闭方式和滚动锁定，不碰记账业务。
+ */
 export function MorphSheet({
   open,
   onClose,

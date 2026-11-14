@@ -11,6 +11,10 @@ const REDUCED_HOLD_MS = 240
  * 冷启动海报：不再显示桌面图标，海报直接渐显、停留，再渐隐交给首页。
  * 只在原生冷启动显示；浏览器里加 ?launch=1 可预览。
  */
+/**
+ * 冷启动海报层：海报渐显 → 停留 → 虚化淡出 → onDone。
+ * 不渲染 App 内容；减少动态效果时走最短路径。
+ */
 export function LaunchScreen({ onDone }: { onDone: () => void }) {
   const [phase, setPhase] = useState<'in' | 'out'>('in')
 

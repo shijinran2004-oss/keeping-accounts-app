@@ -3,6 +3,7 @@ import { useLedger } from '../data'
 import { centsToYuanInput, parseYuan } from '../lib'
 import { Sheet, useToast } from '../ui'
 
+/** 收入与固定支出设置；金额输入只允许数字和两位小数。 */
 export function BudgetSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { state, saveSettings } = useLedger()
   const toast = useToast()

@@ -1,6 +1,7 @@
 import type React from 'react'
 import type { BarDatum, DonutSlice } from '../types'
 
+/** 纯 CSS 柱状图；value 单位是分，active 只改颜色，不改变柱高。 */
 export function BarChart({
   data,
   height = 132,
@@ -31,6 +32,7 @@ export function BarChart({
   )
 }
 
+/** SVG 环形图；children 放在圆心，通常用来放总支出。 */
 export function Donut({
   slices,
   size = 136,

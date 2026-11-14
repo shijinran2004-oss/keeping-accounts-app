@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import type { LucideIcon } from 'lucide-react'
 
+/** 空状态占位：图标、标题、可选提示和操作按钮，列表/日历共用。 */
 export function Empty({
   icon: Icon,
   title,

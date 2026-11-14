@@ -4,6 +4,10 @@ import { Money } from './Money'
 import { relativeDay } from '../lib'
 import type React from 'react'
 
+/**
+ * 一笔流水的摘要行：分类磁贴 + 备注（没有备注就用分类名）+ 带符号金额。
+ * 整行是按钮，点击后由调用方决定打开详情还是编辑。
+ */
 export function TxRow({
   tx,
   category,

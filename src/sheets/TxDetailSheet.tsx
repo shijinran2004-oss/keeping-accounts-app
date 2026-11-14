@@ -8,6 +8,10 @@ import { Sheet } from '../ui'
 import { useToast } from '../ui'
 
 /** 点流水后先看详情，再决定要不要改；修改会打开复用的记账框。 */
+/**
+ * 流水详情：先展示这笔记录，再让用户选择「修改金额」或两次确认删除。
+ * 修改会关闭详情并复用 AddSheet，删除直接走 useLedger().deleteTx。
+ */
 export function TxDetailSheet({ tx, onClose, onEdit }: TxDetailSheetProps) {
   const { state, deleteTx } = useLedger()
   const toast = useToast()

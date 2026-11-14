@@ -3,6 +3,10 @@ import { useLedger } from '../data'
 import { cycleRange, daysBetween, formatMonth, salaryMonthLabel, todayStr } from '../lib'
 import { Sheet, useToast } from '../ui'
 
+/**
+ * 发薪日设置：默认发薪日、当月/次月工资归属、本月实际到账日。
+ * 底部实时预览当前预算月，保存时只把与默认日不同的月份写入 paydayOverrides。
+ */
 export function PaydaySheet({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { state, saveSettings } = useLedger()
   const toast = useToast()

@@ -3,6 +3,10 @@ import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 import { popModal, pushModal } from '../lib'
 
+/**
+ * 常规底部弹层：遮罩、关闭按钮、Esc、Android 返回键、body 滚动锁定都在这里。
+ * 只负责壳；表单、保存逻辑由调用方（sheets/ 里的弹层）自己管。
+ */
 export function Sheet({
   open,
   onClose,

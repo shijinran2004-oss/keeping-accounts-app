@@ -5,6 +5,10 @@ import { Seal } from '../ui'
 import { parseYuan } from '../lib'
 import { tapSuccess } from '../lib'
 
+/**
+ * 首次引导：填工资、固定支出和发薪日，完成后写入 settings.onboarded。
+ * 跳过时保留可用的默认值，之后可在「我的」里改。
+ */
 export function Onboarding() {
   const { saveSettings } = useLedger()
   const [salary, setSalary] = useState('')
