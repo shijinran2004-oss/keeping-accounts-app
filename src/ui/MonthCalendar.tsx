@@ -108,6 +108,7 @@ export function MonthCalendar({
               style={{ ['--cal-day' as string]: cell.day } as CSSProperties}
             >
               {isToday && <span className="cal-today-dot" aria-hidden="true" />}
+              {cell.isPayday && cell.inMonth && <span className="cal-pay" aria-hidden="true">薪</span>}
               <span className="cal-num">{cell.day}</span>
               {mode === 'amount' ? (
                 cell.count > 0 ? (
@@ -124,7 +125,7 @@ export function MonthCalendar({
       </div>
 
       <div className="cal-legend">
-        <span className="cal-pay" aria-hidden="true">薪</span>
+        <span className="cal-pay cal-pay-legend" aria-hidden="true">薪</span>
         <span>发薪日</span>
         <span className="cal-legend-fill" aria-hidden="true" />
         <span>到发薪日</span>

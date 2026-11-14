@@ -145,7 +145,7 @@ App / main
 
 ## 版本与构建
 
-- `versionCode 32` / `versionName 1.1.22`（`android/app/build.gradle`）
+- `versionCode 33` / `versionName 1.1.23`（`android/app/build.gradle`）
 - 数据版本 `LedgerState.version = 1`，`normalize()` 读取时补全新增分类与设置
 - 打包：`npm run build && npx cap copy android`，再 `gradle assembleDebug`
 - 检查：`npm run check`
