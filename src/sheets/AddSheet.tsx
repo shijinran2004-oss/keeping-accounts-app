@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { CalendarDays, Delete, ScanLine, Trash2, X } from 'lucide-react'
+import { AlertTriangle, CalendarDays, Delete, ScanLine, Trash2, X } from 'lucide-react'
 import { useLedger } from '../data'
 import type { AmountSeed, CaptureImage, OcrDraft, ReceiptData, Tx, TxType } from '../types'
 import {
@@ -352,6 +352,13 @@ export function AddSheet({
             <button type="button" className="qa-ocr-x" onClick={() => setOcrDraft(null)} aria-label="忽略识别结果">
               ×
             </button>
+          </div>
+        )}
+
+        {ocrDraft && ocrDraft.warnings.length > 0 && (
+          <div className="qa-ocr-warn" role="status">
+            <AlertTriangle size={13} strokeWidth={1.9} />
+            <span>{ocrDraft.warnings[0]}</span>
           </div>
         )}
 

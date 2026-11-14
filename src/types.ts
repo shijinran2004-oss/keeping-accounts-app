@@ -494,6 +494,8 @@ export interface OcrDraft {
   confidence: number
   lines: OcrLine[]
   text: string
+  /** 需要用户核对的地方，比如缺小数点、没认出金额 */
+  warnings: string[]
 }
 
 /* ============================================================

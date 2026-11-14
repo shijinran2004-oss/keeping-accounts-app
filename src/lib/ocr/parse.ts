@@ -59,6 +59,9 @@ export function parseReceipt(lines: OcrLine[], options: ParseOptions = {}): OcrD
   const dateScore = date?.confidence ?? 0
   const merchantScore = merchant?.confidence ?? 0
   const confidence = Math.round((amountScore * 0.5 + dateScore * 0.25 + merchantScore * 0.25) * 100) / 100
+  const warnings: string[] = []
+  if (amount?.warning) warnings.push(amount.warning)
+  if (!amount) warnings.push('金额没认出来，请手动填')
 
   return {
     amountCents: amount?.cents ?? null,
@@ -68,5 +71,6 @@ export function parseReceipt(lines: OcrLine[], options: ParseOptions = {}): OcrD
     confidence,
     lines: usable,
     text,
+    warnings,
   }
 }

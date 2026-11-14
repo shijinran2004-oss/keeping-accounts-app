@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { OcrLine } from '../../types'
 import { parseReceipt } from './parse'
-import { pickAmount } from './amount'
+import { amountCandidates, pickAmount } from './amount'
 import { pickDate } from './date'
 import { pickMerchant } from './merchant'
 
@@ -114,3 +114,42 @@ describe('小票字段抽取', () => {
     expect(best?.cents).toBe(2820)
   })
 })
+describe('金额对抗用例', () => {
+  it('同一行有原价/折扣/实付时，标签各算各的', () => {
+    const cands = amountCandidates('原价 58.00 折扣 -10.00 实付 48.00')
+    expect(cands.map((c) => c.cents)).toEqual([5800, 1000, 4800])
+    expect(cands[0].labelWeight).toBe(0)
+    expect(cands[1].negative).toBe(true)
+    expect(cands[2].labelWeight).toBe(8)
+    const best = pickAmount(lines(['原价 58.00 折扣 -10.00 实付 48.00']))
+    expect(best?.cents).toBe(4800)
+  })
+
+  it('原价和实付都带 ¥ 时不会取原价', () => {
+    const best = pickAmount(lines(['原价 ¥58.00 实付 ¥48.00']))
+    expect(best?.cents).toBe(4800)
+  })
+
+  it('OCR 吞掉小数点时按分处理，并提示核对', () => {
+    const draft = parseReceipt(lines(['每日鲜生活超市', '合计 2820', '2026-11-14']), { today: '2026-11-14' })
+    expect(draft.amountCents).toBe(2820)
+    expect(draft.warnings.join(' ')).toContain('小数点')
+  })
+
+  it('商品金额合计能反推缺掉的小数点', () => {
+    const best = pickAmount(lines(['合计 3420', '12.50', '8.80', '6.90', '6.00']))
+    expect(best?.cents).toBe(3420)
+  })
+
+  it('带 ¥ 的整数金额保持原样，不会被拆成小数', () => {
+    const best = pickAmount(lines(['合计 ¥1280']))
+    expect(best?.cents).toBe(128000)
+  })
+
+  it('有商品金额时不会被优惠金额带偏', () => {
+    const best = pickAmount(lines(['优惠 -6.00', '12.50']))
+    expect(best?.cents).toBe(1250)
+    expect(best?.negative).toBe(false)
+  })
+})
+

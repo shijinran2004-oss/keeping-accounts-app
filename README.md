@@ -6,7 +6,7 @@
 
 - 纯本地存储，不联网、不上传、无广告、无账号
 - 深色 / 浅色 / 跟随系统 + 8 个强调色的可换主题，新装默认浅色；炭灰卡片、16px 间距、鸿蒙 Sans 中文 + Nunito 圆体数字；版式与主题系统参考 openGym，代码全部重写
-- 安装包：见 GitHub Releases（1.4.0，约 45 MB——内置离线 OCR 模型与 onnxruntime，minSdk 23 / targetSdk 35）
+- 安装包：见 GitHub Releases（1.4.1，约 45 MB——内置离线 OCR 模型与 onnxruntime，minSdk 23 / targetSdk 35）
 
 ## 功能
 
@@ -87,7 +87,7 @@ release/                本地构建的 APK（已 gitignore；安装包见 GitHu
 npm install          # 依赖（国内可用已写入的 npmmirror 源）
 npm run dev          # 浏览器调试
 npm run build        # 产出 dist/
-npm test             # 单元测试（vitest，43 例）
+npm test             # 单元测试（vitest，49 例）
 npm run check        # tsc --noEmit + 分层检查
 npx cap copy android # 同步到原生工程
 ```

@@ -2979,6 +2979,21 @@ textarea:focus-visible {
   cursor: pointer;
 }
 
+.qa-ocr-warn {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  padding: 0 3px;
+  color: #e9c27a;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.qa-ocr-warn svg {
+  flex: none;
+  margin-top: 1px;
+}
+
 .qa-cats {
   display: flex;
   gap: 7px;
