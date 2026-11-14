@@ -85,9 +85,9 @@ export function Ledger({ onOpenTx, onAdd }: { onOpenTx: (tx: Tx) => void; onAdd:
         income: row?.income ?? 0,
         count: row?.count ?? 0,
         isPayday: date >= range.start && date <= range.end && isPaydayDate(date, paydayDay, paydayOverrides),
-        payFill:
+        payLevel:
           date >= today && date <= nextPay
-            ? Math.round(8 + ((daysBetween(today, date) + 1) / nextPaySpan) * 30)
+            ? Math.min(4, Math.max(1, Math.ceil(((daysBetween(today, date) + 1) / nextPaySpan) * 4)))
             : 0,
       }
     })

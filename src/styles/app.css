@@ -1212,14 +1212,52 @@ textarea:focus-visible {
   box-shadow: 0 0 0 1.5px var(--card);
 }
 
-.cal-cell.has-payfill {
-  background: color-mix(in srgb, var(--accent) var(--pay-fill), transparent);
-}
-
 .cal-cell.is-pay {
   outline: 1.5px solid rgba(255, 214, 10, 0.78);
   outline-offset: -1.5px;
 }
+
+/* 发薪倒计时用 GitHub contribution 色板的四级绿 */
+.cal-cell.pay-l1:not(.is-sel) { background: #9be9a8; color: #0b2e13; }
+.cal-cell.pay-l2:not(.is-sel) { background: #40c463; color: #062b13; }
+.cal-cell.pay-l3:not(.is-sel) { background: #30a14e; color: #ffffff; }
+.cal-cell.pay-l4:not(.is-sel) { background: #216e39; color: #ffffff; }
+
+.cal-cell.pay-l1:not(.is-sel) .cal-amt,
+.cal-cell.pay-l2:not(.is-sel) .cal-amt,
+.cal-cell.pay-l3:not(.is-sel) .cal-amt,
+.cal-cell.pay-l4:not(.is-sel) .cal-amt {
+  color: currentColor;
+  opacity: 0.78;
+}
+
+.cal-cell.pay-l1:not(.is-sel) .cal-amt.is-pos,
+.cal-cell.pay-l2:not(.is-sel) .cal-amt.is-pos,
+.cal-cell.pay-l3:not(.is-sel) .cal-amt.is-pos,
+.cal-cell.pay-l4:not(.is-sel) .cal-amt.is-pos {
+  color: currentColor;
+  opacity: 0.92;
+}
+
+.cal-cell.pay-l1:not(.is-sel) .cal-amt.is-blank,
+.cal-cell.pay-l2:not(.is-sel) .cal-amt.is-blank,
+.cal-cell.pay-l3:not(.is-sel) .cal-amt.is-blank,
+.cal-cell.pay-l4:not(.is-sel) .cal-amt.is-blank {
+  opacity: 0;
+}
+
+.cal-cell.pay-l1:not(.is-sel) .cal-today-dot,
+.cal-cell.pay-l2:not(.is-sel) .cal-today-dot,
+.cal-cell.pay-l3:not(.is-sel) .cal-today-dot,
+.cal-cell.pay-l4:not(.is-sel) .cal-today-dot {
+  background: currentColor;
+  opacity: 0.6;
+}
+
+:root[data-theme="dark"] .cal-cell.pay-l1:not(.is-sel) { background: #0e4429; color: #d7f5dd; }
+:root[data-theme="dark"] .cal-cell.pay-l2:not(.is-sel) { background: #006d32; color: #d7f5dd; }
+:root[data-theme="dark"] .cal-cell.pay-l3:not(.is-sel) { background: #26a641; color: #04170a; }
+:root[data-theme="dark"] .cal-cell.pay-l4:not(.is-sel) { background: #39d353; color: #04170a; }
 
 .cal-cell.is-pay.is-sel {
   background: var(--accent);
@@ -1246,7 +1284,7 @@ textarea:focus-visible {
   height: 6px;
   border-radius: 2px;
   margin-left: 2px;
-  background: linear-gradient(90deg, transparent, var(--accent));
+  background: linear-gradient(90deg, #9be9a8, #40c463, #30a14e, #216e39);
 }
 
 .cal-today-dot {

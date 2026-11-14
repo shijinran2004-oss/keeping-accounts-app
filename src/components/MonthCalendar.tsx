@@ -91,7 +91,7 @@ export function MonthCalendar({
           if (isSelected) classes.push('is-sel')
           if (isToday) classes.push('is-today')
           if (cell.isPayday && cell.inMonth) classes.push('is-pay')
-          if (cell.payFill && cell.payFill > 0) classes.push('has-payfill')
+          if (cell.payLevel) classes.push(`pay-l${cell.payLevel}`)
 
           return (
             <button
@@ -101,7 +101,7 @@ export function MonthCalendar({
               onClick={() => onSelect(cell.date)}
               aria-pressed={isSelected}
               aria-label={cellLabel(cell)}
-              style={{ ['--cal-day' as string]: cell.day, ['--pay-fill' as string]: `${cell.payFill ?? 0}%` } as CSSProperties}
+              style={{ ['--cal-day' as string]: cell.day } as CSSProperties}
             >
               {isToday && <span className="cal-today-dot" aria-hidden="true" />}
               <span className="cal-num">{cell.day}</span>
