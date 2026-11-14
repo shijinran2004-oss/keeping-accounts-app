@@ -236,7 +236,7 @@ export function Me() {
       <footer className="me-foot">
         <img className="me-brand-icon" src={appIcon} alt="使劲燃的钱" />
         <div>
-          <b>使劲燃的钱 v1.1.20</b>
+          <b>使劲燃的钱 v1.1.21</b>
           <p><ShieldCheck size={13} strokeWidth={1.6} /> 数据只保存在这台手机上，不上传</p>
         </div>
         <button

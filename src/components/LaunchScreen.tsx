@@ -1,16 +1,14 @@
 import { useEffect, useLayoutEffect, useState } from 'react'
 import { Capacitor } from '@capacitor/core'
 import { SplashScreen } from '@capacitor/splash-screen'
-import appIcon from '../assets/app-icon.png'
 import poster from '../assets/launch-poster.png'
 
 const EXIT_MS = 420
-const HOLD_MS = 1350
-const REDUCED_HOLD_MS = 260
+const HOLD_MS = 1300
+const REDUCED_HOLD_MS = 240
 
 /**
- * 冷启动时从桌面图标过渡到海报：图标先出现，随后海报从图标的圆角矩形里
- * 向外展开、同时对上焦；离场时海报虚化，交底给首页。
+ * 冷启动海报：不再显示桌面图标，海报直接渐显、停留，再渐隐交给首页。
  * 只在原生冷启动显示；浏览器里加 ?launch=1 可预览。
  */
 export function LaunchScreen({ onDone }: { onDone: () => void }) {
@@ -61,12 +59,7 @@ export function LaunchScreen({ onDone }: { onDone: () => void }) {
       role="presentation"
       aria-hidden="true"
     >
-      <div className="launch-clip">
-        <img className="launch-poster" src={poster} alt="" draggable={false} />
-      </div>
-      <div className="launch-icon-wrap">
-        <img className="launch-icon" src={appIcon} alt="" draggable={false} />
-      </div>
+      <img className="launch-poster" src={poster} alt="" draggable={false} />
     </div>
   )
 }
