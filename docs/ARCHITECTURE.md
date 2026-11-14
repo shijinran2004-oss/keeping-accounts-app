@@ -45,8 +45,8 @@ shijinran-money/
 │  └─ styles/og.css       主题皮肤：深/浅两套 token、8 个强调色、首页 / 底栏 / 各页面覆盖
 ├─ android/               Capacitor 生成的 Android 工程（SDK 35 / AGP 8.7.2）
 ├─ design/build_icon.py   桌面图标：抠白底、5 密度、圆形 / 自适应 / 单色层、favicon
-├─ design/build_brand.py  启动图 / App 内印章：抠白底、各密度启动图
-├─ design/icon-src/       源图：app-icon.png 桌面图标，mascot.png 启动图 / 印章
+├─ design/build_brand.py  App 内印章：抠白底、生成 mascot 贴纸
+├─ design/icon-src/       源图：app-icon.png 桌面图标，mascot.png 页头小狗印章
 ├─ design/subset_fonts.py 字体子集化脚本（改文案后重跑，把整字库裁成只含 UI 用字）
 ├─ assets/icon/           生成的 1024px 图标（桌面图标 + 抠图结果）
 ├─ docs/                  架构说明与真机截图
@@ -109,6 +109,6 @@ openGym 是 AGPL-3.0，这里只借鉴版式与间距，没有复制它的代码
 
 ## 版本与构建
 
-- `versionCode 26` / `versionName 1.1.16`（`android/app/build.gradle`）
+- `versionCode 27` / `versionName 1.1.17`（`android/app/build.gradle`）
 - 数据版本 `LedgerState.version = 1`，`normalize()` 会在读取时补全新增的内置分类
 - 打包：`npm run build && npx cap copy android`，再 `gradle assembleDebug`

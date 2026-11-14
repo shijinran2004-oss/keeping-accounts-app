@@ -12,7 +12,7 @@ RES = ROOT / "android/app/src/main/res"
 ASSETS = ROOT / "assets/icon"
 PUBLIC = ROOT / "public"
 FONT = ROOT / "design/fonts-src/HarmonyOS_Sans_SC_Bold.ttf"
-BG = (11, 21, 19, 255)
+BG = (18, 54, 74, 255)
 
 MIPMAPS = {"mdpi": 48, "hdpi": 72, "xhdpi": 96, "xxhdpi": 144, "xxxhdpi": 192}
 FOREGROUNDS = {"mdpi": 108, "hdpi": 162, "xhdpi": 216, "xxhdpi": 324, "xxxhdpi": 432}

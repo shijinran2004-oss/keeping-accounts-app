@@ -238,42 +238,6 @@ def paper(w: int, h: int) -> Image.Image:
     return img
 
 
-def splash(w: int, h: int, art: Image.Image) -> Image.Image:
-    # 深色版：纯黑底，白字 + 绿线，和 App 内的 openGym 风格保持一致
-    img = Image.new("RGB", (w, h), (0, 0, 0))
-    d = ImageDraw.Draw(img)
-    unit = min(w, h)
-
-    art_h = int(unit * 0.30)
-    piece = fit(art, art_h)
-    cx, cy = w // 2, int(h * 0.40)
-    img.paste(piece, (cx - piece.width // 2, cy - piece.height // 2), piece)
-
-    name_font = font(int(unit * 0.072), bold=True)
-    tag_font = font(int(unit * 0.034))
-    text_y = cy + piece.height // 2 + int(unit * 0.06)
-    bottom = _centered_text(d, w, text_y, APP_NAME, name_font, (255, 255, 255))
-
-    rule_y = bottom + int(unit * 0.045)
-    d.line((cx - unit * 0.05, rule_y, cx + unit * 0.05, rule_y), fill=(48, 209, 88), width=max(1, int(unit * 0.0026)))
-    _centered_text(d, w, rule_y + int(unit * 0.035), TAGLINE, tag_font, (150, 150, 155))
-    return img
-
-
-SPLASH_SIZES = {
-    "drawable": (480, 320),
-    "drawable-port-mdpi": (320, 480),
-    "drawable-port-hdpi": (480, 800),
-    "drawable-port-xhdpi": (720, 1280),
-    "drawable-port-xxhdpi": (960, 1600),
-    "drawable-port-xxxhdpi": (1280, 1920),
-    "drawable-land-mdpi": (480, 320),
-    "drawable-land-hdpi": (800, 480),
-    "drawable-land-xhdpi": (1280, 720),
-    "drawable-land-xxhdpi": (1600, 960),
-    "drawable-land-xxxhdpi": (1920, 1280),
-}
-
 MIPMAPS = {"mdpi": 1, "hdpi": 1.5, "xhdpi": 2, "xxhdpi": 3, "xxxhdpi": 4}
 BASE = 48  # mdpi 基准尺寸
 
@@ -283,11 +247,6 @@ def main() -> None:
     PUBLIC.mkdir(parents=True, exist_ok=True)
     art = load_mascot()
     print(f"抠图后尺寸 {art.size[0]}×{art.size[1]}")
-
-    for folder, (w, h) in SPLASH_SIZES.items():
-        out = RES / folder
-        out.mkdir(parents=True, exist_ok=True)
-        splash(w, h, art).save(out / "splash.png")
 
     # App 内的印章：与图标同构图（整张贴纸，不裁切）
     seal_sticker(art).save(ROOT / "src" / "assets" / "mascot.png", optimize=True)

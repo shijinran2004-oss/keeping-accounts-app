@@ -65,7 +65,7 @@ export function Me() {
 
   const days = new Set(state.txs.map((t) => t.date)).size
   const first = [...state.txs].sort((a, b) => a.date.localeCompare(b.date))[0]
-  const theme = state.settings.theme ?? 'dark'
+  const theme = state.settings.theme ?? 'light'
   const accent = state.settings.accent ?? 'lime'
   const ledgerName = state.settings.name?.trim() || DEFAULT_LEDGER_NAME
 
@@ -152,7 +152,7 @@ export function Me() {
                   key={option.key}
                   type="button"
                   className={`theme-mode${theme === option.key ? ' is-on' : ''}`}
-                  onClick={() => saveSettings({ theme: option.key })}
+                  onClick={() => saveSettings({ theme: option.key, themeSet: true })}
                 >
                   <OptionIcon size={14} strokeWidth={1.8} />
                   {option.name}
@@ -236,7 +236,7 @@ export function Me() {
       <footer className="me-foot">
         <img className="me-brand-icon" src={appIcon} alt="使劲燃的钱" />
         <div>
-          <b>使劲燃的钱 v1.1.16</b>
+          <b>使劲燃的钱 v1.1.17</b>
           <p><ShieldCheck size={13} strokeWidth={1.6} /> 数据只保存在这台手机上，不上传</p>
         </div>
         <button

@@ -20,7 +20,7 @@ function Shell() {
   const [editing, setEditing] = useState<Tx | null>(null)
   const [seed, setSeed] = useState<{ type?: TxType; categoryId?: string } | null>(null)
   const [detailTx, setDetailTx] = useState<Tx | null>(null)
-  const theme = state.settings.theme ?? 'dark'
+  const theme = state.settings.theme ?? 'light'
   const accent = state.settings.accent ?? 'lime'
 
   useEffect(() => {

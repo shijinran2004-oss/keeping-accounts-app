@@ -65,10 +65,10 @@ export function applyThemeFromStorage() {
   try {
     const raw = localStorage.getItem('shijinran.money.v1')
     const settings = raw ? (JSON.parse(raw)?.settings ?? {}) : {}
-    const mode = isThemeMode(settings.theme) ? settings.theme : 'dark'
+    const mode = settings.themeSet === true && isThemeMode(settings.theme) ? settings.theme : 'light'
     const accent = isAccentKey(settings.accent) ? settings.accent : 'lime'
     applyTheme(mode, accent)
   } catch {
-    applyTheme('dark', 'lime')
+    applyTheme('light', 'lime')
   }
 }

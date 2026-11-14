@@ -71,6 +71,8 @@ export interface Settings {
   avatar?: string
   /** 外观：深色 / 浅色 / 跟随系统（参考 openGym 的主题系统） */
   theme?: ThemeMode
+  /** 用户是否显式选过主题；false 表示用新的浅色默认 */
+  themeSet?: boolean
   /** 强调色预设，默认青柠绿 */
   accent?: AccentKey
   /** 每月发薪日 1–31；29/30/31 在短月自动取最后一天 */

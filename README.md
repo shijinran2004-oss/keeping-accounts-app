@@ -5,22 +5,22 @@
 一个可以直接装到 Android 手机上的本地记账 App：随手记一笔支出，按**日 / 周 / 月**看统计，先录月工资和固定支出，再算清每月**可支配的钱**和花掉的比例。
 
 - 纯本地存储，不联网、不上传、无广告、无账号
-- 深色 / 浅色 / 跟随系统 + 8 个强调色的可换主题；炭灰卡片、16px 间距、鸿蒙 Sans 中文 + Nunito 圆体数字；版式与主题系统参考 openGym，代码全部重写
-- 冷启动从桌面图标接力：图标先落在黑底上，海报从图标的圆角矩形里向外展开并对上焦，再虚化交给首页
-- 安装包：`release/使劲燃的钱-1.1.16.apk`（约 5.2 MB，minSdk 23 / targetSdk 35）
+- 深色 / 浅色 / 跟随系统 + 8 个强调色的可换主题，新装默认浅色；炭灰卡片、16px 间距、鸿蒙 Sans 中文 + Nunito 圆体数字；版式与主题系统参考 openGym，代码全部重写
+- 冷启动从桌面图标接力：存钱罐图标先落在深青底上，新海报从图标的圆角矩形里向外展开并对上焦，再虚化交给首页
+- 安装包：`release/使劲燃的钱-1.1.17.apk`（约 5.0 MB，minSdk 23 / targetSdk 35）
 
 ## 功能
 
 | 模块 | 内容 |
 | --- | --- |
-| 启动 | 原生启动图只保留图标；进入后 `LaunchScreen` 让海报从图标位置展开并拉焦，停留 1.35s 后虚化淡出，首页接手 |
+| 启动 | 原生启动图只保留存钱罐图标；进入后 `LaunchScreen` 让新海报从图标位置展开并拉焦，停留 1.35s 后虚化淡出，首页接手 |
 | 首页 | 狗屋表头（按预算换睡觉/警惕/告急，点一下跳舞）、按手机时间问候、账本名字、本月预算三条进度、常记分类、最近流水 |
 | 记一笔 | 自研 4×4 算式键盘（+ / − 实时合计）、金额分位显示、18 个内置分类（12 支出 / 6 收入）、备注、日期 |
 | 明细 | 月历（每天带净额，可切金额/圆点、收起成周视图）、上/下月与「今」、点日期看当天流水；点任意一笔先看详情，再选修改或删除 |
 | 统计 | 日 / 周 / 月三档；总支出与环比；每日柱状图；分类环形图与排行；月度预算占用 |
 | 我的 | 头像（从手机相册选图，本地裁成 384×384；底部品牌角标固定用 App 默认图标，不跟头像变）、账本名字（点名字改，同步首页）、外观（深色 / 浅色 / 跟随系统、8 个强调色）、月工资、固定支出、分类管理、备份（导出成 .json 文件 / 从文件恢复）、清空、重置 |
 | 引导 | 首次启动先问「每月到手多少」「每月固定支出」「几号发工资、到账的是哪个月」，可跳过，之后在「我的」里补 |
-| 视觉 | 深色 `#000` / 浅色 `#f2f2f7` 两套语义色，8 个强调色（默认 iOS 绿 `#30d158`）；16px 页边距与卡片间距、全宽卡片、通栏五项底栏、中间圆形主按钮 |
+| 视觉 | 深色 `#000` / 浅色 `#f2f2f7` 两套语义色，8 个强调色（默认 iOS 绿 `#30d158`），新装默认浅色；16px 页边距与卡片间距、全宽卡片、通栏五项底栏、中间圆形主按钮 |
 
 ### 计算口径
 
@@ -57,7 +57,7 @@ src/
   styles/og.css         深色皮肤：token 覆盖、首页 / 底栏 / 各页面深色化（后加载）
 android/                Capacitor 生成的 Android 工程（已配好 SDK 35 / AGP 8.7.2）
 design/build_icon.py    桌面图标生成脚本（源图 design/icon-src/app-icon.png）
-design/build_brand.py   启动图 / App 内印章生成脚本（源图 design/icon-src/mascot.png）
+design/build_brand.py   App 内印章生成脚本（源图 design/icon-src/mascot.png）
 assets/icon/            1024px 品牌原图
 docs/                   架构说明 docs/ARCHITECTURE.md、截图 docs/screenshots/
 release/                可直接安装的 APK
@@ -85,8 +85,8 @@ JAVA_HOME='C:\Program Files\Java\jdk-17' /c/Android/gradle-8.9/bin/gradle.bat -p
 
 > 当前为 debug 签名，可直接侧载安装；上架应用商店需要换成自己的 release keystore。
 
-桌面图标和 App 里的印章是两套资产。桌面图标走 `design/build_icon.py`，源图是 `design/icon-src/app-icon.png`：从四个角洪泛抠掉白底、保留原图的圆角，再铺 5 个密度的传统图标、圆形图标、自适应前景和单色层，favicon 也一并更新。自适应前景补了一层同色模糊底再铺满 108dp，圆形或方圆遮罩裁切时不会露出白边。启动图和页头小狗印章仍走 `design/build_brand.py`，源图是 `design/icon-src/mascot.png`。
-换桌面图标：替换 `design/icon-src/app-icon.png` → `python design/build_icon.py` → `cap copy` 并重新打包。换启动图或印章：替换 `mascot.png` → `python design/build_brand.py`。两个脚本互不覆盖。系统开了「主题图标」时，安卓会用自己的取色走 `ic_launcher_monochrome` 单色层，这是系统行为，不是图标本身的问题。
+桌面图标和 App 里的印章是两套资产。桌面图标走 `design/build_icon.py`，源图是 `design/icon-src/app-icon.png`：从四个角洪泛抠掉白底、保留原图的圆角，再铺 5 个密度的传统图标、圆形图标、自适应前景和单色层，favicon 也一并更新。自适应前景补了一层同色模糊底再铺满 108dp，圆形或方圆遮罩裁切时不会露出白边。启动海报是 `src/assets/launch-poster.png`（存钱罐插画，代码里由 `LaunchScreen` 从图标展开）；页头小狗印章仍走 `design/build_brand.py`，源图是 `design/icon-src/mascot.png`。
+换桌面图标：替换 `design/icon-src/app-icon.png` → `python design/build_icon.py` → `cap copy` 并重新打包。换启动海报：替换 `src/assets/launch-poster.png`；换页头印章：替换 `mascot.png` → `python design/build_brand.py`。图标、海报、印章三套资产互不覆盖。系统开了「主题图标」时，安卓会用自己的取色走 `ic_launcher_monochrome` 单色层，这是系统行为，不是图标本身的问题。
 
 ## 截图
 
@@ -94,7 +94,7 @@ JAVA_HOME='C:\Program Files\Java\jdk-17' /c/Android/gradle-8.9/bin/gradle.bat -p
 | --- | --- | --- |
 | ![](docs/screenshots/web/02-home.png) | ![](docs/screenshots/web/09-ledger.png) | ![](docs/screenshots/web/13-success.png) |
 
-浅色主题与强调色设置见 `docs/screenshots/web/16-theme-light.png`，流水详情见 `docs/screenshots/web/17-tx-detail.png`，改账本名字见 `docs/screenshots/web/18-name.png`，发薪日与实际到账日设置见 `docs/screenshots/web/19-payday.png` 与 `20-onboarding-payday.png`；浏览器截图在 `docs/screenshots/web/`（21 张，390×844@2x，含备份弹层、发薪日设置与带发薪日的引导页）。`docs/screenshots/android/` 里保留的是 1.0 纸色版真机图；1.1 深色版打包后没有可用的模拟器（Windows 提交内存不足），原生截图未重拍。
+浅色主题与强调色设置见 `docs/screenshots/web/16-theme-light.png`，流水详情见 `docs/screenshots/web/17-tx-detail.png`，改账本名字见 `docs/screenshots/web/18-name.png`，发薪日与实际到账日设置见 `docs/screenshots/web/19-payday.png` 与 `20-onboarding-payday.png`；浏览器截图在 `docs/screenshots/web/`（22 张，390×844@2x，含备份弹层、发薪日设置、带发薪日的引导页与新的开屏海报）。`docs/screenshots/android/` 里保留的是 1.0 纸色版真机图；1.1 深色版打包后没有可用的模拟器（Windows 提交内存不足），原生截图未重拍。
 
 ## 设计说明
 
