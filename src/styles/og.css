@@ -1925,3 +1925,19 @@ button {
   line-height: 1.6;
   color: var(--ink-3);
 }
+
+/* 发薪日弹层：本月实际到账 + 恢复默认 */
+.pay-reset {
+  margin-left: 8px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.pay-reset:active {
+  opacity: 0.6;
+}

@@ -23,6 +23,18 @@ export function freshState(): LedgerState {
   }
 }
 
+function sanitizeOverrides(input: unknown): Record<string, number> | undefined {
+  if (!input || typeof input !== 'object') return undefined
+  const out: Record<string, number> = {}
+  for (const [key, value] of Object.entries(input as Record<string, unknown>)) {
+    const day = Math.round(Number(value))
+    if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(key)) continue
+    if (!Number.isFinite(day) || day < 1 || day > 31) continue
+    out[key] = day
+  }
+  return Object.keys(out).length ? out : undefined
+}
+
 function normalize(raw: unknown): LedgerState | null {
   if (!raw || typeof raw !== 'object') return null
   const data = raw as Partial<LedgerState>
@@ -63,6 +75,7 @@ function normalize(raw: unknown): LedgerState | null {
       payday: s.paydaySet === true ? Math.min(31, Math.max(1, Math.round(Number(s.payday) || 15))) : 15,
       salaryLag: s.paydaySet === true && s.salaryLag === 1 ? 1 : 0,
       paydaySet: s.paydaySet === true,
+      paydayOverrides: sanitizeOverrides(s.paydayOverrides),
     },
   }
 }

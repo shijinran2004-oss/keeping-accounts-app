@@ -201,7 +201,13 @@ export function Me() {
           <Row
             icon={CalendarClock}
             label="发薪日与工资归属"
-            sub={(state.settings.salaryLag ?? 0) === 1 ? '次月发上月，预算按自然月算' : '当月发，预算按自然月算'}
+            sub={
+              state.settings.paydayOverrides?.[todayStr().slice(0, 7)]
+                ? `本月 ${state.settings.paydayOverrides[todayStr().slice(0, 7)]} 号到账 · ${(state.settings.salaryLag ?? 0) === 1 ? '次月发上月' : '当月发'}`
+                : (state.settings.salaryLag ?? 0) === 1
+                  ? '次月发上月，预算按自然月算'
+                  : '当月发，预算按自然月算'
+            }
             value={`${state.settings.payday ?? 15} 号`}
             onClick={() => setPayOpen(true)}
           />
@@ -230,7 +236,7 @@ export function Me() {
       <footer className="me-foot">
         <img className="me-brand-icon" src={appIcon} alt="使劲燃的钱" />
         <div>
-          <b>使劲燃的钱 v1.1.15</b>
+          <b>使劲燃的钱 v1.1.16</b>
           <p><ShieldCheck size={13} strokeWidth={1.6} /> 数据只保存在这台手机上，不上传</p>
         </div>
         <button
@@ -401,15 +407,20 @@ function PaydaySheet({ open, onClose }: { open: boolean; onClose: () => void }) 
   const toast = useToast()
   const [day, setDay] = useState('15')
   const [lag, setLag] = useState<0 | 1>(1)
+  const [actual, setActual] = useState('15')
+  const month = todayStr().slice(0, 7)
 
   useEffect(() => {
     if (!open) return
-    setDay(String(state.settings.payday ?? 15))
+    const base = String(state.settings.payday ?? 15)
+    setDay(base)
+    setActual(String(state.settings.paydayOverrides?.[month] ?? base))
     setLag(state.settings.salaryLag === 1 ? 1 : 0)
-  }, [open, state.settings.payday, state.settings.salaryLag])
+  }, [open, month, state.settings.payday, state.settings.salaryLag, state.settings.paydayOverrides])
 
   const cleanDay = (v: string) => v.replace(/\D/g, '').slice(0, 2)
   const safeDay = Math.min(31, Math.max(1, Number(day) || 1))
+  const safeActual = Math.min(31, Math.max(1, Number(actual) || safeDay))
   const cycle = cycleRange(todayStr(), safeDay, lag)
   const cycleDays = daysBetween(cycle.start, cycle.end) + 1
 
@@ -421,7 +432,11 @@ function PaydaySheet({ open, onClose }: { open: boolean; onClose: () => void }) 
           <div className="money-input">
             <input
               value={day}
-              onChange={(e) => setDay(cleanDay(e.target.value))}
+              onChange={(e) => {
+                const next = cleanDay(e.target.value)
+                if (actual === day) setActual(next)
+                setDay(next)
+              }}
               inputMode="numeric"
               placeholder="15"
               aria-label="每月发薪日"
@@ -429,6 +444,26 @@ function PaydaySheet({ open, onClose }: { open: boolean; onClose: () => void }) 
             <i className="is-suffix">号</i>
           </div>
           <small>1–31 号；29/30/31 遇到短月会自动按当月最后一天算。</small>
+        </label>
+
+        <label className="field">
+          <span>{formatMonth(todayStr())}实际到账</span>
+          <div className="money-input">
+            <input
+              value={actual}
+              onChange={(e) => setActual(cleanDay(e.target.value))}
+              inputMode="numeric"
+              placeholder={String(safeDay)}
+              aria-label="本月实际到账日"
+            />
+            <i className="is-suffix">号</i>
+          </div>
+          <small>
+            只改这个月；下个月自动回到 {safeDay} 号。
+            <button type="button" className="pay-reset" onClick={() => setActual(String(safeDay))}>
+              恢复默认
+            </button>
+          </small>
         </label>
 
         <div className="field">
@@ -464,7 +499,7 @@ function PaydaySheet({ open, onClose }: { open: boolean; onClose: () => void }) 
           <span>按这个设置，预算月是</span>
           <b>{formatMonth(cycle.start)} · {salaryMonthLabel(cycle.salaryMonth)}</b>
           <em>
-            共 {cycleDays} 天 · {safeDay} 号到账
+            共 {cycleDays} 天 · 本月 {safeActual} 号到账
           </em>
         </div>
 
@@ -472,7 +507,15 @@ function PaydaySheet({ open, onClose }: { open: boolean; onClose: () => void }) 
           type="button"
           className="btn-primary"
           onClick={() => {
-            saveSettings({ payday: safeDay, salaryLag: lag, paydaySet: true })
+            const next = { ...(state.settings.paydayOverrides ?? {}) }
+            if (safeActual === safeDay) delete next[month]
+            else next[month] = safeActual
+            saveSettings({
+              payday: safeDay,
+              salaryLag: lag,
+              paydaySet: true,
+              paydayOverrides: Object.keys(next).length ? next : undefined,
+            })
             toast('发薪日已更新', 'success')
             onClose()
           }}

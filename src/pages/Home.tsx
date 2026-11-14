@@ -6,6 +6,7 @@ import {
   categoryBreakdown,
   cycleRange,
   daysBetween,
+  effectivePayday,
   formatDay,
   formatMonth,
   formatPercent,
@@ -54,11 +55,16 @@ export function Home({
   const ledgerName = state.settings.name?.trim() || DEFAULT_LEDGER_NAME
   const payday = state.settings.payday ?? 15
   const salaryLag = state.settings.salaryLag ?? 1
+  const overrides = state.settings.paydayOverrides
   const cycle = cycleRange(today, payday, salaryLag)
   const cycleTxs = inRange(state.txs, cycle.start, cycle.end)
   const flow = moneyFlow(state.settings, cycleTxs, today, cycle)
   const salaryLabel = salaryMonthLabel(cycle.salaryMonth)
-  const daysToPayday = Math.max(0, daysBetween(today, nextPayday(today, payday)))
+  const actualDay = effectivePayday(today, payday, overrides)
+  const nextPay = nextPayday(today, payday, overrides)
+  const daysToPayday = Math.max(0, daysBetween(today, nextPay))
+  const isThisPayMonth = nextPay.slice(0, 7) === today.slice(0, 7)
+  const nextMonthDay = effectivePayday(nextPay, payday, overrides)
   const recent = [...state.txs]
     .sort((a, b) => b.date.localeCompare(a.date) || b.createdAt - a.createdAt)
     .slice(0, 5)
@@ -129,8 +135,15 @@ export function Home({
           </button>
         </div>
         <p className="og-cycle">
-          {salaryLabel} · {payday} 号到账 ·{' '}
-          {daysToPayday === 0 ? '今天发薪' : `${daysToPayday} 天后发薪`}
+          {salaryLabel} ·{' '}
+          {isThisPayMonth ? (
+            <>
+              本月 {actualDay} 号到账 ·{' '}
+              {daysToPayday === 0 ? '今天发薪' : `${daysToPayday} 天后发薪`}
+            </>
+          ) : (
+            <>本月 {actualDay} 号已到账 · 下月 {nextMonthDay} 号发薪</>
+          )}
         </p>
 
         <div className="og-meters">

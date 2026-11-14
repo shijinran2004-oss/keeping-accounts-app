@@ -79,6 +79,8 @@ export interface Settings {
   salaryLag?: 0 | 1
   /** 是否由用户明确选过发薪日；旧数据缺这个字段时按 15 号 / 次月发上月 */
   paydaySet?: boolean
+  /** 个别月份的实际到账日，key 为到账月 YYYY-MM，未记录的月份用 payday */
+  paydayOverrides?: Record<string, number>
 }
 
 /** 一个预算月（自然月 1 号到月末），salaryMonth 是这笔工资归属的月份 */

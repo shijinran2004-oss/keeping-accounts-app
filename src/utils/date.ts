@@ -121,12 +121,21 @@ export function cycleRange(s: string, _payday = 1, salaryLag = 0): CycleRange {
   }
 }
 
-/** 下一个发薪日（今天就是发薪日时返回今天） */
-export function nextPayday(s: string, payday = 1): string {
+/** 某个月的实际发薪日：优先读这个月的覆盖值，否则用默认值 */
+export function effectivePayday(s: string, payday = 15, overrides?: Record<string, number>): number {
+  return overrides?.[s.slice(0, 7)] ?? payday
+}
+
+/** 下一个发薪日（今天就是发薪日时返回今天）；个别月份可覆盖 */
+export function nextPayday(s: string, payday = 15, overrides?: Record<string, number>): string {
   const d = parseDate(s)
-  const thisPay = paydayDate(d.getFullYear(), d.getMonth(), payday)
+  const thisDay = effectivePayday(s, payday, overrides)
+  const thisPay = paydayDate(d.getFullYear(), d.getMonth(), thisDay)
   if (toDateStr(d) <= toDateStr(thisPay)) return toDateStr(thisPay)
-  return toDateStr(paydayDate(d.getFullYear(), d.getMonth() + 1, payday))
+  const nextMonth = new Date(d.getFullYear(), d.getMonth() + 1, 1)
+  const nextKey = toDateStr(nextMonth)
+  const nextDay = effectivePayday(nextKey, payday, overrides)
+  return toDateStr(paydayDate(nextMonth.getFullYear(), nextMonth.getMonth(), nextDay))
 }
 
 /** 把预算月往前/后挪 n 个月 */
