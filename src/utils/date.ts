@@ -126,6 +126,13 @@ export function effectivePayday(s: string, payday = 15, overrides?: Record<strin
   return overrides?.[s.slice(0, 7)] ?? payday
 }
 
+
+/** 某一天是不是该月的发薪日（短月自动落在月末，支持单月覆盖） */
+export function isPaydayDate(s: string, payday = 15, overrides?: Record<string, number>): boolean {
+  const d = parseDate(s)
+  const day = effectivePayday(s, payday, overrides)
+  return toDateStr(paydayDate(d.getFullYear(), d.getMonth(), day)) === s
+}
 /** 下一个发薪日（今天就是发薪日时返回今天）；个别月份可覆盖 */
 export function nextPayday(s: string, payday = 15, overrides?: Record<string, number>): string {
   const d = parseDate(s)

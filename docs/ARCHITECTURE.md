@@ -109,6 +109,6 @@ openGym 是 AGPL-3.0，这里只借鉴版式与间距，没有复制它的代码
 
 ## 版本与构建
 
-- `versionCode 27` / `versionName 1.1.17`（`android/app/build.gradle`）
+- `versionCode 28` / `versionName 1.1.18`（`android/app/build.gradle`）
 - 数据版本 `LedgerState.version = 1`，`normalize()` 会在读取时补全新增的内置分类
 - 打包：`npm run build && npx cap copy android`，再 `gradle assembleDebug`

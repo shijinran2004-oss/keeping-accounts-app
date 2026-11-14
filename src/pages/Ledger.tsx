@@ -7,10 +7,13 @@ import {
   dailySeries,
   daysBetween,
   eachDay,
+  effectivePayday,
   formatDay,
   formatMonth,
   inRange,
+  isPaydayDate,
   moneyFlow,
+  nextPayday,
   parseDate,
   salaryMonthLabel,
   shiftCycle,
@@ -30,7 +33,7 @@ export function Ledger({ onOpenTx, onAdd }: { onOpenTx: (tx: Tx) => void; onAdd:
   const [mode, setMode] = useState<CalendarMode>('amount')
   const [weekOnly, setWeekOnly] = useState(false)
 
-  const payday = state.settings.payday ?? 1
+  const payday = state.settings.payday ?? 15
   const salaryLag = state.settings.salaryLag ?? 0
   const today = todayStr()
   const range = cycleRange(anchor, payday, salaryLag)
@@ -57,6 +60,12 @@ export function Ledger({ onOpenTx, onAdd }: { onOpenTx: (tx: Tx) => void; onAdd:
   const totalDays = daysBetween(range.start, range.end) + 1
   const gridEnd = addDays(gridStart, Math.ceil((lead + totalDays) / 7) * 7 - 1)
 
+  const paydayDay = state.settings.payday ?? 15
+  const paydayOverrides = state.settings.paydayOverrides
+  const actualPayday = effectivePayday(range.start, paydayDay, paydayOverrides)
+  const nextPay = nextPayday(today, paydayDay, paydayOverrides)
+  const nextPaySpan = Math.max(1, daysBetween(today, nextPay))
+
   const cells = useMemo<CalendarCell[]>(() => {
     const stats = new Map<string, { expense: number; income: number; count: number }>()
     for (const tx of inRange(state.txs, gridStart, gridEnd)) {
@@ -75,9 +84,14 @@ export function Ledger({ onOpenTx, onAdd }: { onOpenTx: (tx: Tx) => void; onAdd:
         expense: row?.expense ?? 0,
         income: row?.income ?? 0,
         count: row?.count ?? 0,
+        isPayday: date >= range.start && date <= range.end && isPaydayDate(date, paydayDay, paydayOverrides),
+        payFill:
+          date >= today && date <= nextPay
+            ? Math.round(8 + ((daysBetween(today, date) + 1) / nextPaySpan) * 30)
+            : 0,
       }
     })
-  }, [state.txs, gridStart, gridEnd, range.start, range.end])
+  }, [state.txs, gridStart, gridEnd, range.start, range.end, paydayDay, paydayOverrides, today, nextPay, nextPaySpan])
 
   const dayTxs = useMemo(
     () => state.txs.filter((t) => t.date === selected).sort((a, b) => b.createdAt - a.createdAt),
@@ -129,7 +143,7 @@ export function Ledger({ onOpenTx, onAdd }: { onOpenTx: (tx: Tx) => void; onAdd:
       <MonthCalendar
         month={range.start}
         title={formatMonth(range.start)}
-        caption={`${salaryMonthLabel(range.salaryMonth)} · ${payday} 号到账`}
+        caption={`${salaryMonthLabel(range.salaryMonth)} · ${actualPayday} 号到账`}
         selected={selected}
         cells={cells}
         mode={mode}

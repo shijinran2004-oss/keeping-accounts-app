@@ -10,6 +10,7 @@ function cellLabel(cell: CalendarCell): string {
   if (cell.expense) parts.push(`支出 ${(cell.expense / 100).toFixed(2)} 元`)
   if (cell.income) parts.push(`收入 ${(cell.income / 100).toFixed(2)} 元`)
   if (!cell.count) parts.push('没有记录')
+  if (cell.isPayday) parts.push('发薪日')
   return parts.join('，')
 }
 
@@ -89,6 +90,8 @@ export function MonthCalendar({
           if (!cell.inMonth) classes.push('is-out')
           if (isSelected) classes.push('is-sel')
           if (isToday) classes.push('is-today')
+          if (cell.isPayday && cell.inMonth) classes.push('is-pay')
+          if (cell.payFill && cell.payFill > 0) classes.push('has-payfill')
 
           return (
             <button
@@ -98,7 +101,7 @@ export function MonthCalendar({
               onClick={() => onSelect(cell.date)}
               aria-pressed={isSelected}
               aria-label={cellLabel(cell)}
-              style={{ ['--cal-day' as string]: cell.day } as CSSProperties}
+              style={{ ['--cal-day' as string]: cell.day, ['--pay-fill' as string]: `${cell.payFill ?? 0}%` } as CSSProperties}
             >
               {isToday && <span className="cal-today-dot" aria-hidden="true" />}
               <span className="cal-num">{cell.day}</span>
@@ -114,6 +117,13 @@ export function MonthCalendar({
             </button>
           )
         })}
+      </div>
+
+      <div className="cal-legend">
+        <span className="cal-pay" aria-hidden="true">薪</span>
+        <span>发薪日</span>
+        <span className="cal-legend-fill" aria-hidden="true" />
+        <span>到发薪日</span>
       </div>
 
       <button type="button" className="cal-toggle" onClick={onToggleWeek}>

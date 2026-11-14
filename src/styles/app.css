@@ -1194,6 +1194,61 @@ textarea:focus-visible {
   background: #b9cfa9;
 }
 
+.cal-pay {
+  position: absolute;
+  top: 3px;
+  left: 4px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-family: var(--sans);
+  font-size: 8px;
+  font-weight: 700;
+  line-height: 1;
+  color: #3a2b00;
+  background: #ffd60a;
+  box-shadow: 0 0 0 1.5px var(--card);
+}
+
+.cal-cell.has-payfill {
+  background: color-mix(in srgb, var(--accent) var(--pay-fill), transparent);
+}
+
+.cal-cell.is-pay {
+  outline: 1.5px solid rgba(255, 214, 10, 0.78);
+  outline-offset: -1.5px;
+}
+
+.cal-cell.is-pay.is-sel {
+  background: var(--accent);
+  outline-color: #ffd60a;
+}
+
+.cal-legend {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin: 4px 3px 2px;
+  font-size: 9px;
+  color: var(--ink-3);
+}
+
+.cal-legend .cal-pay {
+  position: static;
+  box-shadow: none;
+  flex: none;
+}
+
+.cal-legend-fill {
+  width: 15px;
+  height: 6px;
+  border-radius: 2px;
+  margin-left: 2px;
+  background: linear-gradient(90deg, transparent, var(--accent));
+}
+
 .cal-today-dot {
   position: absolute;
   top: 4px;

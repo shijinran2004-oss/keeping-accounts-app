@@ -241,6 +241,10 @@ export interface CalendarCell {
   income: number
   /** 当日记录条数 */
   count: number
+  /** 这一天是不是发薪日（含本月实际到账覆盖） */
+  isPayday?: boolean
+  /** 从今天到下次发薪日的渐变填充强度（百分比，0 表示不填） */
+  payFill?: number
 }
 
 /** 明细页的月历卡片 */
