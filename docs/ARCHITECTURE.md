@@ -8,10 +8,24 @@ shijinran-money/
 │  ├─ types.ts            全项目唯一的类型文件（领域模型 + 数据接口 + 组件契约）
 │  ├─ App.tsx             应用外壳：Tab、弹层调度、Android 返回键
 │  ├─ main.tsx            入口：样式、启动前恢复主题、状态栏
-│  ├─ data/               数据层：账本状态与内置分类
+│  ├─ data/               数据层：账本状态、存储引擎与分类
 │  │  ├─ index.ts         对外唯一入口
-│  │  ├─ store.tsx        LedgerProvider / useLedger / localStorage / normalize
-│  │  └─ categories.ts    内置分类、图标与颜色
+│  │  ├─ store.tsx        LedgerProvider / useLedger（写入走 repo，不再直写 localStorage）
+│  │  ├─ normalize.ts     STORAGE_KEY / freshState / uid / normalize
+│  │  ├─ categories.ts    内置分类、图标与颜色
+│  │  ├─ db/              IndexedDB 仓库、localStorage 回退与一次性迁移
+│  │  │  ├─ idb.ts        连接与事务封装
+│  │  │  ├─ repo.ts       IdbRepository（实现 LedgerRepository）
+│  │  │  ├─ ls.ts         LsRepository / readLegacyState
+│  │  │  └─ migrate.ts    引擎选择、迁移校验、openLedger()
+│  │  └─ backup/          v2 备份容器与导入
+│  │     ├─ format.ts     format / schema / checksum
+│  │     ├─ codec.ts      gzip 编解码
+│  │     ├─ parse.ts      解析与校验（含旧版纯 JSON）
+│  │     ├─ apply.ts      覆盖 / 合并 / 仅设置
+│  │     ├─ preview.ts    导入前对比
+│  │     ├─ snapshot.ts   快照与恢复
+│  │     └─ export.ts     生成备份文件
 │  ├─ lib/                无 UI 的基础能力
 │  │  ├─ index.ts         对外唯一入口
 │  │  ├─ money.ts         金额格式化与解析（单位：分）
@@ -113,7 +127,9 @@ App / main
 | 改头像裁剪 | `src/lib/avatar.ts` 的 `fileToAvatar` |
 | 改主题 / 强调色 | `src/lib/theme.ts` 的 `ACCENTS` + `styles/og.css` 顶部 token；明细日历倒计时用 `--accent` 混出四级 |
 | 改发薪日 / 工资归属 | `Settings.payday` / `salaryLag` / `paydayOverrides` + `lib/date.ts` 的 `cycleRange` / `effectivePayday` / `nextPayday` |
-| 加一个持久化字段 | `types.ts` 的 `LedgerState` + `store.tsx` 的 `freshState` / `normalize` |
+| 加一个持久化字段 | `types.ts` 的 `LedgerState` + `data/normalize.ts` 的 `freshState` / `normalize` |
+| 改存储引擎 / 迁移校验 | `src/data/db/migrate.ts`；临时回退旧存储：`localStorage['shijinran.storage.engine']='ls'` |
+| 改备份格式 / 导入规则 | `src/data/backup/`（format / parse / apply / snapshot）；`DataSheet.tsx` 只负责界面 |
 | 加内置分类 | `src/data/categories.ts` |
 | 改分类图标 | 设置 → 分类管理；`store.tsx` 的 `updateCategoryIcon`，图标库是 `data/categories.ts` 的 `ICON_CHOICES` |
 
@@ -121,9 +137,12 @@ App / main
 
 ```
 用户操作 → 弹层调用 useLedger().addTx(draft)
-        → store 生成 id / createdAt，更新 state
-        → useEffect 序列化写入 localStorage('shijinran.money.v1')
+        → store 生成 id / createdAt，先更新内存 state
+        → repo.putTx(tx)：IndexedDB 单条写入；失败时顶部提示，不打断记账
         → 订阅 context 的页面重新渲染
+
+首次启动：openLedger() 打开 IndexedDB → 若库为空且有旧 localStorage 账本，整份迁移并校验条数与抽样 id；
+校验失败清空 IDB 并回退旧存储（旧键保持只读，不删）。`localStorage['shijinran.storage.engine']='ls'` 可强制回退。每次写入成功后同步刷新 localStorage 镜像，回退时能读到最新账本。
 ```
 
 读的时候反过来：`useLedger().state` → `lib/stats.ts` 按区间汇总 → 页面渲染。
@@ -146,7 +165,9 @@ App / main
 
 ## 版本与构建
 
-- `versionCode 33` / `versionName 1.1.23`（`android/app/build.gradle`）
+- `versionCode 37` / `versionName 1.2.0`（`android/app/build.gradle`）
 - 数据版本 `LedgerState.version = 1`，`normalize()` 读取时补全新增分类与设置
+- 存储：IndexedDB（库 `shijinran`，`txs` / `meta` / `snapshots` 三个 store），首次启动从 `localStorage` 一次性迁移；`localStorage['shijinran.storage.engine']='ls'` 可强制回退旧引擎
+- 备份：v2 容器带 `schema` / `checksum`，默认 gzip；导入先预览，支持覆盖 / 合并 / 仅设置与分类；导入、清空、恢复前自动快照（保留 5 份）
 - 打包：`npm run build && npx cap copy android`，再 `gradle assembleDebug`
-- 检查：`npm run check`
+- 检查：`npm run check`（tsc + 分层检查）、`npm test`（vitest）

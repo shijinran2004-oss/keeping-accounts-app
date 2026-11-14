@@ -15,7 +15,7 @@ import {
   Wallet,
   type LucideIcon,
 } from 'lucide-react'
-import { DEFAULT_LEDGER_NAME, useLedger } from '../data'
+import { APP_VERSION, DEFAULT_LEDGER_NAME, useLedger } from '../data'
 import { ACCENTS, THEME_OPTIONS, accentName, fileToAvatar, formatDay, formatMoney, themeName, todayStr } from '../lib'
 import { Seal, SectionTitle, useToast } from '../ui'
 import { BudgetSheet, CategorySheet, DataSheet, NameSheet, PaydaySheet } from '../sheets'
@@ -209,7 +209,7 @@ export function Me() {
       <footer className="me-foot">
         <img className="me-brand-icon" src={appIcon} alt="使劲燃的钱" />
         <div>
-          <b>使劲燃的钱 v1.1.26</b>
+          <b>{`使劲燃的钱 v${APP_VERSION}`}</b>
           <p><ShieldCheck size={13} strokeWidth={1.6} /> 数据只保存在这台手机上，不上传</p>
         </div>
         <button

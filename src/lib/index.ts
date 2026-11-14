@@ -9,12 +9,13 @@ export { pushModal, popModal, closeTopModal } from './modal'
 export { fileToAvatar } from './avatar'
 export {
   backupFileName,
-  backupJson,
-  backupBytes,
+  base64ToBytes,
+  bytesToBase64,
   formatBytes,
   exportBackupFile,
   readBackupFile,
 } from './backup'
+export type { BackupFilePayload } from './backup'
 export {
   ACCENTS,
   THEME_OPTIONS,

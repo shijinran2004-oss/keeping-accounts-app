@@ -7,13 +7,14 @@ import { Home, Ledger, Me, Onboarding, Stats } from './pages'
 import { AddSheet, TxDetailSheet } from './sheets'
 import type { Tab, Tx, TxType } from './types'
 import { applyTheme, closeTopModal } from './lib'
+import { AlertTriangle } from 'lucide-react'
 import { LaunchScreen, TabBar, ToastProvider } from './ui'
 
 /**
  * 应用壳：四个 tab、记账/详情弹层、Android 返回键和主题/状态栏同步。
  */
 function Shell() {
-  const { state } = useLedger()
+  const { state, storageError, dismissStorageError } = useLedger()
   const [tab, setTab] = useState<Tab>('home')
   const [addOpen, setAddOpen] = useState(false)
   const [editing, setEditing] = useState<Tx | null>(null)
@@ -73,6 +74,15 @@ function Shell() {
 
   return (
     <div className="app">
+      {storageError ? (
+        <div className="storage-banner" role="alert">
+          <AlertTriangle size={15} strokeWidth={1.8} />
+          <span>没能保存到本机：{storageError}</span>
+          <button type="button" onClick={dismissStorageError}>
+            知道了
+          </button>
+        </div>
+      ) : null}
       <main className="main" key={tab}>
         {tab === 'home' && (
           <Home

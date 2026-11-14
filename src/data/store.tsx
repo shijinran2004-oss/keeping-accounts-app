@@ -1,178 +1,244 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
-import type { Category, LedgerApi, LedgerState, NewCategory, Settings, Tx, TxDraft } from '../types'
-import { isAccentKey, isThemeMode } from '../lib'
-import { DEFAULT_CATEGORIES } from './categories'
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
+import type {
+  Category,
+  ImportMode,
+  ImportOutcome,
+  LedgerApi,
+  LedgerRepository,
+  LedgerState,
+  NewCategory,
+  ParsedBackup,
+  Settings,
+  SnapshotMeta,
+  Tx,
+  TxDraft,
+} from '../types'
+import { freshState, normalize, uid } from './normalize'
+import { openLedger, writeLegacyMirror } from './db'
+import {
+  applyImport,
+  createSnapshot,
+  maybeWeeklySnapshot,
+  restoreSnapshot as restoreSnapshotFrom,
+} from './backup'
 
-export const DEFAULT_LEDGER_NAME = '使劲燃的钱'
-
-const STORAGE_KEY = 'shijinran.money.v1'
-/** 旧版本（小满账本）用过的键，读取时做一次性迁移 */
-const LEGACY_KEY = 'xiaoman.ledger.v1'
-
-function uid(): string {
-  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID()
-  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 9)}`
-}
-
-export function freshState(): LedgerState {
-  return {
-    version: 1,
-    txs: [],
-    categories: DEFAULT_CATEGORIES.map((c) => ({ ...c })),
-    settings: { salary: 0, fixedCost: 0, onboarded: false, name: DEFAULT_LEDGER_NAME, payday: 15, salaryLag: 1, paydaySet: false },
-  }
-}
-
-function sanitizeOverrides(input: unknown): Record<string, number> | undefined {
-  if (!input || typeof input !== 'object') return undefined
-  const out: Record<string, number> = {}
-  for (const [key, value] of Object.entries(input as Record<string, unknown>)) {
-    const day = Math.round(Number(value))
-    if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(key)) continue
-    if (!Number.isFinite(day) || day < 1 || day > 31) continue
-    out[key] = day
-  }
-  return Object.keys(out).length ? out : undefined
-}
-
-function normalize(raw: unknown): LedgerState | null {
-  if (!raw || typeof raw !== 'object') return null
-  const data = raw as Partial<LedgerState>
-  if (!Array.isArray(data.txs) || !Array.isArray(data.categories) || !data.settings) return null
-  const savedCats: Category[] = data.categories.filter(
-    (c): c is Category =>
-      !!c && typeof c.id === 'string' && typeof c.name === 'string' && (c.type === 'expense' || c.type === 'income'),
-  )
-  const merged: Category[] = DEFAULT_CATEGORIES.map((base) => {
-    const saved = savedCats.find((c) => c.id === base.id)
-    return saved ? { ...base, ...saved, builtin: true } : { ...base }
-  })
-  savedCats.filter((c) => !c.builtin && !merged.some((m) => m.id === c.id)).forEach((c) => merged.push(c))
-  const txs: Tx[] = data.txs
-    .filter(
-      (t): t is Tx =>
-        !!t &&
-        typeof t.id === 'string' &&
-        (t.type === 'expense' || t.type === 'income') &&
-        Number.isFinite(t.amount) &&
-        typeof t.date === 'string' &&
-        typeof t.categoryId === 'string',
-    )
-    .map((t) => ({ ...t, note: t.note ?? '', createdAt: t.createdAt ?? 0 }))
-  const s = data.settings as Partial<Settings>
-  return {
-    version: 1,
-    txs,
-    categories: merged,
-    settings: {
-      salary: Math.max(0, Math.round(Number(s.salary) || 0)),
-      fixedCost: Math.max(0, Math.round(Number(s.fixedCost) || 0)),
-      onboarded: !!s.onboarded,
-      name: typeof s.name === 'string' ? s.name.trim().slice(0, 20) : DEFAULT_LEDGER_NAME,
-      avatar: typeof s.avatar === 'string' && /^data:image\//.test(s.avatar) ? s.avatar : undefined,
-      themeSet: s.themeSet === true,
-      theme: s.themeSet === true && isThemeMode(s.theme) ? s.theme : 'light',
-      accent: isAccentKey(s.accent) ? s.accent : 'lime',
-      payday: s.paydaySet === true ? Math.min(31, Math.max(1, Math.round(Number(s.payday) || 15))) : 15,
-      salaryLag: s.paydaySet === true && s.salaryLag === 1 ? 1 : 0,
-      paydaySet: s.paydaySet === true,
-      paydayOverrides: sanitizeOverrides(s.paydayOverrides),
-    },
-  }
-}
-
-function load(): LedgerState {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY) ?? localStorage.getItem(LEGACY_KEY)
-    if (!raw) return freshState()
-    if (!localStorage.getItem(STORAGE_KEY)) localStorage.setItem(STORAGE_KEY, raw)
-    return normalize(JSON.parse(raw)) ?? freshState()
-  } catch {
-    return freshState()
-  }
-}
+export { DEFAULT_LEDGER_NAME, freshState } from './normalize'
 
 const LedgerContext = createContext<LedgerApi | null>(null)
 
-export function LedgerProvider({ children }: { children: React.ReactNode }) {
-  const [state, setState] = useState<LedgerState>(load)
+/** 启动阶段：正在打开数据库，或者彻底打不开 */
+type Boot = { status: 'loading' } | { status: 'failed'; message: string }
 
+export function LedgerProvider({ children }: { children: React.ReactNode }) {
+  const [state, setState] = useState<LedgerState | null>(null)
+  const [boot, setBoot] = useState<Boot>({ status: 'loading' })
+  const [storageError, setStorageError] = useState<string | null>(null)
+  const repoRef = useRef<LedgerRepository | null>(null)
+  const stateRef = useRef<LedgerState | null>(null)
+  stateRef.current = state
+
+  // 打开账本：优先 IndexedDB，必要时把旧 localStorage 搬过来；失败才显示错误页
   useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
-    } catch {
-      /* storage full or unavailable */
+    let alive = true
+    openLedger()
+      .then((opened) => {
+        if (!alive) return
+        repoRef.current = opened.repo
+        stateRef.current = opened.state
+        setState(opened.state)
+        // 一周没备份就自动补一份，失败只写日志
+        void maybeWeeklySnapshot(opened.repo, opened.state)
+      })
+      .catch((error: unknown) => {
+        if (!alive) return
+        setBoot({ status: 'failed', message: error instanceof Error ? error.message : '未知错误' })
+      })
+    return () => {
+      alive = false
     }
+  }, [])
+
+  // 主数据在 IndexedDB；localStorage 留一份最新镜像，回退到旧存储时不至于读到旧账
+  useEffect(() => {
+    if (state && repoRef.current?.engine === 'idb') writeLegacyMirror(state)
   }, [state])
 
-  const addTx = useCallback((draft: TxDraft) => {
-    const tx: Tx = { ...draft, id: uid(), createdAt: Date.now() }
-    setState((s) => ({ ...s, txs: [tx, ...s.txs] }))
-    return tx
-  }, [])
-
-  const updateTx = useCallback((id: string, draft: TxDraft) => {
-    setState((s) => ({
-      ...s,
-      txs: s.txs.map((t) => (t.id === id ? { ...t, ...draft, createdAt: Date.now() } : t)),
-    }))
-  }, [])
-
-  const deleteTx = useCallback((id: string) => {
-    setState((s) => ({ ...s, txs: s.txs.filter((t) => t.id !== id) }))
-  }, [])
-
-  const saveSettings = useCallback((patch: Partial<Settings>) => {
-    setState((s) => ({ ...s, settings: { ...s.settings, ...patch } }))
-  }, [])
-
-  const addCategory = useCallback((cat: NewCategory) => {
-    const next: Category = { ...cat, id: `custom-${uid()}`, builtin: false }
-    setState((s) => ({ ...s, categories: [...s.categories, next] }))
-  }, [])
-
-  const updateCategoryIcon = useCallback((id: string, icon: Category['icon']) => {
-    setState((s) => ({
-      ...s,
-      categories: s.categories.map((c) => (c.id === id ? { ...c, icon } : c)),
-    }))
-  }, [])
-
-  const deleteCategory = useCallback((id: string) => {
-    setState((s) => {
-      const target = s.categories.find((c) => c.id === id)
-      if (!target || target.builtin) return s
-      const fallback = s.categories.find((c) => c.id === (target.type === 'income' ? 'other-income' : 'other'))
-      return {
-        ...s,
-        categories: s.categories.filter((c) => c.id !== id),
-        txs: s.txs.map((t) => (t.categoryId === id ? { ...t, categoryId: fallback?.id ?? 'other' } : t)),
-      }
+  /** 所有落盘都走这里：界面先更新，写入失败只提示、不打断记账 */
+  const persist = useCallback((work: (repo: LedgerRepository) => Promise<unknown>) => {
+    const repo = repoRef.current
+    if (!repo) return
+    work(repo).catch((error: unknown) => {
+      console.error('[ledger] 写入失败', error)
+      setStorageError(error instanceof Error ? error.message : '写入本地数据库失败')
     })
   }, [])
 
-  const importState = useCallback((json: string) => {
-    try {
-      const parsed = normalize(JSON.parse(json))
+  const addTx = useCallback(
+    (draft: TxDraft) => {
+      const tx: Tx = { ...draft, id: uid(), createdAt: Date.now() }
+      setState((s) => (s ? { ...s, txs: [tx, ...s.txs] } : s))
+      persist((repo) => repo.putTx(tx))
+      return tx
+    },
+    [persist],
+  )
+
+  const updateTx = useCallback(
+    (id: string, draft: TxDraft) => {
+      const current = stateRef.current
+      const before = current?.txs.find((t) => t.id === id)
+      if (!current || !before) return
+      const next: Tx = { ...before, ...draft, createdAt: Date.now() }
+      setState({ ...current, txs: current.txs.map((t) => (t.id === id ? next : t)) })
+      persist((repo) => repo.putTx(next))
+    },
+    [persist],
+  )
+
+  const deleteTx = useCallback(
+    (id: string) => {
+      const current = stateRef.current
+      if (!current) return
+      setState({ ...current, txs: current.txs.filter((t) => t.id !== id) })
+      persist((repo) => repo.deleteTx(id))
+    },
+    [persist],
+  )
+
+  const saveSettings = useCallback(
+    (patch: Partial<Settings>) => {
+      const current = stateRef.current
+      if (!current) return
+      const settings = { ...current.settings, ...patch }
+      setState({ ...current, settings })
+      persist((repo) => repo.putSettings(settings))
+    },
+    [persist],
+  )
+
+  const addCategory = useCallback(
+    (cat: NewCategory) => {
+      const current = stateRef.current
+      if (!current) return
+      const next: Category = { ...cat, id: `custom-${uid()}`, builtin: false }
+      const categories = [...current.categories, next]
+      setState({ ...current, categories })
+      persist((repo) => repo.putCategories(categories))
+    },
+    [persist],
+  )
+
+  const updateCategoryIcon = useCallback(
+    (id: string, icon: Category['icon']) => {
+      const current = stateRef.current
+      if (!current) return
+      const categories = current.categories.map((c) => (c.id === id ? { ...c, icon } : c))
+      setState({ ...current, categories })
+      persist((repo) => repo.putCategories(categories))
+    },
+    [persist],
+  )
+
+  const deleteCategory = useCallback(
+    (id: string) => {
+      const current = stateRef.current
+      if (!current) return
+      const target = current.categories.find((c) => c.id === id)
+      if (!target || target.builtin) return
+      const fallback = current.categories.find(
+        (c) => c.id === (target.type === 'income' ? 'other-income' : 'other'),
+      )
+      const fallbackId = fallback?.id ?? 'other'
+      const touched: Tx[] = []
+      const txs = current.txs.map((t) => {
+        if (t.categoryId !== id) return t
+        const next = { ...t, categoryId: fallbackId }
+        touched.push(next)
+        return next
+      })
+      const categories = current.categories.filter((c) => c.id !== id)
+      setState({ ...current, categories, txs })
+      persist(async (repo) => {
+        await repo.putCategories(categories)
+        await Promise.all(touched.map((tx) => repo.putTx(tx)))
+      })
+    },
+    [persist],
+  )
+
+  const importState = useCallback(
+    (json: string) => {
+      let parsed: LedgerState | null = null
+      try {
+        parsed = normalize(JSON.parse(json))
+      } catch {
+        return { ok: false, error: '不是有效的 JSON 备份' }
+      }
       if (!parsed) return { ok: false, error: '备份内容不完整' }
-      setState(parsed)
+      const next = parsed
+      setState(next)
+      persist((repo) => repo.replaceAll(next))
       return { ok: true }
-    } catch {
-      return { ok: false, error: '不是有效的 JSON 备份' }
+    },
+    [persist],
+  )
+
+  const clearTxs = useCallback(() => {
+    const current = stateRef.current
+    if (!current) return
+    const next = { ...current, txs: [] }
+    setState(next)
+    persist(async (repo) => {
+      await createSnapshot(repo, current, 'before-clear')
+      await repo.replaceAll(next)
+    })
+  }, [persist])
+
+  const importBackup = useCallback(
+    async (backup: ParsedBackup, mode: ImportMode): Promise<ImportOutcome> => {
+      const repo = repoRef.current
+      const current = stateRef.current
+      if (!repo || !current) throw new Error('账本还没打开')
+      // 先留底再动数据：快照失败就放弃导入，避免无路可退
+      await createSnapshot(repo, current, 'before-import')
+      const { state: next, outcome } = applyImport(backup, current, mode)
+      await repo.replaceAll(next)
+      stateRef.current = next
+      setState(next)
+      return outcome
+    },
+    [],
+  )
+
+  const listSnapshots = useCallback(async (): Promise<SnapshotMeta[]> => {
+    const repo = repoRef.current
+    return repo ? repo.listSnapshots() : []
+  }, [])
+
+  const restoreSnapshot = useCallback(async (id: string) => {
+    const repo = repoRef.current
+    if (!repo) return { ok: false, error: '账本还没打开' }
+    try {
+      const next = await restoreSnapshotFrom(repo, id)
+      stateRef.current = next
+      setState(next)
+      return { ok: true }
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : '恢复失败' }
     }
   }, [])
 
-  const clearTxs = useCallback(() => {
-    setState((s) => ({ ...s, txs: [] }))
-  }, [])
+  const resetAll = useCallback(() => {
+    const next = freshState()
+    setState(next)
+    persist((repo) => repo.replaceAll(next))
+  }, [persist])
 
-  const resetAll = useCallback(
-() => {
-    setState(freshState())
-  }, [])
+  const dismissStorageError = useCallback(() => setStorageError(null), [])
 
-  const value = useMemo<LedgerApi>(
-    () => ({
+  const value = useMemo<LedgerApi | null>(() => {
+    if (!state) return null
+    return {
       state,
       addTx,
       updateTx,
@@ -184,11 +250,84 @@ export function LedgerProvider({ children }: { children: React.ReactNode }) {
       importState,
       clearTxs,
       resetAll,
-    }),
-    [state, addTx, updateTx, deleteTx, saveSettings, addCategory, deleteCategory, updateCategoryIcon, importState, clearTxs, resetAll],
-  )
+      importBackup,
+      listSnapshots,
+      restoreSnapshot,
+      storageError,
+      dismissStorageError,
+    }
+  }, [
+    state,
+    addTx,
+    updateTx,
+    deleteTx,
+    saveSettings,
+    addCategory,
+    deleteCategory,
+    updateCategoryIcon,
+    importState,
+    clearTxs,
+    resetAll,
+    importBackup,
+    listSnapshots,
+    restoreSnapshot,
+    storageError,
+    dismissStorageError,
+  ])
+
+  if (!value) return <BootScreen boot={boot} />
 
   return <LedgerContext.Provider value={value}>{children}</LedgerContext.Provider>
+}
+
+/** 打开账本时的过渡页：正常情况一闪而过，打不开时给出明确原因 */
+function BootScreen({ boot }: { boot: Boot }) {
+  const dark = typeof document !== 'undefined' && document.documentElement.dataset.theme === 'dark'
+  return (
+    <div
+      style={{
+        position: 'fixed',
+        inset: 0,
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 10,
+        padding: 32,
+        textAlign: 'center',
+        background: dark ? '#000000' : '#F2F2F7',
+        color: dark ? '#8E8E93' : '#6B6B70',
+        fontSize: 14,
+      }}
+    >
+      <div style={{ fontSize: 22, fontWeight: 800, letterSpacing: 1, color: dark ? '#FFFFFF' : '#111114' }}>
+        使劲燃的钱
+      </div>
+      {boot.status === 'failed' ? (
+        <>
+          <div>账本打不开</div>
+          <div style={{ fontSize: 12, opacity: 0.75, maxWidth: 280, wordBreak: 'break-word' }}>{boot.message}</div>
+          <button
+            onClick={() => window.location.reload()}
+            style={{
+              marginTop: 8,
+              padding: '10px 22px',
+              border: 0,
+              borderRadius: 999,
+              background: dark ? '#FFFFFF' : '#111114',
+              color: dark ? '#000000' : '#FFFFFF',
+              fontSize: 14,
+              fontWeight: 700,
+            }}
+          >
+            重试
+          </button>
+        </>
+      ) : (
+        <div>正在打开账本…</div>
+      )}
+    </div>
+  )
 }
 
 export function useLedger(): LedgerApi {

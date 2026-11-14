@@ -11,3 +11,12 @@ export {
   COLOR_CHOICES,
   findCategory,
 } from './categories'
+export {
+  APP_VERSION,
+  BackupParseError,
+  applyImport,
+  buildBackup,
+  buildPreview,
+  gzipSupported,
+  parseBackup,
+} from './backup'

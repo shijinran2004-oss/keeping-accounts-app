@@ -126,6 +126,16 @@ export interface LedgerApi {
   importState: (json: string) => { ok: boolean; error?: string }
   clearTxs: () => void
   resetAll: () => void
+  /** 最近一次写入本地数据库失败的原因；null 表示正常 */
+  storageError?: string | null
+  /** 用户看过提示后清掉错误 */
+  dismissStorageError?: () => void
+  /** 应用解析好的备份；导入前自动存快照 */
+  importBackup: (backup: ParsedBackup, mode: ImportMode) => Promise<ImportOutcome>
+  /** 本机快照列表（最多 5 条） */
+  listSnapshots: () => Promise<SnapshotMeta[]>
+  /** 恢复到指定快照；恢复前会再存一份当前状态 */
+  restoreSnapshot: (id: string) => Promise<{ ok: boolean; error?: string }>
 }
 
 /* ============================================================
@@ -332,3 +342,112 @@ export interface ToastItem {
 
 /** 导出结果：原生端走系统分享面板，浏览器直接下载 */
 export type BackupExportResult = 'shared' | 'downloaded'
+
+/* ============================================================
+ * 7. 存储层（IndexedDB 主存储 / localStorage 回退）
+ * ========================================================== */
+
+/** 当前使用的存储引擎 */
+export type StorageEngine = 'idb' | 'ls'
+
+/** 快照触发原因 */
+export type SnapshotKind = 'before-import' | 'before-clear' | 'before-restore' | 'weekly' | 'manual'
+
+/** 快照摘要：列表只读这个，不带正文 */
+export interface SnapshotMeta {
+  id: string
+  kind: SnapshotKind
+  /** 生成时间戳（毫秒） */
+  createdAt: number
+  /** 快照包含多少笔记录 */
+  txCount: number
+  /** UTF-8 字节数，用于显示体积 */
+  bytes: number
+}
+
+/** 完整快照：data 是一份可以直接当备份用的 LedgerState JSON 文本 */
+export interface SnapshotRecord extends SnapshotMeta {
+  data: string
+}
+
+/**
+ * 存储层统一接口。
+ * 只有 data/store.tsx 依赖它；页面与弹层继续用 useLedger()。
+ */
+export interface LedgerRepository {
+  readonly engine: StorageEngine
+  /** 读出整份状态；空库返回 null */
+  load(): Promise<LedgerState | null>
+  /** 整份替换：导入、清空、重置 */
+  replaceAll(state: LedgerState): Promise<void>
+  /** 单笔新增或更新 */
+  putTx(tx: Tx): Promise<void>
+  deleteTx(id: string): Promise<void>
+  putSettings(settings: Settings): Promise<void>
+  putCategories(categories: Category[]): Promise<void>
+  putSnapshot(snapshot: SnapshotRecord): Promise<void>
+  listSnapshots(): Promise<SnapshotMeta[]>
+  getSnapshot(id: string): Promise<SnapshotRecord | null>
+  deleteSnapshot(id: string): Promise<void>
+  close(): void
+}
+
+/** 启动结果：选中的引擎、初始状态、是否刚从旧存储迁移过来 */
+export interface OpenedLedger {
+  repo: LedgerRepository
+  state: LedgerState
+  engine: StorageEngine
+  migrated: boolean
+}
+/* ============================================================
+ * 8. 备份格式 v2 与导入
+ * ========================================================== */
+
+/** 导入方式：覆盖 / 合并 / 只恢复设置与分类 */
+export type ImportMode = 'replace' | 'merge' | 'settings'
+
+/** 备份文件的头部信息（不含账本正文） */
+export interface BackupEnvelopeMeta {
+  /** 1 = 旧版裸 JSON，2 = 带头部的容器 */
+  schema: number
+  appVersion?: string
+  exportedAt?: number
+  txCount: number
+  categoryCount: number
+  /** 文件是不是 gzip 压缩过 */
+  compressed: boolean
+}
+
+/** 解析后的备份：正文已经过 normalize，可以直接用于导入 */
+export interface ParsedBackup {
+  state: LedgerState
+  meta: BackupEnvelopeMeta
+  warnings: string[]
+}
+
+/** 导入前给用户看的对比信息 */
+export interface ImportPreview {
+  mode: ImportMode
+  txCount: number
+  categoryCount: number
+  dateFrom: string | null
+  dateTo: string | null
+  /** 合并模式：会新增 / 更新 / 完全相同的笔数 */
+  toAdd: number
+  toUpdate: number
+  unchanged: number
+  /** 覆盖模式：会被替换掉的现有记录数 */
+  replaceCount: number
+  warnings: string[]
+}
+
+/** 导入结果 */
+export interface ImportOutcome {
+  mode: ImportMode
+  added: number
+  updated: number
+  unchanged: number
+  /** 导入后账本总记录数 */
+  total: number
+}
+
