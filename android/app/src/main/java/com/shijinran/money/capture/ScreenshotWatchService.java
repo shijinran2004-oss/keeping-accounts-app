@@ -37,8 +37,10 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -59,8 +61,14 @@ public class ScreenshotWatchService extends Service {
     private static final String TAG = "SnoopyCapture";
     private static final int MAX_SIDE = 1280;
     private static final long HISTORY_GUARD_MS = 10_000L;
+    /** 连拍多张时，8 秒内不再重复振动/响铃，只更新同一条通知 */
+    private static final long QUIET_VIBRATE_MS = 8_000L;
+    private static final String GROUP_WATCH = "watch";
+    private static final String GROUP_FOUND = "found";
 
     private final ExecutorService io = Executors.newSingleThreadExecutor();
+    /** 一次截图会触发好几次 onChange，扫一遍就够，别把队列塞满。 */
+    private final AtomicBoolean scanScheduled = new AtomicBoolean(false);
     private ContentObserver observer;
     private long startedAt;
 
@@ -76,7 +84,7 @@ public class ScreenshotWatchService extends Service {
         io.execute(() -> {
             // 先把 OCR 模型加载好，第一张截图就不用等初始化
             OcrEngineHolder.warmUp(this);
-            scheduleScan(0);
+            requestScan();
         });
     }
 
@@ -112,6 +120,8 @@ public class ScreenshotWatchService extends Service {
                 .setContentText("截屏后弹出通知，点「确认记录」才入账")
                 .setOngoing(true)
                 .setPriority(NotificationCompat.PRIORITY_MIN)
+                // 单独一个 group：系统就不会把它和「识别到 ¥X」折叠成一个分组
+                .setGroup(GROUP_WATCH)
                 .setContentIntent(openApp(null, 10))
                 .build();
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -146,15 +156,27 @@ public class ScreenshotWatchService extends Service {
             @Override
             public void onChange(boolean selfChange, Uri uri) {
                 Log.d(TAG, "observer change " + uri);
-                scheduleScan(0);
+                requestScan();
             }
         };
         getContentResolver().registerContentObserver(
                 MediaStore.Images.Media.EXTERNAL_CONTENT_URI, true, observer);
     }
 
+    /**
+     * 用 DATE_ADDED 当游标，而不是 _ID：
+     * 实测媒体库会回收被删掉的 _ID（新截图拿到比最大 ID 更小的号），
+     * 只要按「_ID > 上次的 ID」去查，就会永远漏掉那张截图。
+     */
     private boolean scanNewShots() {
-        long last = CaptureStore.lastId(this);
+        long nowSec = System.currentTimeMillis() / 1000L;
+        long lastSeen = CaptureStore.lastSeenAt(this);
+        // 第一次跑、或者系统时间被往回调过，就从现在开始，别去翻旧账
+        if (lastSeen <= 0 || lastSeen > nowSec + 60) {
+            lastSeen = nowSec;
+            CaptureStore.setLastSeenAt(this, lastSeen);
+        }
+        Set<Long> seen = CaptureStore.seenIds(this);
         int handled = 0;
         ContentResolver resolver = getContentResolver();
         String[] projection = new String[] {
@@ -162,21 +184,30 @@ public class ScreenshotWatchService extends Service {
                 MediaStore.Images.Media.DATE_ADDED,
                 MediaStore.Images.Media.DISPLAY_NAME,
         };
-        String selection = MediaStore.Images.Media._ID + " > ?";
-        String[] args = new String[] { String.valueOf(last) };
+        String selection = MediaStore.Images.Media.DATE_ADDED + " >= ?";
+        String[] args = new String[] { String.valueOf(lastSeen) };
+        String order = MediaStore.Images.Media.DATE_ADDED + " ASC, "
+                + MediaStore.Images.Media._ID + " ASC";
         Cursor cursor = null;
         try {
             cursor = resolver.query(MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
-                    projection, selection, args, MediaStore.Images.Media._ID + " ASC");
+                    projection, selection, args, order);
             if (cursor == null) return false;
             int idCol = cursor.getColumnIndexOrThrow(MediaStore.Images.Media._ID);
             int dateCol = cursor.getColumnIndexOrThrow(MediaStore.Images.Media.DATE_ADDED);
             int nameCol = cursor.getColumnIndexOrThrow(MediaStore.Images.Media.DISPLAY_NAME);
             while (cursor.moveToNext() && !io.isShutdown()) {
                 long id = cursor.getLong(idCol);
-                long addedMs = cursor.getLong(dateCol) * 1000L;
+                long addedSec = cursor.getLong(dateCol);
                 String name = cursor.getString(nameCol);
-                CaptureStore.setLastId(this, id);
+                if (seen.contains(id)) continue;
+                // 同一秒内可能有第二张截图，先记下来再判断，下次不会再重复处理
+                CaptureStore.addSeenId(this, id);
+                if (addedSec > lastSeen) {
+                    lastSeen = addedSec;
+                    CaptureStore.setLastSeenAt(this, lastSeen);
+                }
+                long addedMs = addedSec * 1000L;
                 if (addedMs < startedAt - HISTORY_GUARD_MS) continue;
                 if (!looksLikeScreenshot(name)) continue;
                 handleShot(id);
@@ -191,19 +222,47 @@ public class ScreenshotWatchService extends Service {
         return handled > 0;
     }
 
+    private void requestScan() {
+        if (!scanScheduled.compareAndSet(false, true)) return;
+        scheduleScan(0);
+    }
+
     /** MediaStore 的插入偶尔比系统广播晚一点，第一次没扫到就再试几次。 */
     private void scheduleScan(int attempt) {
         io.execute(() -> {
-            if (scanNewShots()) return;
-            if (attempt >= 10 || io.isShutdown()) return;
+            if (io.isShutdown()) {
+                scanScheduled.set(false);
+                return;
+            }
+            if (scanNewShots()) {
+                scanScheduled.set(false);
+                // 扫的过程中可能又来了新截图，顺手再看一眼（纯查询，很便宜）
+                requestScan();
+                return;
+            }
+            if (attempt >= 10) {
+                scanScheduled.set(false);
+                return;
+            }
             // 头一次先等 200ms（媒体库写入通常不到一秒），之后每 400ms 再试，最多等 4 秒
             long delay = attempt == 0 ? 200L : 400L;
             new Handler(Looper.getMainLooper()).postDelayed(() -> scheduleScan(attempt + 1), delay);
         });
     }
 
-    /** 第一次开启时先记下当前最大的 _ID，避免把以前的截图全部过一遍。 */
+    private void cancelFoundNotice() {
+        try {
+            NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+            if (nm != null) nm.cancel(NOTIFY_FOUND_ID);
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /** 第一次开启时先记下当前时间与最大的 _ID，避免把以前的截图全部过一遍。 */
     private void primeCursor() {
+        if (CaptureStore.lastSeenAt(this) <= 0) {
+            CaptureStore.setLastSeenAt(this, System.currentTimeMillis() / 1000L);
+        }
         if (CaptureStore.lastId(this) > 0) return;
         io.execute(() -> {
             Cursor cursor = null;
@@ -230,6 +289,7 @@ public class ScreenshotWatchService extends Service {
     }
 
     private void handleShot(long id) {
+        long begin = System.currentTimeMillis();
         Uri uri = ContentUris.withAppendedId(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, id);
         File saved = null;
         try {
@@ -250,9 +310,13 @@ public class ScreenshotWatchService extends Service {
                 // 聊天、网页之类没有金额的截图，静默跳过
                 saved.delete();
                 CaptureStore.clearPendingPath(this);
+                // 上一条提醒指向的截图已经被这次覆盖掉了，留着点开只会是空弹层，直接收走
+                cancelFoundNotice();
+                Log.d(TAG, "skip id=" + id + " no amount in " + (System.currentTimeMillis() - begin) + "ms");
                 return;
             }
             notifyFound(amount, saved.getAbsolutePath());
+            Log.d(TAG, "handled id=" + id + " ¥" + amount + " in " + (System.currentTimeMillis() - begin) + "ms");
             CaptureStore.setLastNoticeAt(this, System.currentTimeMillis());
         } catch (Throwable t) {
             Log.w(TAG, "handleShot failed: " + id, t);
@@ -354,6 +418,8 @@ public class ScreenshotWatchService extends Service {
      */
     private void notifyFound(String amount, String path) {
         String text = "点「确认记录」记账，点「取消」忽略这张截图";
+        // 连续截好几张时，只有第一条振动，避免口袋里的手机连震一串
+        boolean vibrate = System.currentTimeMillis() - CaptureStore.lastNoticeAt(this) > QUIET_VIBRATE_MS;
         NotificationCompat.Builder builder = new NotificationCompat.Builder(this, CHANNEL_FOUND)
                 .setSmallIcon(R.mipmap.ic_launcher)
                 .setContentTitle("识别到 ¥" + amount)
@@ -361,7 +427,9 @@ public class ScreenshotWatchService extends Service {
                 .setStyle(new NotificationCompat.BigTextStyle().bigText(text))
                 .setCategory(NotificationCompat.CATEGORY_MESSAGE)
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
-                .setDefaults(NotificationCompat.DEFAULT_VIBRATE)
+                .setGroup(GROUP_FOUND)
+                .setDefaults(vibrate ? NotificationCompat.DEFAULT_VIBRATE : 0)
+                .setSilent(!vibrate)
                 .setAutoCancel(true)
                 .setContentIntent(openApp(path, 11))
                 .addAction(0, "确认记录", openApp(path, 12))

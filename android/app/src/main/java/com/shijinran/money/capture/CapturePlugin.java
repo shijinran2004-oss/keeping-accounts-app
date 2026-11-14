@@ -1,7 +1,9 @@
 package com.shijinran.money.capture;
 
 import android.Manifest;
+import android.app.NotificationManager;
 import android.content.ClipData;
+import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
@@ -152,6 +154,13 @@ public class CapturePlugin extends Plugin {
     @PluginMethod
     public void disableWatch(PluginCall call) {
         CaptureStore.setEnabled(getContext(), false);
+        // 关掉以后不该留着「识别到 ¥X」和它指向的截图，否则点开是个没用的弹层
+        CaptureStore.clearPendingPath(getContext());
+        try {
+            NotificationManager nm = (NotificationManager) getContext().getSystemService(Context.NOTIFICATION_SERVICE);
+            if (nm != null) nm.cancel(ScreenshotWatchService.NOTIFY_FOUND_ID);
+        } catch (Throwable ignored) {
+        }
         try {
             getContext().stopService(new Intent(getContext(), ScreenshotWatchService.class));
         } catch (Throwable ignored) {

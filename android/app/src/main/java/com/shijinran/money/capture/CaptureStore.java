@@ -3,6 +3,9 @@ package com.shijinran.money.capture;
 import android.content.Context;
 import android.content.SharedPreferences;
 
+import java.util.HashSet;
+import java.util.Set;
+
 /**
  * 截图记账的本地开关与游标。用 SharedPreferences 而不是账本设置：
  * 它只描述「这台手机上的监听状态」，不属于账本数据，也不需要参与备份。
@@ -15,6 +18,9 @@ final class CaptureStore {
     private static final String KEY_PENDING = "pendingPath";
     private static final String KEY_SOURCE = "pendingSource";
     private static final String KEY_LAST_NOTICE = "lastNoticeAt";
+    private static final String KEY_LAST_SEEN = "lastSeenAt";
+    private static final String KEY_SEEN_IDS = "seenIds";
+    private static final int SEEN_IDS_KEEP = 40;
 
     private CaptureStore() {}
 
@@ -36,6 +42,45 @@ final class CaptureStore {
 
     static void setLastId(Context context, long id) {
         prefs(context).edit().putLong(KEY_LAST_ID, id).apply();
+    }
+
+    /** 已经扫到过的最大 DATE_ADDED（秒）。MediaStore 的 _ID 会被回收重用，不能当游标。 */
+    static long lastSeenAt(Context context) {
+        return prefs(context).getLong(KEY_LAST_SEEN, 0L);
+    }
+
+    static void setLastSeenAt(Context context, long seconds) {
+        prefs(context).edit().putLong(KEY_LAST_SEEN, seconds).apply();
+    }
+
+    /** 同一秒内的行会被重复查出来，用这组 id 去重。 */
+    static Set<Long> seenIds(Context context) {
+        Set<Long> ids = new HashSet<>();
+        String raw = prefs(context).getString(KEY_SEEN_IDS, "");
+        if (raw == null || raw.isEmpty()) return ids;
+        for (String part : raw.split(",")) {
+            if (part.isEmpty()) continue;
+            try {
+                ids.add(Long.parseLong(part));
+            } catch (NumberFormatException ignored) {
+            }
+        }
+        return ids;
+    }
+
+    static void addSeenId(Context context, long id) {
+        String raw = prefs(context).getString(KEY_SEEN_IDS, "");
+        if (raw == null) raw = "";
+        raw = raw.isEmpty() ? String.valueOf(id) : raw + "," + id;
+        String[] parts = raw.split(",");
+        StringBuilder sb = new StringBuilder();
+        int start = Math.max(0, parts.length - SEEN_IDS_KEEP);
+        for (int i = start; i < parts.length; i++) {
+            if (parts[i].isEmpty()) continue;
+            if (sb.length() > 0) sb.append(',');
+            sb.append(parts[i]);
+        }
+        prefs(context).edit().putString(KEY_SEEN_IDS, sb.toString()).apply();
     }
 
     static String pendingPath(Context context) {
