@@ -3,10 +3,8 @@ import type { CSSProperties } from 'react'
 import { Bookmark, ChevronRight, ReceiptText, Settings, Target } from 'lucide-react'
 import { DEFAULT_LEDGER_NAME, useLedger } from '../data'
 import {
-  addDays,
   categoryBreakdown,
   cycleRange,
-  cycleRangeLabel,
   daysBetween,
   formatDay,
   formatMonth,
@@ -14,6 +12,7 @@ import {
   greeting,
   inRange,
   moneyFlow,
+  nextPayday,
   salaryMonthLabel,
   toDateStr,
   weekdayLabel,
@@ -53,13 +52,13 @@ export function Home({
   }, [])
   const today = toDateStr(now)
   const ledgerName = state.settings.name?.trim() || DEFAULT_LEDGER_NAME
-  const payday = state.settings.payday ?? 1
-  const salaryLag = state.settings.salaryLag ?? 0
+  const payday = state.settings.payday ?? 15
+  const salaryLag = state.settings.salaryLag ?? 1
   const cycle = cycleRange(today, payday, salaryLag)
   const cycleTxs = inRange(state.txs, cycle.start, cycle.end)
   const flow = moneyFlow(state.settings, cycleTxs, today, cycle)
   const salaryLabel = salaryMonthLabel(cycle.salaryMonth)
-  const daysToPayday = Math.max(1, daysBetween(today, addDays(cycle.end, 1)))
+  const daysToPayday = Math.max(0, daysBetween(today, nextPayday(today, payday)))
   const recent = [...state.txs]
     .sort((a, b) => b.date.localeCompare(a.date) || b.createdAt - a.createdAt)
     .slice(0, 5)
@@ -121,16 +120,17 @@ export function Home({
           </span>
           <div className="og-card-copy">
             <span className="og-eyebrow">
-              {formatMonth(cycle.start)}账期 · 已用 {formatPercent(spentPct)}
+              {formatMonth(cycle.start)} · 已用 {formatPercent(spentPct)}
             </span>
-            <h2>本期预算</h2>
+            <h2>本月预算</h2>
           </div>
           <button className="og-icon-btn" onClick={onGoStats} aria-label="查看统计" type="button">
             <ChevronRight size={16} strokeWidth={2} />
           </button>
         </div>
         <p className="og-cycle">
-          {cycleRangeLabel(cycle.start, cycle.end)} · {salaryLabel} · {daysToPayday} 天后发薪
+          {salaryLabel} · {payday} 号到账 ·{' '}
+          {daysToPayday === 0 ? '今天发薪' : `${daysToPayday} 天后发薪`}
         </p>
 
         <div className="og-meters">
@@ -158,7 +158,7 @@ export function Home({
           </div>
           <div className="og-meter is-green">
             <div className="og-meter-top">
-              <span>本期还剩</span>
+              <span>本月还剩</span>
               <b>
                 ¥{yuan(Math.max(0, flow.remaining))} <em>可用</em>
               </b>

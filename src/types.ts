@@ -77,9 +77,11 @@ export interface Settings {
   payday?: number
   /** 工资归属：0 = 当月发，1 = 次月发上月 */
   salaryLag?: 0 | 1
+  /** 是否由用户明确选过发薪日；旧数据缺这个字段时按 15 号 / 次月发上月 */
+  paydaySet?: boolean
 }
 
-/** 一个账期（发薪日到下次发薪日前一天） */
+/** 一个预算月（自然月 1 号到月末），salaryMonth 是这笔工资归属的月份 */
 export interface CycleRange {
   start: string
   end: string

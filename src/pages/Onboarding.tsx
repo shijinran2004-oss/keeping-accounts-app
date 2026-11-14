@@ -9,8 +9,8 @@ export function Onboarding() {
   const { saveSettings } = useLedger()
   const [salary, setSalary] = useState('')
   const [fixed, setFixed] = useState('')
-  const [payday, setPayday] = useState('1')
-  const [lag, setLag] = useState<0 | 1>(0)
+  const [payday, setPayday] = useState('15')
+  const [lag, setLag] = useState<0 | 1>(1)
 
   const clean = (v: string) => {
     const s = v.replace(/[^\d.]/g, '')
@@ -22,8 +22,9 @@ export function Onboarding() {
     saveSettings({
       salary: skip ? 0 : parseYuan(salary),
       fixedCost: skip ? 0 : parseYuan(fixed),
-      payday: skip ? 1 : Math.min(31, Math.max(1, Number(payday) || 1)),
-      salaryLag: skip ? 0 : lag,
+      payday: skip ? 15 : Math.min(31, Math.max(1, Number(payday) || 15)),
+      salaryLag: skip ? 1 : lag,
+      paydaySet: !skip,
       onboarded: true,
     })
     tapSuccess()
@@ -119,8 +120,8 @@ export function Onboarding() {
           </div>
           <p className="ob-hint">
             {lag === 1
-              ? '例如 11 月 15 日到账的是 10 月工资，预算从 11/15 用到 12/14。'
-              : '预算从发薪日开始，到下次发薪日前一天结束。'}
+              ? '例如 11 月 15 日到账的是 10 月工资；11 月整月都按 10 月工资算。'
+              : '例如 11 月 15 日到账的是 11 月工资；11 月整月都按 11 月工资算。'}
           </p>
         </div>
       </div>

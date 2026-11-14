@@ -108,28 +108,31 @@ function paydayDate(year: number, month: number, payday: number): Date {
   return new Date(year, month, day)
 }
 
-/** 当前日期所在的账期：发薪日到下次发薪日前一天 */
-export function cycleRange(s: string, payday = 1, salaryLag = 0): CycleRange {
+/** 预算月：自然月 1 号到月末；工资归属由 salaryLag 决定，发薪日只影响哪天到账 */
+export function cycleRange(s: string, _payday = 1, salaryLag = 0): CycleRange {
   const d = parseDate(s)
-  const thisPay = paydayDate(d.getFullYear(), d.getMonth(), payday)
-  let start = thisPay
-  if (toDateStr(d) < toDateStr(thisPay)) {
-    start = paydayDate(d.getFullYear(), d.getMonth() - 1, payday)
-  }
-  const nextPay = paydayDate(start.getFullYear(), start.getMonth() + 1, payday)
-  const salaryMonth = toDateStr(new Date(start.getFullYear(), start.getMonth() - (salaryLag ? 1 : 0), 1))
+  const start = new Date(d.getFullYear(), d.getMonth(), 1)
+  const end = new Date(d.getFullYear(), d.getMonth() + 1, 0)
+  const salaryMonth = new Date(d.getFullYear(), d.getMonth() - (salaryLag ? 1 : 0), 1)
   return {
     start: toDateStr(start),
-    end: addDays(toDateStr(nextPay), -1),
-    salaryMonth,
+    end: toDateStr(end),
+    salaryMonth: toDateStr(salaryMonth),
   }
 }
 
-/** 把账期起始日往前/后挪 n 个发薪周期 */
-export function shiftCycle(s: string, n: number, payday = 1): string {
+/** 下一个发薪日（今天就是发薪日时返回今天） */
+export function nextPayday(s: string, payday = 1): string {
   const d = parseDate(s)
-  const base = new Date(d.getFullYear(), d.getMonth() + n, 1)
-  return toDateStr(paydayDate(base.getFullYear(), base.getMonth(), payday))
+  const thisPay = paydayDate(d.getFullYear(), d.getMonth(), payday)
+  if (toDateStr(d) <= toDateStr(thisPay)) return toDateStr(thisPay)
+  return toDateStr(paydayDate(d.getFullYear(), d.getMonth() + 1, payday))
+}
+
+/** 把预算月往前/后挪 n 个月 */
+export function shiftCycle(s: string, n: number, _payday = 1): string {
+  const d = parseDate(s)
+  return toDateStr(new Date(d.getFullYear(), d.getMonth() + n, 1))
 }
 
 /** 例如「10 月工资」 */

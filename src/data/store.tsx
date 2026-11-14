@@ -19,7 +19,7 @@ export function freshState(): LedgerState {
     version: 1,
     txs: [],
     categories: DEFAULT_CATEGORIES.map((c) => ({ ...c })),
-    settings: { salary: 0, fixedCost: 0, onboarded: false, name: DEFAULT_LEDGER_NAME, payday: 1, salaryLag: 0 },
+    settings: { salary: 0, fixedCost: 0, onboarded: false, name: DEFAULT_LEDGER_NAME, payday: 15, salaryLag: 1, paydaySet: false },
   }
 }
 
@@ -60,8 +60,9 @@ function normalize(raw: unknown): LedgerState | null {
       avatar: typeof s.avatar === 'string' && /^data:image\//.test(s.avatar) ? s.avatar : undefined,
       theme: isThemeMode(s.theme) ? s.theme : 'dark',
       accent: isAccentKey(s.accent) ? s.accent : 'lime',
-      payday: Math.min(31, Math.max(1, Math.round(Number(s.payday) || 1))),
-      salaryLag: s.salaryLag === 1 ? 1 : 0,
+      payday: s.paydaySet === true ? Math.min(31, Math.max(1, Math.round(Number(s.payday) || 15))) : 15,
+      salaryLag: s.paydaySet === true && s.salaryLag === 1 ? 1 : 0,
+      paydaySet: s.paydaySet === true,
     },
   }
 }

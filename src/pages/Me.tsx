@@ -32,12 +32,12 @@ import {
   backupJson,
   centsToYuanInput,
   cycleRange,
-  cycleRangeLabel,
   daysBetween,
   fileToAvatar,
   exportBackupFile,
   formatBytes,
   formatMoney,
+  formatMonth,
   parseYuan,
   readBackupFile,
   salaryMonthLabel,
@@ -200,13 +200,13 @@ export function Me() {
           />
           <Row
             icon={CalendarClock}
-            label="发薪日与账期"
-            sub={(state.settings.salaryLag ?? 0) === 1 ? '次月发上月，按到账日切账期' : '当月发，按到账日切账期'}
-            value={`${state.settings.payday ?? 1} 号`}
+            label="发薪日与工资归属"
+            sub={(state.settings.salaryLag ?? 0) === 1 ? '次月发上月，预算按自然月算' : '当月发，预算按自然月算'}
+            value={`${state.settings.payday ?? 15} 号`}
             onClick={() => setPayOpen(true)}
           />
         </div>
-        <p className="field-note">预算从发薪日开始，到下次发薪日前一天结束；不再按自然月重置。</p>
+        <p className="field-note">预算按自然月算；发薪日只决定工资哪天到账。</p>
       </section>
 
       <section className="section">
@@ -230,7 +230,7 @@ export function Me() {
       <footer className="me-foot">
         <img className="me-brand-icon" src={appIcon} alt="使劲燃的钱" />
         <div>
-          <b>使劲燃的钱 v1.1.14</b>
+          <b>使劲燃的钱 v1.1.15</b>
           <p><ShieldCheck size={13} strokeWidth={1.6} /> 数据只保存在这台手机上，不上传</p>
         </div>
         <button
@@ -399,12 +399,12 @@ function BudgetSheet({ open, onClose }: { open: boolean; onClose: () => void }) 
 function PaydaySheet({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { state, saveSettings } = useLedger()
   const toast = useToast()
-  const [day, setDay] = useState('1')
-  const [lag, setLag] = useState<0 | 1>(0)
+  const [day, setDay] = useState('15')
+  const [lag, setLag] = useState<0 | 1>(1)
 
   useEffect(() => {
     if (!open) return
-    setDay(String(state.settings.payday ?? 1))
+    setDay(String(state.settings.payday ?? 15))
     setLag(state.settings.salaryLag === 1 ? 1 : 0)
   }, [open, state.settings.payday, state.settings.salaryLag])
 
@@ -414,7 +414,7 @@ function PaydaySheet({ open, onClose }: { open: boolean; onClose: () => void }) 
   const cycleDays = daysBetween(cycle.start, cycle.end) + 1
 
   return (
-    <Sheet open={open} onClose={onClose} title="发薪日与账期">
+    <Sheet open={open} onClose={onClose} title="发薪日与工资归属">
       <div className="sheet-body form">
         <label className="field">
           <span>每月发薪日</span>
@@ -455,16 +455,16 @@ function PaydaySheet({ open, onClose }: { open: boolean; onClose: () => void }) 
           </div>
           <small>
             {lag === 1
-              ? '例如 11 月 15 日到账的是 10 月工资；预算从 11/15 用到 12/14。'
-              : '例如 11 月 15 日到账的是 11 月工资；预算从 11/15 用到 12/14。'}
+              ? '例如 11 月 15 日到账的是 10 月工资；11 月整月都按 10 月工资做预算。'
+              : '例如 11 月 15 日到账的是 11 月工资；11 月整月都按 11 月工资做预算。'}
           </small>
         </div>
 
         <div className="pay-preview">
-          <span>按这个设置，今天在</span>
-          <b>{cycleRangeLabel(cycle.start, cycle.end)}</b>
+          <span>按这个设置，预算月是</span>
+          <b>{formatMonth(cycle.start)} · {salaryMonthLabel(cycle.salaryMonth)}</b>
           <em>
-            {salaryMonthLabel(cycle.salaryMonth)} · 共 {cycleDays} 天
+            共 {cycleDays} 天 · {safeDay} 号到账
           </em>
         </div>
 
@@ -472,8 +472,8 @@ function PaydaySheet({ open, onClose }: { open: boolean; onClose: () => void }) 
           type="button"
           className="btn-primary"
           onClick={() => {
-            saveSettings({ payday: safeDay, salaryLag: lag })
-            toast('账期已更新', 'success')
+            saveSettings({ payday: safeDay, salaryLag: lag, paydaySet: true })
+            toast('发薪日已更新', 'success')
             onClose()
           }}
         >

@@ -4,7 +4,6 @@ import { findCategory, useLedger } from '../data'
 import {
   addDays,
   cycleRange,
-  cycleRangeLabel,
   dailySeries,
   daysBetween,
   eachDay,
@@ -52,7 +51,7 @@ export function Ledger({ onOpenTx, onAdd }: { onOpenTx: (tx: Tx) => void; onAdd:
   )
   const comparePct = prevSpent > 0 ? ((sum.expense - prevSpent) / prevSpent) * 100 : null
 
-  // 日历格子：从账期第一天所在周的周一开始，补满整周
+  // 日历格子：从当月第一天所在周的周一开始，补满整周
   const gridStart = startOfWeek(range.start)
   const lead = daysBetween(gridStart, range.start)
   const totalDays = daysBetween(range.start, range.end) + 1
@@ -118,7 +117,7 @@ export function Ledger({ onOpenTx, onAdd }: { onOpenTx: (tx: Tx) => void; onAdd:
       </header>
 
       <SparkSummary
-        label={isCurrent ? '本期支出' : `${parseDate(range.start).getMonth() + 1} 月支出`}
+        label={isCurrent ? '本月支出' : `${parseDate(range.start).getMonth() + 1} 月支出`}
         spent={sum.expense}
         income={sum.income}
         balance={sum.income - sum.expense}
@@ -129,8 +128,8 @@ export function Ledger({ onOpenTx, onAdd }: { onOpenTx: (tx: Tx) => void; onAdd:
 
       <MonthCalendar
         month={range.start}
-        title={`${formatMonth(range.start)}账期`}
-        caption={`${cycleRangeLabel(range.start, range.end)} · ${salaryMonthLabel(range.salaryMonth)}`}
+        title={formatMonth(range.start)}
+        caption={`${salaryMonthLabel(range.salaryMonth)} · ${payday} 号到账`}
         selected={selected}
         cells={cells}
         mode={mode}

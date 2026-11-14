@@ -91,7 +91,7 @@ openGym 是 AGPL-3.0，这里只借鉴版式与间距，没有复制它的代码
 | 改头像裁剪尺寸或格式 | `src/utils/avatar.ts` 的 `fileToAvatar` |
 | 改主题 / 强调色预设 | `src/utils/theme.ts` 的 `ACCENTS`，配色值在 `styles/og.css` 顶部 |
 | 改账本名字 / 问候语 | `Settings.name`（默认值 `DEFAULT_LEDGER_NAME`）+ `Home.tsx` 里的 `greeting(now)` 与 30 秒时钟 |
-| 改发薪日 / 账期 | `Settings.payday` / `Settings.salaryLag` + `utils/date.ts` 的 `cycleRange` / `shiftCycle`；首页、统计、明细都从账期取值 |
+| 改发薪日 / 工资归属 | `Settings.payday` / `Settings.salaryLag` + `utils/date.ts` 的 `cycleRange` / `shiftCycle` / `nextPayday`；预算按自然月，`salaryMonth` 决定工资归属 |
 | 加一个持久化字段 | `src/types.ts` 的 `LedgerState` + `store.tsx` 的 `freshState` / `normalize` |
 | 加内置分类 | `src/data/categories.ts` |
 
@@ -105,10 +105,10 @@ openGym 是 AGPL-3.0，这里只借鉴版式与间距，没有复制它的代码
 ```
 
 读的时候反过来：`useLedger().state` → `utils/stats.ts` 按区间汇总 → 页面渲染。
-统计口径集中在 `moneyFlow()`：`可支配 = 本期工资 + 其他收入 − 固定支出`，`剩余 = 可支配 − 日常支出`。账期由 `cycleRange(date, payday, salaryLag)` 决定，`salaryMonth` 是这笔钱归属的月份；`moneyFlow` 的 `daysElapsed` / `daysLeft` 按账期天数而不是自然月天数计算。
+统计口径集中在 `moneyFlow()`：`可支配 = 本期工资 + 其他收入 − 固定支出`，`剩余 = 可支配 − 日常支出`。预算月由 `cycleRange(date, payday, salaryLag)` 决定（现在就是自然月），`salaryMonth` 是这笔钱归属的月份；`moneyFlow` 的 `daysElapsed` / `daysLeft` 按当月天数计算。发薪日只通过 `nextPayday()` 影响到账倒计时和「几号到账」文案。
 
 ## 版本与构建
 
-- `versionCode 24` / `versionName 1.1.14`（`android/app/build.gradle`）
+- `versionCode 25` / `versionName 1.1.15`（`android/app/build.gradle`）
 - 数据版本 `LedgerState.version = 1`，`normalize()` 会在读取时补全新增的内置分类
 - 打包：`npm run build && npx cap copy android`，再 `gradle assembleDebug`

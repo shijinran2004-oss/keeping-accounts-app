@@ -39,11 +39,11 @@ export function MonthCalendar({
     <section className="cal-card" aria-label="账单日历">
       <div className="cal-head">
         <div className="cal-month">
-          <button type="button" className="cal-nav" onClick={() => onChangeMonth(-1)} aria-label="上一个账期">
+          <button type="button" className="cal-nav" onClick={() => onChangeMonth(-1)} aria-label="上个月">
             <ChevronLeft size={17} strokeWidth={1.9} />
           </button>
           <span className="cal-title">{title ?? formatMonth(month)}</span>
-          <button type="button" className="cal-nav" onClick={() => onChangeMonth(1)} aria-label="下一个账期">
+          <button type="button" className="cal-nav" onClick={() => onChangeMonth(1)} aria-label="下个月">
             <ChevronRight size={17} strokeWidth={1.9} />
           </button>
           <button type="button" className="cal-today-jump" onClick={onToday}>
