@@ -19,7 +19,7 @@ function cellLabel(cell: CalendarCell): string {
  * 可以切上/下月、回到今天、只展开选中那一周。
  */
 /**
- * 明细月历：7 列网格、发薪日金边、到发薪日的四级绿、金额/圆点两种模式。
+ * 明细月历：7 列网格、发薪日金边、到发薪日的四级强调色、金额/圆点两种模式。
  * 日期、净额和 payLevel 都由 Ledger 算好传入，组件本身不读账本。
  */
 export function MonthCalendar({

@@ -7,7 +7,7 @@
 - 纯本地存储，不联网、不上传、无广告、无账号
 - 深色 / 浅色 / 跟随系统 + 8 个强调色的可换主题，新装默认浅色；炭灰卡片、16px 间距、鸿蒙 Sans 中文 + Nunito 圆体数字；版式与主题系统参考 openGym，代码全部重写
 - 冷启动直接渐显存钱罐海报：深青底上海报淡入、轻微拉焦，停留后虚化交给首页；不再先闪一下桌面图标
-- 安装包：`release/使劲燃的钱-1.1.24.apk`（约 5.0 MB，minSdk 23 / targetSdk 35）
+- 安装包：`release/使劲燃的钱-1.1.25.apk`（约 5.0 MB，minSdk 23 / targetSdk 35）
 
 ## 功能
 
@@ -16,7 +16,7 @@
 | 启动 | 原生 splash 用纯色空白（不显示图标）；进入后 `LaunchScreen` 让海报从透明 + 10px 模糊渐显并拉焦，停留 1.3s 后虚化淡出，首页接手 |
 | 首页 | 狗屋表头（按预算换睡觉/警惕/告急，点一下跳舞）、按手机时间问候、账本名字、本月预算三条进度、常记分类、最近流水 |
 | 记一笔 | 自研 4×4 算式键盘（+ / − 实时合计）、金额分位显示、18 个内置分类（12 支出 / 6 收入）、备注、日期 |
-| 明细 | 月历（每天带净额，可切金额/圆点、收起成周视图）；发薪日金色圈标记，今天到下次发薪日之间用 GitHub contribution 四级绿填充，并显示到账日；上/下月与「今」、点日期看当天流水；点任意一笔先看详情，再选修改或删除 |
+| 明细 | 月历（每天带净额，可切金额/圆点、收起成周视图）；发薪日金币角标，今天到下次发薪日之间用当前强调色的四级渐变填充，并显示到账日；上/下月与「今」、点日期看当天流水；点任意一笔先看详情，再选修改或删除 |
 | 统计 | 日 / 周 / 月三档；总支出与环比；每日柱状图；分类环形图与排行；月度预算占用 |
 | 我的 | 头像（从手机相册选图，本地裁成 384×384；底部品牌角标固定用 App 默认图标，不跟头像变）、账本名字（点名字改，同步首页）、外观（深色 / 浅色 / 跟随系统、8 个强调色）、月工资、固定支出、分类管理、备份（导出成 .json 文件 / 从文件恢复）、清空、重置 |
 | 分类图标 | 设置 → 分类管理，点任意分类左侧的图标就能换；内置分类也能改。选择器按分类颜色渲染高光徽章，改完立刻同步记账、明细、统计 |
@@ -96,7 +96,7 @@ JAVA_HOME='C:\Program Files\Java\jdk-17' /c/Android/gradle-8.9/bin/gradle.bat -p
 | --- | --- | --- |
 | ![](docs/screenshots/web/02-home.png) | ![](docs/screenshots/web/09-ledger.png) | ![](docs/screenshots/web/13-success.png) |
 
-浅色主题与强调色设置见 `docs/screenshots/web/16-theme-light.png`，流水详情见 `docs/screenshots/web/17-tx-detail.png`，改账本名字见 `docs/screenshots/web/18-name.png`，发薪日与实际到账日设置见 `docs/screenshots/web/19-payday.png` 与 `20-onboarding-payday.png`，分类图标选择器见 `docs/screenshots/web/22-category-icon.png`；浏览器截图在 `docs/screenshots/web/`（23 张，390×844@2x，含备份弹层、发薪日设置、带发薪日的引导页、分类图标选择器与新的开屏海报）。`docs/screenshots/android/` 里保留的是 1.0 纸色版真机图；1.1 版打包后没有可用的模拟器（Windows 提交内存不足），原生截图未重拍。
+浅色主题与强调色设置见 `docs/screenshots/web/16-theme-light.png`，流水详情见 `docs/screenshots/web/17-tx-detail.png`，改账本名字见 `docs/screenshots/web/18-name.png`，发薪日与实际到账日设置见 `docs/screenshots/web/19-payday.png` 与 `20-onboarding-payday.png`，分类图标选择器见 `docs/screenshots/web/22-category-icon.png`，强调色日历见 `docs/screenshots/web/23-accent-calendar.png`；浏览器截图在 `docs/screenshots/web/`（24 张，390×844@2x，含备份弹层、发薪日设置、带发薪日的引导页、分类图标选择器、强调色日历与新的开屏海报）。`docs/screenshots/android/` 里保留的是 1.0 纸色版真机图；1.1 版打包后没有可用的模拟器（Windows 提交内存不足），原生截图未重拍。
 
 ## 设计说明
 

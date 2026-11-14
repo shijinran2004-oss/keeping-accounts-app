@@ -111,7 +111,7 @@ App / main
 | 加一个计算口径 | `src/lib/stats.ts` |
 | 改备份文件名或导出方式 | `src/lib/backup.ts` |
 | 改头像裁剪 | `src/lib/avatar.ts` 的 `fileToAvatar` |
-| 改主题 / 强调色 | `src/lib/theme.ts` 的 `ACCENTS` + `styles/og.css` 顶部 token |
+| 改主题 / 强调色 | `src/lib/theme.ts` 的 `ACCENTS` + `styles/og.css` 顶部 token；明细日历倒计时用 `--accent` 混出四级 |
 | 改发薪日 / 工资归属 | `Settings.payday` / `salaryLag` / `paydayOverrides` + `lib/date.ts` 的 `cycleRange` / `effectivePayday` / `nextPayday` |
 | 加一个持久化字段 | `types.ts` 的 `LedgerState` + `store.tsx` 的 `freshState` / `normalize` |
 | 加内置分类 | `src/data/categories.ts` |

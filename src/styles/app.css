@@ -1130,10 +1130,10 @@ textarea:focus-visible {
 }
 
 .cal-cell.is-sel {
-  background: #15803d;
-  color: #fff;
+  background: var(--accent);
+  color: var(--on-accent);
   opacity: 1;
-  box-shadow: 0 4px 12px rgba(21, 128, 61, 0.28);
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--accent) 34%, transparent);
 }
 
 .cal-num {
@@ -1167,11 +1167,11 @@ textarea:focus-visible {
 }
 
 .cal-cell.is-sel .cal-amt {
-  color: rgba(247, 241, 227, 0.64);
+  color: color-mix(in srgb, var(--on-accent) 64%, transparent);
 }
 
 .cal-cell.is-sel .cal-amt.is-pos {
-  color: #b9cfa9;
+  color: color-mix(in srgb, var(--on-accent) 82%, transparent);
 }
 
 .cal-amt.is-blank,
@@ -1196,11 +1196,11 @@ textarea:focus-visible {
 }
 
 .cal-cell.is-sel .cal-dot {
-  background: rgba(247, 241, 227, 0.68);
+  background: color-mix(in srgb, var(--on-accent) 68%, transparent);
 }
 
 .cal-cell.is-sel .cal-dot.is-pos {
-  background: #b9cfa9;
+  background: color-mix(in srgb, var(--on-accent) 84%, transparent);
 }
 
 .cal-pay {
@@ -1277,17 +1277,29 @@ textarea:focus-visible {
 }
 
 .cal-cell.is-pay.is-sel {
-  background: #15803d;
-  border-color: #15803d;
-  color: #fff;
-  box-shadow: 0 4px 12px rgba(21, 128, 61, 0.28);
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--accent) 34%, transparent);
 }
 
-/* 发薪倒计时用 GitHub contribution 色板的四级绿 */
-.cal-cell.pay-l1:not(.is-sel) { background: #9be9a8; color: #0b2e13; }
-.cal-cell.pay-l2:not(.is-sel) { background: #40c463; color: #062b13; }
-.cal-cell.pay-l3:not(.is-sel) { background: #30a14e; color: #ffffff; }
-.cal-cell.pay-l4:not(.is-sel) { background: #216e39; color: #ffffff; }
+/* 发薪倒计时：用当前强调色混出由浅到深的四级 */
+.cal-cell.pay-l1:not(.is-sel) {
+  background: color-mix(in srgb, var(--accent) 16%, var(--card));
+  color: var(--ink);
+}
+.cal-cell.pay-l2:not(.is-sel) {
+  background: color-mix(in srgb, var(--accent) 34%, var(--card));
+  color: var(--ink);
+}
+.cal-cell.pay-l3:not(.is-sel) {
+  background: color-mix(in srgb, var(--accent) 56%, var(--card));
+  color: var(--ink);
+}
+.cal-cell.pay-l4:not(.is-sel) {
+  background: var(--accent);
+  color: var(--on-accent);
+}
 
 .cal-cell.pay-l1:not(.is-sel) .cal-amt,
 .cal-cell.pay-l2:not(.is-sel) .cal-amt,
@@ -1320,10 +1332,19 @@ textarea:focus-visible {
   opacity: 0.6;
 }
 
-:root[data-theme="dark"] .cal-cell.pay-l1:not(.is-sel) { background: #0e4429; color: #d7f5dd; }
-:root[data-theme="dark"] .cal-cell.pay-l2:not(.is-sel) { background: #006d32; color: #d7f5dd; }
-:root[data-theme="dark"] .cal-cell.pay-l3:not(.is-sel) { background: #26a641; color: #04170a; }
-:root[data-theme="dark"] .cal-cell.pay-l4:not(.is-sel) { background: #39d353; color: #04170a; }
+:root[data-theme="dark"] .cal-cell.pay-l1:not(.is-sel) {
+  background: color-mix(in srgb, var(--accent) 12%, var(--card));
+}
+:root[data-theme="dark"] .cal-cell.pay-l2:not(.is-sel) {
+  background: color-mix(in srgb, var(--accent) 24%, var(--card));
+}
+:root[data-theme="dark"] .cal-cell.pay-l3:not(.is-sel) {
+  background: color-mix(in srgb, var(--accent) 38%, var(--card));
+}
+:root[data-theme="dark"] .cal-cell.pay-l4:not(.is-sel) {
+  background: var(--accent);
+  color: var(--on-accent);
+}
 
 .cal-cell.is-pay.is-sel {
   background: var(--accent);
@@ -1350,7 +1371,23 @@ textarea:focus-visible {
   height: 6px;
   border-radius: 2px;
   margin-left: 2px;
-  background: linear-gradient(90deg, #9be9a8, #40c463, #30a14e, #216e39);
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--accent) 16%, var(--card)),
+    color-mix(in srgb, var(--accent) 34%, var(--card)),
+    color-mix(in srgb, var(--accent) 56%, var(--card)),
+    var(--accent)
+  );
+}
+
+:root[data-theme="dark"] .cal-legend-fill {
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--accent) 12%, var(--card)),
+    color-mix(in srgb, var(--accent) 24%, var(--card)),
+    color-mix(in srgb, var(--accent) 38%, var(--card)),
+    var(--accent)
+  );
 }
 
 .cal-today-dot {

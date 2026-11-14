@@ -81,6 +81,7 @@ export function Ledger({ onOpenTx, onAdd }: { onOpenTx: (tx: Tx) => void; onAdd:
     }
     return eachDay(gridStart, gridEnd).map((date) => {
       const row = stats.get(date)
+      const isPayday = date >= range.start && date <= range.end && isPaydayDate(date, paydayDay, paydayOverrides)
       return {
         date,
         day: parseDate(date).getDate(),
@@ -88,9 +89,10 @@ export function Ledger({ onOpenTx, onAdd }: { onOpenTx: (tx: Tx) => void; onAdd:
         expense: row?.expense ?? 0,
         income: row?.income ?? 0,
         count: row?.count ?? 0,
-        isPayday: date >= range.start && date <= range.end && isPaydayDate(date, paydayDay, paydayOverrides),
+        isPayday,
+        // 发薪日自己用金币角标，不再叠倒计时色
         payLevel:
-          date >= today && date <= nextPay
+          !isPayday && date >= today && date <= nextPay
             ? Math.min(4, Math.max(1, Math.ceil(((daysBetween(today, date) + 1) / nextPaySpan) * 4)))
             : 0,
       }
