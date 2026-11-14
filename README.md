@@ -6,14 +6,14 @@
 
 - 纯本地存储，不联网、不上传、无广告、无账号
 - 深色 / 浅色 / 跟随系统 + 8 个强调色的可换主题，新装默认浅色；炭灰卡片、16px 间距、鸿蒙 Sans 中文 + Nunito 圆体数字；版式与主题系统参考 openGym，代码全部重写
-- 冷启动从桌面图标接力：存钱罐图标先落在深青底上，新海报从图标的圆角矩形里向外展开并对上焦，再虚化交给首页
+- 冷启动直接渐显存钱罐海报：深青底上海报淡入、轻微拉焦，停留后虚化交给首页；不再先闪一下桌面图标
 - 安装包：`release/使劲燃的钱-1.1.22.apk`（约 5.0 MB，minSdk 23 / targetSdk 35）
 
 ## 功能
 
 | 模块 | 内容 |
 | --- | --- |
-| 启动 | 原生启动图只保留存钱罐图标；进入后 `LaunchScreen` 让新海报从图标位置展开并拉焦，停留 1.35s 后虚化淡出，首页接手 |
+| 启动 | 原生 splash 用纯色空白（不显示图标）；进入后 `LaunchScreen` 让海报从透明 + 10px 模糊渐显并拉焦，停留 1.3s 后虚化淡出，首页接手 |
 | 首页 | 狗屋表头（按预算换睡觉/警惕/告急，点一下跳舞）、按手机时间问候、账本名字、本月预算三条进度、常记分类、最近流水 |
 | 记一笔 | 自研 4×4 算式键盘（+ / − 实时合计）、金额分位显示、18 个内置分类（12 支出 / 6 收入）、备注、日期 |
 | 明细 | 月历（每天带净额，可切金额/圆点、收起成周视图）；发薪日金色圈标记，今天到下次发薪日之间用 GitHub contribution 四级绿填充，并显示到账日；上/下月与「今」、点日期看当天流水；点任意一笔先看详情，再选修改或删除 |
@@ -55,7 +55,7 @@ src/
   ui/                   Money、TxRow、Charts、SparkSummary、MonthCalendar、Sheet、TabBar、Toast、Icon
   lib/                  money、date、stats、theme、backup、avatar、haptics、modal（纯函数 / 平台能力）
   styles/app.css        结构、组件与基础样式
-  styles/og.css         深色皮肤：token 覆盖、首页 / 底栏 / 各页面深色化（后加载）
+  styles/og.css         主题皮肤：深/浅 token、8 组强调色、页面覆盖（后加载）
 android/                Capacitor 生成的 Android 工程（已配好 SDK 35 / AGP 8.7.2）
 design/build_icon.py    桌面图标生成脚本（源图 design/icon-src/app-icon.png）
 design/build_brand.py   App 内印章生成脚本（源图 design/icon-src/mascot.png）
@@ -86,7 +86,7 @@ JAVA_HOME='C:\Program Files\Java\jdk-17' /c/Android/gradle-8.9/bin/gradle.bat -p
 
 > 当前为 debug 签名，可直接侧载安装；上架应用商店需要换成自己的 release keystore。
 
-桌面图标和 App 里的印章是两套资产。桌面图标走 `design/build_icon.py`，源图是 `design/icon-src/app-icon.png`：从四个角洪泛抠掉白底、保留原图的圆角，再铺 5 个密度的传统图标、圆形图标、自适应前景和单色层，favicon 也一并更新。自适应前景补了一层同色模糊底再铺满 108dp，圆形或方圆遮罩裁切时不会露出白边。启动海报是 `src/assets/launch-poster.png`（存钱罐插画，代码里由 `LaunchScreen` 从图标展开）；页头小狗印章仍走 `design/build_brand.py`，源图是 `design/icon-src/mascot.png`。
+桌面图标和 App 里的印章是两套资产。桌面图标走 `design/build_icon.py`，源图是 `design/icon-src/app-icon.png`：从四个角洪泛抠掉白底、保留原图的圆角，再铺 5 个密度的传统图标、圆形图标、自适应前景和单色层，favicon 也一并更新。自适应前景补了一层同色模糊底再铺满 108dp，圆形或方圆遮罩裁切时不会露出白边。启动海报是 `src/assets/launch-poster.png`（存钱罐插画，代码里由 `LaunchScreen` 直接渐显）；页头小狗印章仍走 `design/build_brand.py`，源图是 `design/icon-src/mascot.png`。
 换桌面图标：替换 `design/icon-src/app-icon.png` → `python design/build_icon.py` → `cap copy` 并重新打包。换启动海报：替换 `src/assets/launch-poster.png`；换页头印章：替换 `mascot.png` → `python design/build_brand.py`。图标、海报、印章三套资产互不覆盖。系统开了「主题图标」时，安卓会用自己的取色走 `ic_launcher_monochrome` 单色层，这是系统行为，不是图标本身的问题。
 
 ## 截图

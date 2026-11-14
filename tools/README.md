@@ -1,12 +1,13 @@
 # tools
 
-开发期的三个小工具，跟 App 本身没关系，但复现截图和看效果要靠它们。脚本里的路径都可以用环境变量覆盖，默认值就是这台机器的配置。
+开发期的四个小工具，跟 App 本身没关系，但复现截图、看效果和检查目录分层要靠它们。脚本里的路径都可以用环境变量覆盖，默认值就是这台机器的配置。
 
 | 脚本 | 干什么 | 怎么跑 |
 | --- | --- | --- |
-| `shots-web.cjs` | 用 Chrome 把 13 个页面拍一遍（390×844 @2x），存到 `docs/screenshots/web/` | 先 `npm run dev`，再 `node tools/shots-web.cjs` |
-| `shots-android.cjs` | 在真机/模拟器上拍 14 张，存到 `docs/screenshots/android/` | 设备已连 `adb`、APK 已安装，然后 `node tools/shots-android.cjs` |
+| `shots-web.cjs` | 用 Chrome 拍 13 张基础截图（390×844 @2x），存到 `docs/screenshots/web/` | 先 `npm run dev`，再 `node tools/shots-web.cjs` |
+| `shots-android.cjs` | 在真机/模拟器上拍 13 张，存到 `docs/screenshots/android/`（`00-launcher` / `00-splash` 为手工补拍） | 设备已连 `adb`、APK 已安装，然后 `node tools/shots-android.cjs` |
 | `preview.cjs` | 开一个手机尺寸的 Chrome 窗口，灌好演示数据，停在「记一笔」，改代码 HMR 实时反映 | 先 `npm run dev`，再 `node tools/preview.cjs` |
+| `check-structure.cjs` | 按 `types → lib → data/ui → sheets → pages` 检查越界引用和跨层深层 import | `node tools/check-structure.cjs`（或直接 `npm run check`） |
 
 两个截图脚本用同一份种子数据（`lib.cjs` 的 `seedTxs()`：2026 年 11 月，20 笔支出 + 1 笔奖金，月薪 12000 / 固定 3500），所以 Web 版和真机版的数字是一致的。
 
