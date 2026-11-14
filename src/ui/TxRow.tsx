@@ -1,7 +1,7 @@
 import type { Category, Tx } from '../types'
 import { CategoryIcon } from './Icon'
 import { Money } from './Money'
-import { relativeDay } from '../utils/date'
+import { relativeDay } from '../lib'
 import type React from 'react'
 
 export function TxRow({

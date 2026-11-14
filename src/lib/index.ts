@@ -5,7 +5,7 @@ export * from './money'
 export * from './date'
 export * from './stats'
 export { tap, tapSuccess } from './haptics'
-export { pushModal, popModal, closeTopModal } from './modalStack'
+export { pushModal, popModal, closeTopModal } from './modal'
 export { fileToAvatar } from './avatar'
 export {
   backupFileName,

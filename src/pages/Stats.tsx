@@ -3,30 +3,29 @@ import { ArrowDownRight, ArrowUpRight, ChevronLeft, ChevronRight, Minus, PieChar
 import { useLedger } from '../data'
 import {
   addDays,
+  categoryBreakdown,
   cycleRange,
+  dailySeries,
   daysBetween,
   eachDay,
   endOfWeek,
   formatDay,
+  formatMoneyShort,
   formatMonth,
+  formatPercent,
+  inRange,
+  moneyFlow,
   parseDate,
+  previousRange,
   shiftCycle,
   startOfWeek,
+  summarize,
   todayStr,
   weekdayLabel,
   weekdayShort,
-} from '../utils'
-import {
-  categoryBreakdown,
-  dailySeries,
-  inRange,
-  moneyFlow,
-  previousRange,
-  summarize,
-} from '../utils'
-import { formatMoneyShort, formatPercent } from '../utils'
+} from '../lib'
 import type { BarDatum, DonutSlice, StatsRange } from '../types'
-import { BarChart, Donut, Empty, Money, SectionTitle } from '../components'
+import { BarChart, Donut, Empty, Money, SectionTitle } from '../ui'
 
 export function Stats({ onGoMe }: { onGoMe: () => void }) {
   const { state } = useLedger()

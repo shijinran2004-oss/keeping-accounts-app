@@ -1,9 +1,9 @@
 import { useState } from 'react'
 import { ShieldCheck } from 'lucide-react'
 import { useLedger } from '../data'
-import { Seal } from '../components'
-import { parseYuan } from '../utils'
-import { tapSuccess } from '../utils'
+import { Seal } from '../ui'
+import { parseYuan } from '../lib'
+import { tapSuccess } from '../lib'
 
 export function Onboarding() {
   const { saveSettings } = useLedger()

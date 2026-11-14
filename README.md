@@ -7,7 +7,7 @@
 - 纯本地存储，不联网、不上传、无广告、无账号
 - 深色 / 浅色 / 跟随系统 + 8 个强调色的可换主题，新装默认浅色；炭灰卡片、16px 间距、鸿蒙 Sans 中文 + Nunito 圆体数字；版式与主题系统参考 openGym，代码全部重写
 - 冷启动从桌面图标接力：存钱罐图标先落在深青底上，新海报从图标的圆角矩形里向外展开并对上焦，再虚化交给首页
-- 安装包：`release/使劲燃的钱-1.1.21.apk`（约 5.0 MB，minSdk 23 / targetSdk 35）
+- 安装包：`release/使劲燃的钱-1.1.22.apk`（约 5.0 MB，minSdk 23 / targetSdk 35）
 
 ## 功能
 
@@ -50,9 +50,10 @@ React 18 + TypeScript + Vite 5，用 Capacitor 6 打包成原生 Android 壳，�
 src/
   types.ts              全部类型与接口（唯一一份）
   data/                 数据层：index.ts 统一出口 → store.tsx / categories.ts
-  pages/                Home / Ledger / Stats / Me / AddSheet / Onboarding
-  components/           Money、TxRow、Charts、SparkSummary（趋势横条）、SuccessReceipt（记账成功小票）、MorphSheet、Sheet、TabBar、Toast、Icon
-  utils/                money、date、stats、theme、haptics、modalStack（index.ts 统一出口）
+  pages/                Home / Ledger / Stats / Me / Onboarding（只做布局与编排）
+  sheets/               AddSheet、TxDetailSheet、Name / Budget / Payday / Category / Data 弹层
+  ui/                   Money、TxRow、Charts、SparkSummary、MonthCalendar、Sheet、TabBar、Toast、Icon
+  lib/                  money、date、stats、theme、backup、avatar、haptics、modal（纯函数 / 平台能力）
   styles/app.css        结构、组件与基础样式
   styles/og.css         深色皮肤：token 覆盖、首页 / 底栏 / 各页面深色化（后加载）
 android/                Capacitor 生成的 Android 工程（已配好 SDK 35 / AGP 8.7.2）
@@ -63,7 +64,7 @@ docs/                   架构说明 docs/ARCHITECTURE.md、截图 docs/screensh
 release/                可直接安装的 APK
 ```
 
-结构细则见 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)：类型只写在 `src/types.ts`，页面只从 `../data`、`../components`、`../utils` 三个入口取东西。
+结构细则见 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)：类型只写在 `src/types.ts`；跨层只能走对方的 `index.ts`，页面只从 `../data`、`../lib`、`../ui`、`../sheets` 取东西；`npm run check` 会检查越界引用。
 
 ## 开发与打包
 
@@ -102,7 +103,7 @@ JAVA_HOME='C:\Program Files\Java\jdk-17' /c/Android/gradle-8.9/bin/gradle.bat -p
 
 首页的大标题就是账本名字，可以在「我的」点名字修改，最多 20 个字，保存后立刻同步到首页、也会跟着备份一起搬走；名字留空时回落到「使劲燃的钱」。日期那一行的问候语按手机当前时间分段（早上好 / 上午好 / 中午好 / 下午好 / 晚上好 / 夜深了），每 30 秒重算一次，从后台切回前台也会刷新，不是写死的文案。
 
-主题系统是 openGym 那套的轻量移植：`src/utils/theme.ts` 负责 `data-theme` / `data-accent`、系统偏好与本地记忆，`styles/og.css` 顶部集中放深/浅两套语义 token 和 8 组强调色；`index.html` 在首屏渲染前先读一次本地设置，避免深色闪一下。状态栏图标颜色跟随主题；主题选择随账本保存在本地，覆盖安装或导入备份都会保留。
+主题系统是 openGym 那套的轻量移植：`src/lib/theme.ts` 负责 `data-theme` / `data-accent`、系统偏好与本地记忆，`styles/og.css` 顶部集中放深/浅两套语义 token 和 8 组强调色；`index.html` 在首屏渲染前先读一次本地设置，避免深色闪一下。状态栏图标颜色跟随主题；主题选择随账本保存在本地，覆盖安装或导入备份都会保留。
 
 预算按自然月重置，发薪日不改变预算月份。首页副行会写清「10 月工资 · 15 号到账 · 2 天后发薪」：11 月 15 日到账的是 10 月工资，所以 11 月整月都按 10 月工资算；12 月 1 日起切到 11 月工资，不会出现 11 月 13 日还算 9 月工资的情况。设置里可以填每月几号发工资，并选「当月发 / 次月发上月」；如果某个月实际到账日不一样，在同一个弹层里改「本月实际到账」，只影响当月，下个月自动回到默认日。统计页的「月」、明细的月历、每日柱状图和分类占比都按自然月走。发薪日填 29/30/31 时，短月自动落到月末，下个周期再回到原日期。
 

@@ -6,7 +6,7 @@ import App from './App'
 import { Capacitor } from '@capacitor/core'
 import { StatusBar, Style } from '@capacitor/status-bar'
 import { SplashScreen } from '@capacitor/splash-screen'
-import { applyThemeFromStorage } from './utils'
+import { applyThemeFromStorage } from './lib'
 
 async function initNative() {
   if (!Capacitor.isNativePlatform()) return

@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
-import { popModal, pushModal } from '../utils/modalStack'
+import { popModal, pushModal } from '../lib'
 
 export function Sheet({
   open,

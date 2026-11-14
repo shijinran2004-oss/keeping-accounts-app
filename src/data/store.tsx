@@ -1,6 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import type { Category, LedgerApi, LedgerState, NewCategory, Settings, Tx, TxDraft } from '../types'
-import { isAccentKey, isThemeMode } from '../utils/theme'
+import { isAccentKey, isThemeMode } from '../lib'
 import { DEFAULT_CATEGORIES } from './categories'
 
 export const DEFAULT_LEDGER_NAME = '使劲燃的钱'

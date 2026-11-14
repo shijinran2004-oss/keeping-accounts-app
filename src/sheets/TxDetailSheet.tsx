@@ -2,10 +2,10 @@ import { useEffect, useState, type CSSProperties } from 'react'
 import { AlertTriangle, PencilLine, Trash2 } from 'lucide-react'
 import type { TxDetailSheetProps } from '../types'
 import { findCategory, useLedger } from '../data'
-import { formatDayLong, formatMoney, relativeDay } from '../utils'
-import { CategoryIcon } from './Icon'
-import { Sheet } from './Sheet'
-import { useToast } from './Toast'
+import { formatDayLong, formatMoney, relativeDay } from '../lib'
+import { CategoryIcon } from '../ui'
+import { Sheet } from '../ui'
+import { useToast } from '../ui'
 
 /** 点流水后先看详情，再决定要不要改；修改会打开复用的记账框。 */
 export function TxDetailSheet({ tx, onClose, onEdit }: TxDetailSheetProps) {

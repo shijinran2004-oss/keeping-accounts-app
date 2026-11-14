@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
-import { CategoryIcon } from './Icon'
-import { Seal } from './Seal'
-import { formatMoney, tap, tapSuccess } from '../utils'
+import { CategoryIcon } from '../ui'
+import { Seal } from '../ui'
+import { formatMoney, tap, tapSuccess } from '../lib'
 import type { ReceiptData } from '../types'
 
 /** 各阶段时间点，单位 ms */

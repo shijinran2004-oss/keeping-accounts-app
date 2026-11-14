@@ -22,9 +22,9 @@ import {
   summarize,
   todayStr,
   weekdayLabel,
-} from '../utils'
+} from '../lib'
 import type { CalendarCell, CalendarMode, Tx } from '../types'
-import { Empty, Money, MonthCalendar, SparkSummary, TxRow } from '../components'
+import { Empty, Money, MonthCalendar, SparkSummary, TxRow } from '../ui'
 
 export function Ledger({ onOpenTx, onAdd }: { onOpenTx: (tx: Tx) => void; onAdd: () => void }) {
   const { state } = useLedger()

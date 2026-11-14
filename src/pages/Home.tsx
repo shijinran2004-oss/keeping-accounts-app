@@ -1,7 +1,6 @@
-import { useEffect, useState } from 'react'
-import type { CSSProperties } from 'react'
+import { useEffect, useState, type CSSProperties } from 'react'
 import { Bookmark, ChevronRight, ReceiptText, Settings, Target } from 'lucide-react'
-import { DEFAULT_LEDGER_NAME, useLedger } from '../data'
+import { DEFAULT_LEDGER_NAME, EXPENSE_CATEGORIES, findCategory, useLedger } from '../data'
 import {
   categoryBreakdown,
   cycleRange,
@@ -17,10 +16,9 @@ import {
   salaryMonthLabel,
   toDateStr,
   weekdayLabel,
-} from '../utils'
-import { EXPENSE_CATEGORIES, findCategory } from '../data'
+} from '../lib'
 import type { DogMood, Tx } from '../types'
-import { CategoryIcon, Doghouse, Empty, Money, TxRow } from '../components'
+import { CategoryIcon, Doghouse, Empty, Money, TxRow } from '../ui'
 
 export function Home({
   onAdd,

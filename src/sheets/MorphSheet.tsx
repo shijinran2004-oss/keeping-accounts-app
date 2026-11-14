@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Plus } from 'lucide-react'
-import { popModal, pushModal } from '../utils/modalStack'
+import { popModal, pushModal } from '../lib'
 
 /**
  * 形变弹层：从底部导航中间的「+」按钮原位长成一块面板，收起时缩回原处。
