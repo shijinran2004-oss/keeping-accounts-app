@@ -7,7 +7,7 @@
 - 纯本地存储，不联网、不上传、无广告、无账号
 - 深色 / 浅色 / 跟随系统 + 8 个强调色的可换主题，新装默认浅色；炭灰卡片、16px 间距、鸿蒙 Sans 中文 + Nunito 圆体数字；版式与主题系统参考 openGym，代码全部重写
 - 冷启动直接渐显存钱罐海报：深青底上海报淡入、轻微拉焦，停留后虚化交给首页；不再先闪一下桌面图标
-- 安装包：`release/使劲燃的钱-1.1.26.apk`（约 5.0 MB，minSdk 23 / targetSdk 35）
+- 安装包：见 GitHub Releases（1.2.0，约 5.0 MB，minSdk 23 / targetSdk 35）
 
 ## 功能
 
@@ -18,7 +18,7 @@
 | 记一笔 | 自研 4×4 算式键盘（+ / − 实时合计）、金额分位显示、18 个内置分类（12 支出 / 6 收入）、备注、日期 |
 | 明细 | 月历（每天带净额，可切金额/圆点、收起成周视图）；发薪日金币角标，今天到下次发薪日之间用当前强调色的四级渐变填充，并显示到账日；上/下月与「今」、点日期看当天流水；点任意一笔先看详情，再选修改或删除 |
 | 统计 | 日 / 周 / 月三档；总支出与环比；每日柱状图；分类环形图与排行；月度预算占用 |
-| 我的 | 头像（从手机相册选图，本地裁成 384×384；底部品牌角标固定用 App 默认图标，不跟头像变）、账本名字（点名字改，同步首页）、外观（深色 / 浅色 / 跟随系统、8 个强调色）、月工资、固定支出、分类管理、备份（导出成 .json 文件 / 从文件恢复）、清空、重置 |
+| 我的 | 头像（从手机相册选图，本地裁成 384×384；底部品牌角标固定用 App 默认图标，不跟头像变）、账本名字（点名字改，同步首页）、外观（深色 / 浅色 / 跟随系统、8 个强调色）、月工资、固定支出、分类管理、数据备份（压缩导出 / 导入预览与三种模式 / 自动快照恢复）、清空、重置 |
 | 分类图标 | 设置 → 分类管理，点任意分类左侧的图标就能换；内置分类也能改。选择器按分类颜色渲染高光徽章，改完立刻同步记账、明细、统计 |
 | 引导 | 首次启动先问「每月到手多少」「每月固定支出」「几号发工资、到账的是哪个月」，可跳过，之后在「我的」里补 |
 | 视觉 | 深色 `#000` / 浅色 `#f2f2f7` 两套语义色，8 个强调色（默认 iOS 绿 `#30d158`），新装默认浅色；16px 页边距与卡片间距、全宽卡片、通栏五项底栏、中间圆形主按钮 |
@@ -36,21 +36,25 @@
 
 ## 数据与备份
 
-整本账是一个 JSON 对象（`LedgerState`：记录 + 分类 + 设置），存在手机的应用存储里，没有服务端：
+整本账是一份 `LedgerState`（记录 + 分类 + 设置），存在手机的 IndexedDB 里，没有服务端：
 
 - **覆盖安装不丢数据**：包名和签名不变、versionCode 递增就是升级安装，应用目录不会被清。会丢的情况只有：卸载、系统里点「清除数据」、改包名、换签名。
-- **导出**：我的 → 数据备份 → 导出 → 生成 `使劲燃的钱-备份-2026-11-11.json`。安卓上会弹系统分享面板，可以存到「文件」、发微信、发网盘；浏览器里直接下载。另有「复制为文本备份」，适合贴到笔记里。
-- **导入**：切到「导入」，选那个 .json 文件，也可以把内容直接粘进框里，点「导入并覆盖」后整份还原（分类和设置一起回来）。
-- 换手机、重装、清数据之后，用这份文件就能把账本完整搬回去。
+- **导出**：我的 → 数据备份 → 导出，默认生成 `使劲燃的钱-备份-2026-11-14.json.gz`（gzip 压缩，体积约为纯文本 1/5）；勾选「兼容 1.1.x 纯 JSON」可导出未压缩的 `.json`。安卓上弹系统分享面板，可存「文件」、发微信、发网盘；浏览器直接下载。另有「复制为文本备份」。
+- **导入**：切到「导入」，选 `.json` / `.json.gz` 文件或直接粘贴文本，先看预览（格式版本、条数、日期范围、警告），再选**覆盖 / 合并 / 仅设置与分类**。覆盖前自动存快照，导错了能在「本机快照」里恢复；旧版 1.1.x 的纯 JSON 也能直接读。
+- **存储引擎**：IndexedDB 库 `shijinran`，流水一笔一条写入；首次启动把旧 localStorage 数据迁移过来并保留镜像，迁移失败自动回退旧存储（开关 `localStorage['shijinran.storage.engine'] = 'ls'`）。
+- **自动快照**：导入、清空、恢复前各存一份，另外每周一次，保留 5 份。
+- 换手机、重装、清数据之后，用备份文件就能把账本完整搬回去；文件上限 20MB、粘贴文本上限 2MB。
 
 ## 技术选型
 
-React 18 + TypeScript + Vite 5，用 Capacitor 6 打包成原生 Android 壳，数据存 `localStorage`（键名 `shijinran.money.v1`，旧版本数据会自动迁移），图表是手写 SVG，不引入图表库。
+React 18 + TypeScript + Vite 5，用 Capacitor 6 打包成原生 Android 壳，数据存 IndexedDB（库名 `shijinran`，首次启动自动迁移旧 localStorage 并保留镜像），备份是带版本号与校验和的 v2 容器（默认 gzip），图表是手写 SVG，不引入图表库。
 
 ```
 src/
   types.ts              全部类型与接口（唯一一份）
-  data/                 数据层：index.ts 统一出口 → store.tsx / categories.ts
+  data/                 数据层：index.ts 统一出口 → store.tsx / categories.ts / normalize.ts
+  data/db/              IndexedDB 封装、单条仓库、旧数据迁移与 localStorage 回退
+  data/backup/          备份容器 v2、gzip 编解码、导入预览与合并、快照
   pages/                Home / Ledger / Stats / Me / Onboarding（只做布局与编排）
   sheets/               AddSheet、TxDetailSheet、Name / Budget / Payday / Category / Data 弹层
   ui/                   Money、TxRow、Charts、SparkSummary、MonthCalendar、Sheet、TabBar、Toast、Icon
@@ -62,7 +66,7 @@ design/build_icon.py    桌面图标生成脚本（源图 design/icon-src/app-ic
 design/build_brand.py   App 内印章生成脚本（源图 design/icon-src/mascot.png）
 assets/icon/            1024px 品牌原图
 docs/                   架构说明 docs/ARCHITECTURE.md、截图 docs/screenshots/
-release/                可直接安装的 APK
+release/                本地构建的 APK（已 gitignore；安装包见 GitHub Releases）
 ```
 
 结构细则见 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)：类型只写在 `src/types.ts`；跨层只能走对方的 `index.ts`，页面只从 `../data`、`../lib`、`../ui`、`../sheets` 取东西；`npm run check` 会检查越界引用。
@@ -73,6 +77,8 @@ release/                可直接安装的 APK
 npm install          # 依赖（国内可用已写入的 npmmirror 源）
 npm run dev          # 浏览器调试
 npm run build        # 产出 dist/
+npm test             # 单元测试（vitest，30 例）
+npm run check        # tsc --noEmit + 分层检查
 npx cap copy android # 同步到原生工程
 ```
 
@@ -83,7 +89,7 @@ cd android
 JAVA_HOME='C:\Program Files\Java\jdk-17' /c/Android/gradle-8.9/bin/gradle.bat -p . assembleDebug
 ```
 
-产物：`android/app/build/outputs/apk/debug/app-debug.apk`，`adb install -r` 即可装机。
+产物：`android/app/build/outputs/apk/debug/app-debug.apk`，`adb install -r` 即可装机。一条命令打包：`npm run cap:build`（build + cap sync + assembleDebug）；版本号在 `android/app/build.gradle`。
 
 > 当前为 debug 签名，可直接侧载安装；上架应用商店需要换成自己的 release keystore。
 
@@ -118,12 +124,18 @@ JAVA_HOME='C:\Program Files\Java\jdk-17' /c/Android/gradle-8.9/bin/gradle.bat -p
 
 品牌标记是那只抱花的小狗：页头、我的页、引导页都用同一枚印章——深色圆角卡片里放贴纸，外面一圈 1.5px 朱砂细线（线画在图形之上，不会被盖住）。小图用的是 `src/assets/mascot.png`（由 `design/build_brand.py` 从 `design/icon-src/mascot.png` 生成：方块画布 + 整张贴纸居中），和桌面图标是两套资产，印章里始终是那只完整的小狗，不裁头也不切花。小票顶部的头像跟「我的」保持一致：设置过个人头像时用头像，没设置时回退成这枚小狗印章。
 
-「数据备份」弹层分导出、导入两个模式：导出页是一张文件名卡片（`使劲燃的钱-备份-日期.json` + 记录数 / 分类数 / 文件大小）加一个「导出备份文件」按钮，安卓走 `Filesystem` 写缓存再 `Share` 唤起系统分享面板，浏览器退化成 Blob 下载；导入页是「选择备份文件」+ 可编辑的文本框，两条路都行，读进来的内容先过一遍 `normalize()` 再整份覆盖。两个模式共用同一块弹层，切页不重开。
+「数据备份」弹层分导出、导入两个模式：导出页默认生成 `.json.gz`（可勾选导出兼容 1.1.x 的纯 JSON），卡片显示记录数 / 分类数 / 压缩前后体积，安卓走 `Filesystem` 写缓存再 `Share` 唤起分享面板，浏览器退化成 Blob 下载；导入页支持选文件或粘贴文本，先出预览（格式版本、条数、日期范围、警告），再选覆盖 / 合并 / 仅设置与分类，覆盖前自动存快照，同页「本机快照」可随时恢复。两个模式共用同一块弹层，切页不重开。
 
 明细页顶部是一条趋势横条，替掉原来的「支出 / 收入 / 收支差」三栏：左边是本月支出、占可支配的比例、收入与收支差，右边一条 42px 高的迷你曲线画这个月每天的支出。进页面时按路径长度做描边生长（1.15s，Web Animations，先量 `getTotalLength()` 再跑关键帧，避免首帧反向闪一下），面积渐变晚 80ms 淡入，末点有一个呼吸光斑，卡片上还有一层 5.6s 一轮的扫光。空月份曲线会转成灰色细线、不显示光斑。
 
 再往下是账本日历：周一开始的 7 列格子，每格日期下面写当天的净额（收入 − 支出），支出为负、收入为正，正数用绿；右上角一个小红点标今天。右上角可以在「金额 / 圆点」之间切，圆点模式只留一个 4px 的点，适合记完账快速扫一眼。点任意日期，下面就是那一天的流水；跨月补位的日期也能点，会自动翻到对应月份。底部「收起为周视图」只展开选中日所在的那一周，再点一次展开整月。趋势横条和日历都不重复三栏概览：本月支出、收入、收支差已经在横条里了。
 
+
+## 开源协议
+
+[MIT](LICENSE) © 2026 Printfhappy
+
+自由使用、修改、商用与再发布，保留版权声明即可。
 
 ## 参考的开源项目
 
