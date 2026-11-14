@@ -190,5 +190,5 @@ App / main
 - OCR 引擎：全进程只有一个，由 `android/app/src/main/java/com/shijinran/money/ocr/OcrEngineHolder.java` 提供。RapidOcr 的 native 层不是多实例安全的，截图监听服务和 `Ocr` 插件如果在同一进程各建一个引擎，后来那个实例的识别结果会变成字形相近的乱码；`detect` 也加了锁，两个线程同时调用不会互相踩
 - 金额口径（`lib/ocr/amount.ts`）：每个金额只认它左边紧邻的标签（实付 / 实收 / 应付 8，付款 / 支付金额 7，合计 / 总计 / 应收 6，本次消费 5，通用「金额」3，找零 / 优惠 / 折扣 / 原价 / 余额 −9），同行多个金额各算各的；没有小数点且 ≥100 时用商品金额合计反推是「分」还是「元」，都不像就按分记并在 `OcrDraft.warnings` 里提示核对
 - 权限：`AndroidManifest.xml` 只申请 `READ_MEDIA_IMAGES`（13+）/ `READ_EXTERNAL_STORAGE`（≤32）、`POST_NOTIFICATIONS`、`FOREGROUND_SERVICE(_SPECIAL_USE)`，以及可选的 `SYSTEM_ALERT_WINDOW`（悬浮窗，用来截屏后弹卡片；不给就退回通知）；不申请 `INTERNET`，安装包无法联网
-- 分享 / 截图：`CapturePlugin` 收 `ACTION_SEND`、启停前台服务；`ScreenshotWatchService`（`foregroundServiceType="specialUse"`）用 ContentObserver 监听 MediaStore 新图，只认开启后新增且文件名像截图的，识别到金额后由 `CaptureOverlay` 通过 `WindowManager`（`TYPE_APPLICATION_OVERLAY`）在屏幕底部弹卡片（缩略图 + 金额 + 去记账/忽略，20 秒自动收起），没有悬浮窗权限时退回通知；两条路径都用 `capture_pending` extra 带图进 `AddSheet`，冷启动也生效
+- 分享 / 截图：`CapturePlugin` 收 `ACTION_SEND`、启停前台服务；`ScreenshotWatchService`（`foregroundServiceType="specialUse"`）用 ContentObserver 监听 MediaStore 新图，只认开启后新增且文件名像截图的，识别到金额后由 `CaptureOverlay` 通过 `WindowManager`（`TYPE_APPLICATION_OVERLAY`）在屏幕底部弹卡片（缩略图 + 金额 + 去记账/忽略，20 秒自动收起并清掉待确认），没有悬浮窗权限时退回通知；两条路径都用 `capture_pending` extra 带图进 `AddSheet`，冷启动也生效
 - 检查：`npm run check`（tsc + 分层检查）、`npm test`（vitest）

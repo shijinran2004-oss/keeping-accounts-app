@@ -53,6 +53,8 @@ public final class CaptureOverlay {
     private final Runnable hideTask = new Runnable() {
         @Override
         public void run() {
+            // 卡片自己消失说明用户没理它，清掉待确认，避免下次打开 App 又把旧图调出来
+            if (path.equals(CaptureStore.pendingPath(context))) CaptureStore.clearPendingPath(context);
             dismiss();
         }
     };
@@ -243,6 +245,7 @@ public final class CaptureOverlay {
     }
 
     private void openApp() {
+        dismiss();
         CaptureStore.setPendingPath(context, path);
         CaptureStore.setPendingSource(context, "screenshot");
         try {

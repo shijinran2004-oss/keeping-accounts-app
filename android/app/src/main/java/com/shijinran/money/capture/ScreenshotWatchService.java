@@ -183,12 +183,14 @@ public class ScreenshotWatchService extends Service {
         return handled > 0;
     }
 
-    /** MediaStore 的插入偶尔比系统广播晚一点，第一次没扫到就再试两次。 */
+    /** MediaStore 的插入偶尔比系统广播晚一点，第一次没扫到就再试几次。 */
     private void scheduleScan(int attempt) {
         io.execute(() -> {
             if (scanNewShots()) return;
             if (attempt >= 10 || io.isShutdown()) return;
-            new Handler(Looper.getMainLooper()).postDelayed(() -> scheduleScan(attempt + 1), 400);
+            // 头一次先等 200ms（媒体库写入通常不到一秒），之后每 400ms 再试，最多等 4 秒
+            long delay = attempt == 0 ? 200L : 400L;
+            new Handler(Looper.getMainLooper()).postDelayed(() -> scheduleScan(attempt + 1), delay);
         });
     }
 
