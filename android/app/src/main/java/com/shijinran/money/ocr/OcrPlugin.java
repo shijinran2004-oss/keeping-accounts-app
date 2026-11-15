@@ -18,9 +18,6 @@ import com.getcapacitor.annotation.CapacitorPlugin;
 
 import org.json.JSONException;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -77,18 +74,8 @@ public class OcrPlugin extends Plugin {
                 OcrResult result = OcrEngineHolder.detect(getContext(), input, box, maxSide);
                 long ms = System.currentTimeMillis() - t0;
 
-                List<TextBlock> blocks = result != null && result.getTextBlocks() != null
-                        ? new ArrayList<>(result.getTextBlocks())
-                        : new ArrayList<>();
-                Collections.sort(blocks, new Comparator<TextBlock>() {
-                    @Override
-                    public int compare(TextBlock a, TextBlock b) {
-                        int ay = centerY(a), by = centerY(b);
-                        int rowA = ay / 24, rowB = by / 24;
-                        if (rowA != rowB) return Integer.compare(rowA, rowB);
-                        return Integer.compare(centerX(a), centerX(b));
-                    }
-                });
+                // 顺序统一由 OcrEngineHolder 负责：RapidOCR 原始块顺序不可靠
+                List<TextBlock> blocks = OcrEngineHolder.orderedBlocks(result);
 
                 JSArray lines = new JSArray();
                 StringBuilder all = new StringBuilder();
@@ -124,22 +111,6 @@ public class OcrPlugin extends Plugin {
                 call.reject(friendly(t), "ocr_failed");
             }
         });
-    }
-
-    private static int centerY(TextBlock b) {
-        List<Point> pts = b.getBoxPoint();
-        if (pts == null || pts.isEmpty()) return 0;
-        int sum = 0;
-        for (Point p : pts) sum += p.getY();
-        return sum / pts.size();
-    }
-
-    private static int centerX(TextBlock b) {
-        List<Point> pts = b.getBoxPoint();
-        if (pts == null || pts.isEmpty()) return 0;
-        int sum = 0;
-        for (Point p : pts) sum += p.getX();
-        return sum / pts.size();
     }
 
     private static Bitmap decode(String dataUrl) {

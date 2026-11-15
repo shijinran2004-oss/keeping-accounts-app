@@ -29,6 +29,7 @@ public class CaptureCancelReceiver extends BroadcastReceiver {
     static final String ACTION_CANCEL = "com.shijinran.money.capture.CANCEL";
     static final String ACTION_RECORD = "com.shijinran.money.capture.RECORD";
 
+    private static final String TAG = "SnoopyCapture";
     private static final String CHANNEL_DONE = "screenshot_done";
     private static final int NOTIFY_DONE_ID = 4302;
 
@@ -50,22 +51,30 @@ public class CaptureCancelReceiver extends BroadcastReceiver {
             long amount = intent.getLongExtra(ScreenshotWatchService.EXTRA_AMOUNT, 0L);
             String text = intent.getStringExtra(ScreenshotWatchService.EXTRA_TEXT);
 
-            JSONObject shot = key != 0 ? CaptureStore.removeShot(context, key) : null;
-            if (shot != null) {
+            NotificationManager nm = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
+            if (key != 0) {
+                // 新通知都带 key：金额和文字只认待确认队列里那一条。
+                // 如果队列里已经没有它（已经记过、或者刚点了取消），说明这是重复点击，
+                // 直接收掉通知返回——绝不能回退去用 intent 里的金额再记第二笔。
+                JSONObject shot = CaptureStore.removeShot(context, key);
+                if (shot == null) {
+                    if (nm != null && notifyId > 0) nm.cancel(notifyId);
+                    Log.d(TAG, "record ignored, shot gone key=" + key);
+                    return;
+                }
                 amount = shot.optLong("amountCents", amount);
                 text = shot.optString("text", text);
                 deleteFile(shot);
             }
             if (amount > 0) CaptureStore.pushAutoRecord(context, amount, text);
 
-            NotificationManager nm = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
             if (nm != null && notifyId > 0) nm.cancel(notifyId);
             if (amount > 0) notifyDone(context, amount);
             // App 在前台时让 JS 立刻把队列写进账本，不用等切到后台再回来
             if (amount > 0) CapturePlugin.pingAutoRecord();
-            Log.d("SnoopyCapture", "record ¥" + amount + " queued=" + (amount > 0));
+            Log.d(TAG, "record ¥" + amount + " queued=" + (amount > 0));
         } catch (Throwable t) {
-            Log.w("SnoopyCapture", "record failed", t);
+            Log.w(TAG, "record failed", t);
         }
     }
 
@@ -90,7 +99,7 @@ public class CaptureCancelReceiver extends BroadcastReceiver {
                 }
             }
         } catch (Throwable t) {
-            Log.w("SnoopyCapture", "cancel pending failed", t);
+            Log.w(TAG, "cancel pending failed", t);
         }
     }
 
@@ -122,7 +131,7 @@ public class CaptureCancelReceiver extends BroadcastReceiver {
                     .setTimeoutAfter(6_000L);
             nm.notify(NOTIFY_DONE_ID, builder.build());
         } catch (Throwable t) {
-            Log.w("SnoopyCapture", "done notice failed", t);
+            Log.w(TAG, "done notice failed", t);
         }
     }
 }

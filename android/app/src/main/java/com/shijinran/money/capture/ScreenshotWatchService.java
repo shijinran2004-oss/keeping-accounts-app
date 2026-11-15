@@ -24,7 +24,6 @@ import android.util.Log;
 import androidx.core.app.NotificationCompat;
 
 import com.benjaminwan.ocrlibrary.OcrResult;
-import com.benjaminwan.ocrlibrary.TextBlock;
 import com.shijinran.money.MainActivity;
 import com.shijinran.money.R;
 import com.shijinran.money.ocr.OcrEngineHolder;
@@ -42,6 +41,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -85,6 +85,8 @@ public class ScreenshotWatchService extends Service {
     /** 识别串行：RapidOcr 的 native 层不是多实例/并发安全的 */
     private final ExecutorService recognizer = Executors.newSingleThreadExecutor();
     private final AtomicBoolean scanQueued = new AtomicBoolean(false);
+    /** 补扫的延迟重试挂在主线程上，销毁时要能一次清干净 */
+    private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private ContentObserver observer;
     private long startedAt;
 
@@ -97,7 +99,7 @@ public class ScreenshotWatchService extends Service {
         startForegroundCompat();
         primeCursor();
         registerObserver();
-        recognizer.execute(() -> OcrEngineHolder.warmUp(this));
+        submit(recognizer, () -> OcrEngineHolder.warmUp(this));
         requestScan();
     }
 
@@ -115,6 +117,8 @@ public class ScreenshotWatchService extends Service {
     @Override
     public void onDestroy() {
         running = false;
+        // 先掐掉还在排队的补扫：否则它会在线程池 shutdown 之后再 execute，主线程直接崩
+        mainHandler.removeCallbacksAndMessages(null);
         if (observer != null) {
             try {
                 getContentResolver().unregisterContentObserver(observer);
@@ -224,8 +228,7 @@ public class ScreenshotWatchService extends Service {
                 if (!looksLikeScreenshot(name)) continue;
                 // 扫描只负责发现，识别丢给另一个线程排队
                 final long shotId = id;
-                recognizer.execute(() -> handleShot(shotId));
-                found++;
+                if (submit(recognizer, () -> handleShot(shotId))) found++;
             }
         } catch (Throwable t) {
             Log.w(TAG, "scan failed", t);
@@ -243,7 +246,7 @@ public class ScreenshotWatchService extends Service {
 
     /** MediaStore 的插入偶尔比系统广播晚一点，第一次没扫到就再补两次。 */
     private void scheduleScan(int attempt) {
-        scanner.execute(() -> {
+        submit(scanner, () -> {
             if (scanner.isShutdown()) {
                 scanQueued.set(false);
                 return;
@@ -259,8 +262,25 @@ public class ScreenshotWatchService extends Service {
                 return;
             }
             long delay = attempt == 0 ? 200L : 400L;
-            new Handler(Looper.getMainLooper()).postDelayed(() -> scheduleScan(attempt + 1), delay);
+            mainHandler.postDelayed(() -> scheduleScan(attempt + 1), delay);
         });
+    }
+
+    /**
+     * 往线程池里丢任务。
+     * 关闭监听或系统回收服务时，可能还有一次补扫/识别在路上；
+     * 那些任务醒来时线程池已经 shutdown，直接 execute 会抛
+     * RejectedExecutionException，而延迟任务跑在主线程上没人接。
+     * 所以统一从这里进：池子关了就把任务丢掉。
+     */
+    private static boolean submit(ExecutorService pool, Runnable task) {
+        if (pool == null || pool.isShutdown()) return false;
+        try {
+            pool.execute(task);
+            return true;
+        } catch (RejectedExecutionException ignored) {
+            return false;
+        }
     }
 
     /** 第一次开启时先记下当前时间与最大的 _ID，避免把以前的截图全部过一遍。 */
@@ -269,7 +289,7 @@ public class ScreenshotWatchService extends Service {
             CaptureStore.setLastSeenAt(this, System.currentTimeMillis() / 1000L);
         }
         if (CaptureStore.lastId(this) > 0) return;
-        scanner.execute(() -> {
+        submit(scanner, () -> {
             Cursor cursor = null;
             try {
                 cursor = getContentResolver().query(MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
@@ -429,13 +449,8 @@ public class ScreenshotWatchService extends Service {
         try {
             box = Bitmap.createBitmap(bitmap.getWidth(), bitmap.getHeight(), Bitmap.Config.ARGB_8888);
             OcrResult result = OcrEngineHolder.detect(getApplicationContext(), bitmap, box, MAX_SIDE);
-            StringBuilder text = new StringBuilder();
-            if (result != null && result.getTextBlocks() != null) {
-                for (TextBlock block : result.getTextBlocks()) {
-                    if (block != null && block.getText() != null) text.append(block.getText()).append('\n');
-                }
-            }
-            String raw = text.toString();
+            // 顺序由 OcrEngineHolder 统一排（RapidOCR 原始块顺序不可靠），和插件走同一套
+            String raw = OcrEngineHolder.toText(result);
             return new OcrShot(guessAmount(raw), raw);
         } catch (Throwable t) {
             return null;

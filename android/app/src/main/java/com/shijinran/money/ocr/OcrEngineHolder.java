@@ -5,6 +5,13 @@ import android.graphics.Bitmap;
 
 import com.benjaminwan.ocrlibrary.OcrEngine;
 import com.benjaminwan.ocrlibrary.OcrResult;
+import com.benjaminwan.ocrlibrary.Point;
+import com.benjaminwan.ocrlibrary.TextBlock;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.List;
 
 /**
  * 全进程共用一个 OcrEngine。
@@ -31,6 +38,62 @@ public final class OcrEngineHolder {
         synchronized (LOCK) {
             return engine(context).detect(input, box, maxSide);
         }
+    }
+
+    /**
+     * 按版面顺序排好的文字块。
+     *
+     * RapidOCR 返回的 TextBlock 顺序并不可靠（同一张图两次识别顺序可能不同），
+     * 而前端解析要靠「相邻行」拼金额（「实付」一行、「48.00」下一行）。
+     * 所以统一在这里排：先按行（中心 y 相近算同一行），再按行内从左到右。
+     * 插件和截图服务都走这一个方法，顺序只有一套逻辑。
+     */
+    public static List<TextBlock> orderedBlocks(OcrResult result) {
+        List<TextBlock> blocks = new ArrayList<>();
+        if (result == null || result.getTextBlocks() == null) return blocks;
+        for (TextBlock block : result.getTextBlocks()) {
+            if (block != null) blocks.add(block);
+        }
+        Collections.sort(blocks, new Comparator<TextBlock>() {
+            @Override
+            public int compare(TextBlock a, TextBlock b) {
+                int rowA = centerY(a) / 24;
+                int rowB = centerY(b) / 24;
+                if (rowA != rowB) return Integer.compare(rowA, rowB);
+                return Integer.compare(centerX(a), centerX(b));
+            }
+        });
+        return blocks;
+    }
+
+    /** 识别结果按版面顺序拼成多行文本；空行跳过。 */
+    public static String toText(OcrResult result) {
+        StringBuilder text = new StringBuilder();
+        for (TextBlock block : orderedBlocks(result)) {
+            String line = block.getText() == null ? "" : block.getText().trim();
+            if (line.isEmpty()) continue;
+            if (text.length() > 0) text.append('\n');
+            text.append(line);
+        }
+        return text.toString();
+    }
+
+    private static int centerY(TextBlock block) {
+        return average(block, 1);
+    }
+
+    private static int centerX(TextBlock block) {
+        return average(block, 0);
+    }
+
+    private static int average(TextBlock block, int axis) {
+        List<Point> points = block.getBoxPoint();
+        if (points == null || points.isEmpty()) return 0;
+        int sum = 0;
+        for (Point point : points) {
+            sum += axis == 0 ? point.getX() : point.getY();
+        }
+        return sum / points.size();
     }
 
     private static OcrEngine engine(Context context) {
