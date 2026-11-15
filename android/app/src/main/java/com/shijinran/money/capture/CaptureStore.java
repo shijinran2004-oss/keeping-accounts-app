@@ -10,8 +10,11 @@ import java.util.HashSet;
 import java.util.Set;
 
 /**
- * 截图记账的本地开关与游标。用 SharedPreferences 而不是账本设置：
- * 它只描述「这台手机上的监听状态」，不属于账本数据，也不需要参与备份。
+ * 截图记账的本地状态：
+ * 1) 开关与扫描游标；
+ * 2) 待确认的截图队列（每张一条通知，各自能「直接记一笔」）；
+ * 3) 已确认、等前端写进账本的记录。
+ * 用 SharedPreferences 而不是账本设置：它只描述「这台手机上的监听状态」。
  */
 final class CaptureStore {
 
@@ -24,8 +27,13 @@ final class CaptureStore {
     private static final String KEY_LAST_SEEN = "lastSeenAt";
     private static final String KEY_SEEN_IDS = "seenIds";
     private static final String KEY_AUTO = "autoRecords";
+    private static final String KEY_SHOTS = "pendingShots";
+    private static final String KEY_NOTIFY_SEQ = "notifySeq";
     private static final int SEEN_IDS_KEEP = 40;
     private static final int AUTO_KEEP = 30;
+    static final int SHOTS_KEEP = 5;
+    private static final int NOTIFY_SEQ_MIN = 4301;
+    private static final int NOTIFY_SEQ_MAX = 4499;
 
     private CaptureStore() {}
 
@@ -47,6 +55,36 @@ final class CaptureStore {
 
     static void setLastId(Context context, long id) {
         prefs(context).edit().putLong(KEY_LAST_ID, id).apply();
+    }
+
+    /** 分享进来的图（截图走 pendingShots 队列）。 */
+    static String pendingPath(Context context) {
+        return prefs(context).getString(KEY_PENDING, null);
+    }
+
+    static void setPendingPath(Context context, String path) {
+        prefs(context).edit().putString(KEY_PENDING, path).apply();
+    }
+
+    static void clearPendingPath(Context context) {
+        prefs(context).edit().remove(KEY_PENDING).remove(KEY_SOURCE).apply();
+    }
+
+    /** 这张图是分享进来的（share）还是截图监听来的（screenshot）。 */
+    static String pendingSource(Context context) {
+        return prefs(context).getString(KEY_SOURCE, null);
+    }
+
+    static void setPendingSource(Context context, String source) {
+        prefs(context).edit().putString(KEY_SOURCE, source).apply();
+    }
+
+    static long lastNoticeAt(Context context) {
+        return prefs(context).getLong(KEY_LAST_NOTICE, 0L);
+    }
+
+    static void setLastNoticeAt(Context context, long at) {
+        prefs(context).edit().putLong(KEY_LAST_NOTICE, at).apply();
     }
 
     /** 已经扫到过的最大 DATE_ADDED（秒）。MediaStore 的 _ID 会被回收重用，不能当游标。 */
@@ -88,38 +126,103 @@ final class CaptureStore {
         prefs(context).edit().putString(KEY_SEEN_IDS, sb.toString()).apply();
     }
 
-    static String pendingPath(Context context) {
-        return prefs(context).getString(KEY_PENDING, null);
+    /** 每条提醒一个固定但可重复利用的 id，两张截图同时待确认时不会互相盖掉。 */
+    static synchronized int nextNotifyId(Context context) {
+        int next = prefs(context).getInt(KEY_NOTIFY_SEQ, NOTIFY_SEQ_MIN);
+        if (next < NOTIFY_SEQ_MIN || next > NOTIFY_SEQ_MAX) next = NOTIFY_SEQ_MIN;
+        prefs(context).edit().putInt(KEY_NOTIFY_SEQ, next >= NOTIFY_SEQ_MAX ? NOTIFY_SEQ_MIN : next + 1).apply();
+        return next;
     }
 
-    static void setPendingPath(Context context, String path) {
-        prefs(context).edit().putString(KEY_PENDING, path).apply();
+    /**
+     * 把一张认出金额的截图放进待确认队列。
+     * 队列满了就挤掉最旧的一条，返回它，调用方负责收起对应通知并删缓存图。
+     */
+    static synchronized JSONObject addShot(Context context, long key, int notifyId, String path,
+                                          long amountCents, String text) {
+        JSONObject evicted = null;
+        try {
+            JSONArray arr = shots(context);
+            JSONObject item = new JSONObject();
+            item.put("key", key);
+            item.put("notifyId", notifyId);
+            item.put("path", path);
+            item.put("amountCents", amountCents);
+            item.put("text", text == null ? "" : text);
+            item.put("createdAt", System.currentTimeMillis());
+            arr.put(item);
+            while (arr.length() > SHOTS_KEEP) {
+                evicted = arr.optJSONObject(0);
+                arr.remove(0);
+            }
+            prefs(context).edit().putString(KEY_SHOTS, arr.toString()).apply();
+        } catch (Throwable ignored) {
+        }
+        return evicted;
     }
 
-    static void clearPendingPath(Context context) {
-        prefs(context).edit().remove(KEY_PENDING).remove(KEY_SOURCE).apply();
+    static synchronized JSONArray shots(Context context) {
+        String raw = prefs(context).getString(KEY_SHOTS, "");
+        if (raw == null || raw.isEmpty()) return new JSONArray();
+        try {
+            return new JSONArray(raw);
+        } catch (Throwable t) {
+            return new JSONArray();
+        }
     }
 
-    /** 这张图是分享进来的（share）还是截图监听来的（screenshot）。 */
-    static String pendingSource(Context context) {
-        return prefs(context).getString(KEY_SOURCE, null);
+    static synchronized JSONObject findShot(Context context, long key) {
+        JSONArray arr = shots(context);
+        for (int i = 0; i < arr.length(); i++) {
+            JSONObject item = arr.optJSONObject(i);
+            if (item != null && item.optLong("key", 0L) == key) return item;
+        }
+        return null;
     }
 
-    static void setPendingSource(Context context, String source) {
-        prefs(context).edit().putString(KEY_SOURCE, source).apply();
+    /** 点通知正文进来时，用图片路径找回它对应的识别文字，不用再识别一遍。 */
+    static synchronized JSONObject findShotByPath(Context context, String path) {
+        if (path == null) return null;
+        JSONArray arr = shots(context);
+        for (int i = 0; i < arr.length(); i++) {
+            JSONObject item = arr.optJSONObject(i);
+            if (item != null && path.equals(item.optString("path", ""))) return item;
+        }
+        return null;
     }
 
-    static long lastNoticeAt(Context context) {
-        return prefs(context).getLong(KEY_LAST_NOTICE, 0L);
+    /** 取走一张待确认截图；返回被移除的那条，没有就返回 null。 */
+    static synchronized JSONObject removeShot(Context context, long key) {
+        try {
+            JSONArray arr = shots(context);
+            JSONObject removed = null;
+            JSONArray next = new JSONArray();
+            for (int i = 0; i < arr.length(); i++) {
+                JSONObject item = arr.optJSONObject(i);
+                if (item == null) continue;
+                if (item.optLong("key", 0L) == key) {
+                    removed = item;
+                } else {
+                    next.put(item);
+                }
+            }
+            if (removed != null) prefs(context).edit().putString(KEY_SHOTS, next.toString()).apply();
+            return removed;
+        } catch (Throwable t) {
+            return null;
+        }
     }
 
-    static void setLastNoticeAt(Context context, long at) {
-        prefs(context).edit().putLong(KEY_LAST_NOTICE, at).apply();
+    /** 关闭监听时清空所有待确认截图，返回清掉的列表方便调用方收通知。 */
+    static synchronized JSONArray clearShots(Context context) {
+        JSONArray arr = shots(context);
+        prefs(context).edit().remove(KEY_SHOTS).apply();
+        return arr;
     }
 
     /**
      * 通知里点了「直接记一笔」：先把金额和识别文字暂存在这里，
-     * 等前端下次启动/回到前台时取走写进账本。App 没在跑也能先记下来。
+     * 等前端写进账本。App 没在跑也能先记下来。
      */
     static synchronized void pushAutoRecord(Context context, long amountCents, String text) {
         try {

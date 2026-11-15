@@ -509,6 +509,8 @@ export type CaptureSource = 'share' | 'screenshot'
 export interface CaptureImage {
   dataUrl: string
   source: CaptureSource
+  /** 截图监听时原生已经识别好的文字：有它就直接解析，不必再把图送进模型 */
+  text?: string
 }
 
 /** 通知里点了「直接记一笔」后原生暂存、等前端写进账本的一笔 */

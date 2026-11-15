@@ -57,9 +57,19 @@ public class CapturePlugin extends Plugin {
     private static final int MAX_SIDE = 1600;
 
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
+    private static volatile CapturePlugin instance;
+
+    /** 接收器在后台点「直接记一笔」时喊一声，App 在前台就能立刻写进账本。 */
+    static void pingAutoRecord() {
+        CapturePlugin plugin = instance;
+        if (plugin == null) return;
+        plugin.getBridge().getActivity().runOnUiThread(() ->
+                plugin.notifyListeners("captureRecord", new JSObject(), true));
+    }
 
     @Override
     public void load() {
+        instance = this;
         // 冷启动被分享拉起时，立刻记下这张图，避免 onNewIntent 之前被清掉
         Uri shared = pickShareUri(getActivity() == null ? null : getActivity().getIntent());
         if (shared != null) {
@@ -69,6 +79,12 @@ public class CapturePlugin extends Plugin {
         if (CaptureStore.isEnabled(getContext()) && !ScreenshotWatchService.running) {
             startService();
         }
+    }
+
+    @Override
+    protected void handleOnDestroy() {
+        if (instance == this) instance = null;
+        super.handleOnDestroy();
     }
 
     @Override
@@ -119,6 +135,17 @@ public class CapturePlugin extends Plugin {
             }
             ret.put("dataUrl", dataUrl);
             ret.put("source", source == null ? "share" : source);
+            if ("screenshot".equals(source)) {
+                // 这张截图已经在 App 里打开了：把它移出待确认队列，省得下次再弹一次
+                JSONObject shot = CaptureStore.findShotByPath(getContext(), pending);
+                if (shot != null) {
+                    ret.put("text", shot.optString("text", ""));
+                    int notifyId = shot.optInt("notifyId", 0);
+                    CaptureStore.removeShot(getContext(), shot.optLong("key", 0L));
+                    NotificationManager nm = (NotificationManager) getContext().getSystemService(Context.NOTIFICATION_SERVICE);
+                    if (nm != null && notifyId > 0) nm.cancel(notifyId);
+                }
+            }
             call.resolve(ret);
         });
     }
@@ -233,7 +260,16 @@ public class CapturePlugin extends Plugin {
         CaptureStore.clearPendingPath(getContext());
         try {
             NotificationManager nm = (NotificationManager) getContext().getSystemService(Context.NOTIFICATION_SERVICE);
-            if (nm != null) nm.cancel(ScreenshotWatchService.NOTIFY_FOUND_ID);
+            JSONArray shots = CaptureStore.clearShots(getContext());
+            for (int i = 0; i < shots.length(); i++) {
+                JSONObject item = shots.optJSONObject(i);
+                if (item == null) continue;
+                int id = item.optInt("notifyId", 0);
+                if (nm != null && id > 0) nm.cancel(id);
+                String path = item.optString("path", "");
+                if (!path.isEmpty()) new File(path).delete();
+            }
+            if (nm != null) nm.cancel(4301); // 1.4.7 及更早版本的固定通知 id
         } catch (Throwable ignored) {
         }
         try {

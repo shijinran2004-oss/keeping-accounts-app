@@ -16,7 +16,7 @@ import type {
 import { freshState, normalize, uid } from './normalize'
 import { openLedger, writeLegacyMirror } from './db'
 import { autoRecordToTx } from './auto'
-import { drainAutoRecords as readAutoRecords } from '../lib'
+import { drainAutoRecords as readAutoRecords, onAutoRecord } from '../lib'
 import {
   applyImport,
   createSnapshot,
@@ -110,9 +110,15 @@ export function LedgerProvider({ children }: { children: React.ReactNode }) {
     }
     window.addEventListener('focus', sync)
     document.addEventListener('visibilitychange', sync)
+    // 原生在后台点了「直接记一笔」：不切回 App 也把它写进账本
+    let stop: (() => void) | null = null
+    void onAutoRecord(sync).then((off) => {
+      stop = off
+    })
     return () => {
       window.removeEventListener('focus', sync)
       document.removeEventListener('visibilitychange', sync)
+      stop?.()
     }
   }, [applyAutoRecords])
 

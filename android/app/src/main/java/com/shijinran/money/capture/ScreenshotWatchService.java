@@ -29,12 +29,14 @@ import com.shijinran.money.MainActivity;
 import com.shijinran.money.R;
 import com.shijinran.money.ocr.OcrEngineHolder;
 
+import org.json.JSONArray;
+import org.json.JSONObject;
+
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
@@ -45,8 +47,11 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * 截图监听：前台服务里挂一个 MediaStore 观察者，发现新截图就本地识别一次。
- * 只有认出金额才发通知；通知点开才进记账页，绝不自动写库。
+ * 截图监听：前台服务里挂一个 MediaStore 观察者。
+ *
+ * 扫描和识别分成两个线程：扫描线程只管查「有没有新图」，查到就丢给识别线程排隊；
+ * 识别线程串行跑 OCR（模型只允许一个实例），一张接一张接上，不会互相抢开关。
+ * 每张认出金额的截图各自入队、各自一条通知，都能单独「直接记一笔」。
  */
 public class ScreenshotWatchService extends Service {
 
@@ -55,24 +60,31 @@ public class ScreenshotWatchService extends Service {
     static final String CHANNEL_FOUND = "screenshot_found_v2";
     private static final String CHANNEL_FOUND_LEGACY = "screenshot_found";
     static final int FOREGROUND_ID = 4101;
-    static final int NOTIFY_FOUND_ID = 4301;
-    /** 通知按钮带出来的东西：金额（分）与整段识别文字，前端拿去做正式解析 */
+
+    /** 通知按钮带出来的东西 */
+    static final String EXTRA_KEY = "capture_shot_key";
+    static final String EXTRA_NOTIFY_ID = "capture_notify_id";
     static final String EXTRA_AMOUNT = "capture_amount";
     static final String EXTRA_TEXT = "capture_text";
     static final String EXTRA_PATH = "capture_path";
+
     static volatile boolean running = false;
 
     private static final String TAG = "SnoopyCapture";
     private static final int MAX_SIDE = 1280;
     private static final long HISTORY_GUARD_MS = 10_000L;
-    /** 连拍多张时，8 秒内不再重复振动/响铃，只更新同一条通知 */
+    /** 连拍多张时，8 秒内不再重复振动/响铃 */
     private static final long QUIET_VIBRATE_MS = 8_000L;
+    /** 媒体库写入比广播慢，首次没扫到最多再补 2 次（原来要重试 10 次） */
+    private static final int MAX_SCAN_RETRIES = 2;
     private static final String GROUP_WATCH = "watch";
     private static final String GROUP_FOUND = "found";
 
-    private final ExecutorService io = Executors.newSingleThreadExecutor();
-    /** 一次截图会触发好几次 onChange，扫一遍就够，别把队列塞满。 */
-    private final AtomicBoolean scanScheduled = new AtomicBoolean(false);
+    /** 只查媒体库，永远不阻塞在 OCR 上 */
+    private final ExecutorService scanner = Executors.newSingleThreadExecutor();
+    /** 识别串行：RapidOcr 的 native 层不是多实例/并发安全的 */
+    private final ExecutorService recognizer = Executors.newSingleThreadExecutor();
+    private final AtomicBoolean scanQueued = new AtomicBoolean(false);
     private ContentObserver observer;
     private long startedAt;
 
@@ -85,11 +97,8 @@ public class ScreenshotWatchService extends Service {
         startForegroundCompat();
         primeCursor();
         registerObserver();
-        io.execute(() -> {
-            // 先把 OCR 模型加载好，第一张截图就不用等初始化
-            OcrEngineHolder.warmUp(this);
-            requestScan();
-        });
+        recognizer.execute(() -> OcrEngineHolder.warmUp(this));
+        requestScan();
     }
 
     @Override
@@ -113,7 +122,8 @@ public class ScreenshotWatchService extends Service {
             }
             observer = null;
         }
-        io.shutdownNow();
+        scanner.shutdownNow();
+        recognizer.shutdownNow();
         super.onDestroy();
     }
 
@@ -145,7 +155,6 @@ public class ScreenshotWatchService extends Service {
         watch.setShowBadge(false);
         nm.createNotificationChannel(watch);
         // IMPORTANCE_HIGH 才会像 QQ 消息那样从顶部弹出来
-        // 老渠道是默认重要性，留着也不会再弹横幅，直接删掉
         nm.deleteNotificationChannel(CHANNEL_FOUND_LEGACY);
         NotificationChannel found = new NotificationChannel(
                 CHANNEL_FOUND, "截图记账提醒", NotificationManager.IMPORTANCE_HIGH);
@@ -159,7 +168,6 @@ public class ScreenshotWatchService extends Service {
         observer = new ContentObserver(new Handler(Looper.getMainLooper())) {
             @Override
             public void onChange(boolean selfChange, Uri uri) {
-                Log.d(TAG, "observer change " + uri);
                 requestScan();
             }
         };
@@ -181,7 +189,7 @@ public class ScreenshotWatchService extends Service {
             CaptureStore.setLastSeenAt(this, lastSeen);
         }
         Set<Long> seen = CaptureStore.seenIds(this);
-        int handled = 0;
+        int found = 0;
         ContentResolver resolver = getContentResolver();
         String[] projection = new String[] {
                 MediaStore.Images.Media._ID,
@@ -200,7 +208,7 @@ public class ScreenshotWatchService extends Service {
             int idCol = cursor.getColumnIndexOrThrow(MediaStore.Images.Media._ID);
             int dateCol = cursor.getColumnIndexOrThrow(MediaStore.Images.Media.DATE_ADDED);
             int nameCol = cursor.getColumnIndexOrThrow(MediaStore.Images.Media.DISPLAY_NAME);
-            while (cursor.moveToNext() && !io.isShutdown()) {
+            while (cursor.moveToNext() && !scanner.isShutdown()) {
                 long id = cursor.getLong(idCol);
                 long addedSec = cursor.getLong(dateCol);
                 String name = cursor.getString(nameCol);
@@ -214,52 +222,45 @@ public class ScreenshotWatchService extends Service {
                 long addedMs = addedSec * 1000L;
                 if (addedMs < startedAt - HISTORY_GUARD_MS) continue;
                 if (!looksLikeScreenshot(name)) continue;
-                handleShot(id);
-                handled++;
+                // 扫描只负责发现，识别丢给另一个线程排队
+                final long shotId = id;
+                recognizer.execute(() -> handleShot(shotId));
+                found++;
             }
         } catch (Throwable t) {
             Log.w(TAG, "scan failed", t);
         } finally {
             if (cursor != null) cursor.close();
         }
-        if (handled > 0) Log.d(TAG, "scanned " + handled + " new shot(s)");
-        return handled > 0;
+        if (found > 0) Log.d(TAG, "queued " + found + " new shot(s) for OCR");
+        return found > 0;
     }
 
     private void requestScan() {
-        if (!scanScheduled.compareAndSet(false, true)) return;
+        if (!scanQueued.compareAndSet(false, true)) return;
         scheduleScan(0);
     }
 
-    /** MediaStore 的插入偶尔比系统广播晚一点，第一次没扫到就再试几次。 */
+    /** MediaStore 的插入偶尔比系统广播晚一点，第一次没扫到就再补两次。 */
     private void scheduleScan(int attempt) {
-        io.execute(() -> {
-            if (io.isShutdown()) {
-                scanScheduled.set(false);
+        scanner.execute(() -> {
+            if (scanner.isShutdown()) {
+                scanQueued.set(false);
                 return;
             }
             if (scanNewShots()) {
-                scanScheduled.set(false);
+                scanQueued.set(false);
                 // 扫的过程中可能又来了新截图，顺手再看一眼（纯查询，很便宜）
                 requestScan();
                 return;
             }
-            if (attempt >= 10) {
-                scanScheduled.set(false);
+            if (attempt >= MAX_SCAN_RETRIES) {
+                scanQueued.set(false);
                 return;
             }
-            // 头一次先等 200ms（媒体库写入通常不到一秒），之后每 400ms 再试，最多等 4 秒
             long delay = attempt == 0 ? 200L : 400L;
             new Handler(Looper.getMainLooper()).postDelayed(() -> scheduleScan(attempt + 1), delay);
         });
-    }
-
-    private void cancelFoundNotice() {
-        try {
-            NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
-            if (nm != null) nm.cancel(NOTIFY_FOUND_ID);
-        } catch (Throwable ignored) {
-        }
     }
 
     /** 第一次开启时先记下当前时间与最大的 _ID，避免把以前的截图全部过一遍。 */
@@ -268,7 +269,7 @@ public class ScreenshotWatchService extends Service {
             CaptureStore.setLastSeenAt(this, System.currentTimeMillis() / 1000L);
         }
         if (CaptureStore.lastId(this) > 0) return;
-        io.execute(() -> {
+        scanner.execute(() -> {
             Cursor cursor = null;
             try {
                 cursor = getContentResolver().query(MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
@@ -292,12 +293,14 @@ public class ScreenshotWatchService extends Service {
                 || lower.contains("截图");
     }
 
+    /** 识别线程：解码 → 存缓存 → OCR（只做一次，文字随截图一起存起来）→ 入队 + 一条通知。 */
     private void handleShot(long id) {
         long begin = System.currentTimeMillis();
         Uri uri = ContentUris.withAppendedId(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, id);
         File saved = null;
+        Bitmap bitmap = null;
         try {
-            Bitmap bitmap = decode(uri, MAX_SIDE);
+            bitmap = decode(uri, MAX_SIDE);
             if (bitmap == null) {
                 Log.w(TAG, "decode failed " + uri);
                 return;
@@ -307,26 +310,42 @@ public class ScreenshotWatchService extends Service {
                 Log.w(TAG, "cache write failed " + id);
                 return;
             }
-            CaptureStore.setPendingPath(this, saved.getAbsolutePath());
-            CaptureStore.setPendingSource(this, "screenshot");
             OcrShot shot = ocrShot(bitmap);
             String amount = shot == null ? null : shot.amount;
             if (amount == null) {
                 // 聊天、网页之类没有金额的截图，静默跳过
                 saved.delete();
-                CaptureStore.clearPendingPath(this);
-                // 上一条提醒指向的截图已经被这次覆盖掉了，留着点开只会是空弹层，直接收走
-                cancelFoundNotice();
                 Log.d(TAG, "skip id=" + id + " no amount in " + (System.currentTimeMillis() - begin) + "ms");
                 return;
             }
-            notifyFound(amount, saved.getAbsolutePath(), shot.text);
-            Log.d(TAG, "handled id=" + id + " ¥" + amount + " in " + (System.currentTimeMillis() - begin) + "ms");
+            long key = (id << 20) ^ (System.currentTimeMillis() & 0xFFFFFL);
+            int notifyId = CaptureStore.nextNotifyId(this);
+            JSONObject evicted = CaptureStore.addShot(this, key, notifyId, saved.getAbsolutePath(),
+                    centsOf(amount), shot.text);
+            if (evicted != null) dropShot(evicted);
+            notifyFound(notifyId, key, amount, saved.getAbsolutePath(), shot.text);
             CaptureStore.setLastNoticeAt(this, System.currentTimeMillis());
+            Log.d(TAG, "handled id=" + id + " ¥" + amount + " in " + (System.currentTimeMillis() - begin) + "ms");
         } catch (Throwable t) {
             Log.w(TAG, "handleShot failed: " + id, t);
             if (saved != null) saved.delete();
-            CaptureStore.clearPendingPath(this);
+        } finally {
+            // 位图用完立刻回收，连拍时不至于堆一堆大图把内存撑爆
+            if (bitmap != null && !bitmap.isRecycled()) bitmap.recycle();
+        }
+    }
+
+    /** 队列挤掉旧截图或用户取消时：收起它的通知、删掉缓存图 */
+    private void dropShot(JSONObject shot) {
+        try {
+            int notifyId = shot.optInt("notifyId", 0);
+            if (notifyId > 0) {
+                NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+                if (nm != null) nm.cancel(notifyId);
+            }
+            String path = shot.optString("path", "");
+            if (!path.isEmpty()) new File(path).delete();
+        } catch (Throwable ignored) {
         }
     }
 
@@ -376,11 +395,22 @@ public class ScreenshotWatchService extends Service {
         }
     }
 
+    /** 缓存只留最近几张；还在待确认队列里的图一律不删。 */
     private void prune(File dir) {
         File[] files = dir.listFiles();
-        if (files == null || files.length < 5) return;
-        Arrays.sort(files, Comparator.comparingLong(File::lastModified));
-        for (int i = 0; i < files.length - 4; i++) files[i].delete();
+        if (files == null || files.length < CaptureStore.SHOTS_KEEP + 3) return;
+        List<String> keep = new ArrayList<>();
+        JSONArray shots = CaptureStore.shots(this);
+        for (int i = 0; i < shots.length(); i++) {
+            JSONObject item = shots.optJSONObject(i);
+            if (item != null) keep.add(item.optString("path", ""));
+        }
+        Comparator<File> byTime = Comparator.comparingLong(File::lastModified);
+        java.util.Arrays.sort(files, byTime);
+        int allowed = CaptureStore.SHOTS_KEEP + 3;
+        for (int i = 0; i < files.length - allowed; i++) {
+            if (!keep.contains(files[i].getAbsolutePath())) files[i].delete();
+        }
     }
 
     /** 一次识别拿两样东西：够不够格提醒（金额），以及交给前端正式解析的原文。 */
@@ -395,8 +425,9 @@ public class ScreenshotWatchService extends Service {
     }
 
     private OcrShot ocrShot(Bitmap bitmap) {
+        Bitmap box = null;
         try {
-            Bitmap box = Bitmap.createBitmap(bitmap.getWidth(), bitmap.getHeight(), Bitmap.Config.ARGB_8888);
+            box = Bitmap.createBitmap(bitmap.getWidth(), bitmap.getHeight(), Bitmap.Config.ARGB_8888);
             OcrResult result = OcrEngineHolder.detect(getApplicationContext(), bitmap, box, MAX_SIDE);
             StringBuilder text = new StringBuilder();
             if (result != null && result.getTextBlocks() != null) {
@@ -408,6 +439,8 @@ public class ScreenshotWatchService extends Service {
             return new OcrShot(guessAmount(raw), raw);
         } catch (Throwable t) {
             return null;
+        } finally {
+            if (box != null && !box.isRecycled()) box.recycle();
         }
     }
 
@@ -430,10 +463,9 @@ public class ScreenshotWatchService extends Service {
     }
 
     /**
-     * 认到金额就发一条能直接操作的通知：系统会把它当成高优先级消息从顶部弹出来，
-     * 卡片上带「确认记录」「取消」两个按钮，不用先切回 App。
+     * 一张截图一条通知：两张同时待确认时各自有 id，都能单独点「直接记一笔」。
      */
-    private void notifyFound(String amount, String path, String ocrText) {
+    private void notifyFound(int notifyId, long key, String amount, String path, String ocrText) {
         String text = "点「直接记一笔」马上入账，点「取消」忽略这张截图";
         // 连续截好几张时，只有第一条振动，避免口袋里的手机连震一串
         boolean vibrate = System.currentTimeMillis() - CaptureStore.lastNoticeAt(this) > QUIET_VIBRATE_MS;
@@ -448,26 +480,27 @@ public class ScreenshotWatchService extends Service {
                 .setDefaults(vibrate ? NotificationCompat.DEFAULT_VIBRATE : 0)
                 .setSilent(!vibrate)
                 .setAutoCancel(true)
-                // 点通知本身还是进 App 看/改；点按钮则完全留在后台
-                .setContentIntent(openApp(path, 11))
-                .addAction(0, "直接记一笔", recordIntent(amount, path, ocrText))
-                .addAction(0, "取消", cancelIntent(13));
+                // 点通知本身进 App 看/改这个金额；点按钮则完全留在后台
+                .setContentIntent(openApp(path, 10000 + notifyId))
+                .addAction(0, "直接记一笔", recordIntent(key, notifyId, amount, ocrText))
+                .addAction(0, "取消", cancelIntent(key, notifyId));
         try {
             NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
-            // 固定 id：新截图直接替换上一条，通知栏不会堆一串旧提醒
-            if (nm != null) nm.notify(NOTIFY_FOUND_ID, builder.build());
+            if (nm != null) nm.notify(notifyId, builder.build());
         } catch (Throwable ignored) {
         }
     }
 
-    /** 「直接记一笔」：把金额和原文交给接收器排队，不需要把 App 拉到前台。 */
-    private PendingIntent recordIntent(String amount, String path, String text) {
+    /** 「直接记一笔」：把这张截图交给接收器入队，不需要把 App 拉到前台。 */
+    private PendingIntent recordIntent(long key, int notifyId, String amount, String ocrText) {
         Intent intent = new Intent(this, CaptureCancelReceiver.class);
         intent.setAction(CaptureCancelReceiver.ACTION_RECORD);
+        intent.putExtra(EXTRA_KEY, key);
+        intent.putExtra(EXTRA_NOTIFY_ID, notifyId);
         intent.putExtra(EXTRA_AMOUNT, centsOf(amount));
-        intent.putExtra(EXTRA_TEXT, text);
-        intent.putExtra(EXTRA_PATH, path);
-        return PendingIntent.getBroadcast(this, 12, intent,
+        // 连同识别文字一起带上：即使队列里那张已经被点开过，按钮也还能拿到原文
+        intent.putExtra(EXTRA_TEXT, ocrText == null ? "" : ocrText);
+        return PendingIntent.getBroadcast(this, 20000 + notifyId, intent,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
     }
 
@@ -484,11 +517,13 @@ public class ScreenshotWatchService extends Service {
         }
     }
 
-    /** 「取消」按钮：把待确认的截图丢掉，再把通知收起来 */
-    private PendingIntent cancelIntent(int requestCode) {
+    /** 「取消」按钮：丢掉这一张，收起它的通知。 */
+    private PendingIntent cancelIntent(long key, int notifyId) {
         Intent intent = new Intent(this, CaptureCancelReceiver.class);
         intent.setAction(CaptureCancelReceiver.ACTION_CANCEL);
-        return PendingIntent.getBroadcast(this, requestCode, intent,
+        intent.putExtra(EXTRA_KEY, key);
+        intent.putExtra(EXTRA_NOTIFY_ID, notifyId);
+        return PendingIntent.getBroadcast(this, 30000 + notifyId, intent,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
     }
 

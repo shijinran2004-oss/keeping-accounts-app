@@ -8,6 +8,7 @@ export {
   disableWatch,
   drainAutoRecords,
   enableWatch,
+  onAutoRecord,
   onCapture,
   openNoticeSettings,
   watchStatus,

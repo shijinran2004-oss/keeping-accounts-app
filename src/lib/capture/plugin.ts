@@ -7,7 +7,7 @@ import type { AutoRecord, CaptureImage, CaptureSource, WatchStatus } from '../..
  * 识别、解析、回填全在前端，和拍小票走同一条路。
  */
 interface CaptureApi {
-  consume(): Promise<{ dataUrl?: string; source?: string }>
+  consume(): Promise<{ dataUrl?: string; source?: string; text?: string }>
   drainAutoRecords(): Promise<{ records?: AutoRecord[] }>
   watchStatus(): Promise<WatchStatus>
   enableWatch(): Promise<WatchStatus>
@@ -17,6 +17,7 @@ interface CaptureApi {
     event: 'capture',
     listener: (data: { source?: string }) => void,
   ): Promise<PluginListenerHandle>
+  addListener(event: 'captureRecord', listener: () => void): Promise<PluginListenerHandle>
   removeAllListeners(): Promise<void>
 }
 
@@ -51,7 +52,7 @@ export async function consumeCapture(): Promise<CaptureImage | null> {
   try {
     const result = await capture().consume()
     if (!result?.dataUrl) return null
-    return { dataUrl: result.dataUrl, source: asSource(result.source) }
+    return { dataUrl: result.dataUrl, source: asSource(result.source), text: result.text }
   } catch {
     return null
   }
@@ -94,6 +95,17 @@ export async function enableWatch(): Promise<WatchStatus> {
 export async function disableWatch(): Promise<WatchStatus> {
   if (!captureAvailable()) return WATCH_OFF
   return capture().disableWatch()
+}
+
+/**
+ * 通知里点了「直接记一笔」时叫一声（App 在前台的话立刻写进账本，不用等切回前台）。
+ */
+export async function onAutoRecord(handler: () => void): Promise<() => void> {
+  if (!captureAvailable()) return () => {}
+  const handle = await capture().addListener('captureRecord', () => handler())
+  return () => {
+    void handle.remove()
+  }
 }
 
 /**

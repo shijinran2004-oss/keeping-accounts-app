@@ -160,24 +160,40 @@ export function AddSheet({
     if (open && canScan) void warmUpOcr()
   }, [open, canScan])
 
+  /** 识别结果填表：拍照、分享、截图走的是同一套回填 */
+  const applyDraft = (draft: OcrDraft) => {
+    setOcrDraft(draft)
+    if (draft.amountCents) setExpr(centsToYuanInput(draft.amountCents))
+    if (draft.date) setDate(draft.date)
+    if (draft.merchant) setNote(draft.merchant.slice(0, 30))
+    if (draft.categoryId && state.categories.some((c) => c.id === draft.categoryId && c.type === 'expense')) {
+      if (type !== 'expense') setType('expense')
+      setCategoryId(draft.categoryId)
+    }
+    if (draft.amountCents) tapSuccess()
+    else toast('金额没认出来，手动补一下', 'error')
+  }
+
   const runOcr = async (dataUrl: string) => {
     setScanning(true)
     setOcrDraft(null)
     try {
       const result = await recognizeReceipt(dataUrl)
-      const draft = parseReceipt(result.lines)
-      setOcrDraft(draft)
-      if (draft.amountCents) setExpr(centsToYuanInput(draft.amountCents))
-      if (draft.date) setDate(draft.date)
-      if (draft.merchant) setNote(draft.merchant.slice(0, 30))
-      if (draft.categoryId && state.categories.some((c) => c.id === draft.categoryId && c.type === 'expense')) {
-        if (type !== 'expense') setType('expense')
-        setCategoryId(draft.categoryId)
-      }
-      if (draft.amountCents) tapSuccess()
-      else toast('金额没认出来，手动补一下', 'error')
+      applyDraft(parseReceipt(result.lines))
     } catch (error) {
       toast(error instanceof Error ? error.message : '识别失败了，手动记吧', 'error')
+    } finally {
+      setScanning(false)
+    }
+  }
+
+  /** 截图监听已经把文字识别过了，这里只解析文字，不再对图片跑一遍模型 */
+  const runText = (text: string) => {
+    setScanning(true)
+    setOcrDraft(null)
+    try {
+      const lines = text.split(/\r?\n/).map((line) => ({ text: line, score: 1, box: [] }))
+      applyDraft(parseReceipt(lines))
     } finally {
       setScanning(false)
     }
@@ -204,7 +220,8 @@ export function AddSheet({
     if (!open || !capture) return
     if (usedCapture.current === capture) return
     usedCapture.current = capture
-    void runOcr(capture.dataUrl)
+    if (capture.text?.trim()) runText(capture.text)
+    else void runOcr(capture.dataUrl)
     onCaptureUsed?.()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, capture])

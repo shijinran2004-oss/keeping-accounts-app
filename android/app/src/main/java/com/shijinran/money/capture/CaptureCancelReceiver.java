@@ -12,12 +12,17 @@ import androidx.core.app.NotificationCompat;
 
 import com.shijinran.money.R;
 
+import org.json.JSONArray;
+import org.json.JSONObject;
+
+import java.io.File;
 import java.util.Locale;
 
 /**
  * 通知上两个按钮的落点：
- * 「直接记一笔」把金额先存进本地队列，前端下次启动/回到前台时写进账本；
- * 「取消」直接丢掉这张截图。两条路径都顺手把通知收起来。
+ * 「直接记一笔」把这一张截图移出待确认队列、金额和识别文字存进待入账队列；
+ * 「取消」把这一张丢掉。
+ * 两者都只处理自己那条通知对应的截图，连拍多张时互不影响。
  */
 public class CaptureCancelReceiver extends BroadcastReceiver {
 
@@ -32,39 +37,69 @@ public class CaptureCancelReceiver extends BroadcastReceiver {
         String action = intent == null ? null : intent.getAction();
         if (ACTION_RECORD.equals(action)) {
             record(context, intent);
-            return;
-        }
-        try {
-            CaptureStore.clearPendingPath(context);
-            cancelFound(context);
-        } catch (Throwable t) {
-            Log.w("SnoopyCapture", "cancel pending failed", t);
+        } else {
+            cancel(context, intent);
         }
     }
 
-    /** 只认通知当前指向的那张截图，连点两下也只会记一笔。 */
+    /** 只认通知当前指向的那一张，连点两下也只会记一笔。 */
     private void record(Context context, Intent intent) {
         try {
+            long key = intent.getLongExtra(ScreenshotWatchService.EXTRA_KEY, 0L);
+            int notifyId = intent.getIntExtra(ScreenshotWatchService.EXTRA_NOTIFY_ID, 0);
             long amount = intent.getLongExtra(ScreenshotWatchService.EXTRA_AMOUNT, 0L);
             String text = intent.getStringExtra(ScreenshotWatchService.EXTRA_TEXT);
-            String path = intent.getStringExtra(ScreenshotWatchService.EXTRA_PATH);
-            String pending = CaptureStore.pendingPath(context);
-            boolean current = path == null || path.equals(pending);
-            if (current && amount > 0) {
-                CaptureStore.pushAutoRecord(context, amount, text);
+
+            JSONObject shot = key != 0 ? CaptureStore.removeShot(context, key) : null;
+            if (shot != null) {
+                amount = shot.optLong("amountCents", amount);
+                text = shot.optString("text", text);
+                deleteFile(shot);
             }
-            if (current) CaptureStore.clearPendingPath(context);
-            cancelFound(context);
-            if (current && amount > 0) notifyDone(context, amount);
-            Log.d("SnoopyCapture", "record ¥" + amount + " queued=" + (current && amount > 0));
+            if (amount > 0) CaptureStore.pushAutoRecord(context, amount, text);
+
+            NotificationManager nm = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
+            if (nm != null && notifyId > 0) nm.cancel(notifyId);
+            if (amount > 0) notifyDone(context, amount);
+            // App 在前台时让 JS 立刻把队列写进账本，不用等切到后台再回来
+            if (amount > 0) CapturePlugin.pingAutoRecord();
+            Log.d("SnoopyCapture", "record ¥" + amount + " queued=" + (amount > 0));
         } catch (Throwable t) {
             Log.w("SnoopyCapture", "record failed", t);
         }
     }
 
-    private void cancelFound(Context context) {
-        NotificationManager nm = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
-        if (nm != null) nm.cancel(ScreenshotWatchService.NOTIFY_FOUND_ID);
+    private void cancel(Context context, Intent intent) {
+        try {
+            long key = intent.getLongExtra(ScreenshotWatchService.EXTRA_KEY, 0L);
+            int notifyId = intent.getIntExtra(ScreenshotWatchService.EXTRA_NOTIFY_ID, 0);
+            NotificationManager nm = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
+            if (key != 0) {
+                JSONObject shot = CaptureStore.removeShot(context, key);
+                if (shot != null) deleteFile(shot);
+                if (nm != null && notifyId > 0) nm.cancel(notifyId);
+            } else {
+                // 老版本的通知没有 key：整队清掉
+                JSONArray all = CaptureStore.clearShots(context);
+                for (int i = 0; i < all.length(); i++) {
+                    JSONObject item = all.optJSONObject(i);
+                    if (item == null) continue;
+                    int id = item.optInt("notifyId", 0);
+                    if (nm != null && id > 0) nm.cancel(id);
+                    deleteFile(item);
+                }
+            }
+        } catch (Throwable t) {
+            Log.w("SnoopyCapture", "cancel pending failed", t);
+        }
+    }
+
+    private void deleteFile(JSONObject shot) {
+        try {
+            String path = shot.optString("path", "");
+            if (!path.isEmpty()) new File(path).delete();
+        } catch (Throwable ignored) {
+        }
     }
 
     /** 静静地回一条「已记账」，几秒后自己消失，不弹横幅也不再振动。 */
