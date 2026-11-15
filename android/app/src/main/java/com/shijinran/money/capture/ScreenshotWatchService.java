@@ -133,7 +133,8 @@ public class ScreenshotWatchService extends Service {
     public void onDestroy() {
         running = false;
         instance = null;
-        cancelHeartbeat(this);
+        // 不要在这里取消自检闹钟：系统回收或冻结后台服务时同样会走 onDestroy，
+        // 一旦取消就再没人把服务叫回来。用户主动关闭时由 CapturePlugin.disableWatch() 取消。
         cancelProgress();
         // 先掐掉还在排队的补扫：否则它会在线程池 shutdown 之后再 execute，主线程直接崩
         mainHandler.removeCallbacksAndMessages(null);
@@ -541,7 +542,14 @@ public class ScreenshotWatchService extends Service {
             OcrResult result = OcrEngineHolder.detect(getApplicationContext(), bitmap, box, MAX_SIDE);
             // 顺序由 OcrEngineHolder 统一排（RapidOCR 原始块顺序不可靠），和插件走同一套
             String raw = OcrEngineHolder.toText(result);
-            return new OcrShot(guessAmount(raw), raw);
+            // 截的是我们自己的页面就不用记账（截图同时也会把自己的通知横幅拍进去，
+            // 不挡掉会形成闭环：截图 → 我们弹「识别到 ¥12.34」→ 再截图把这行认成金额）
+            if (looksLikeOurApp(raw)) {
+                Log.d(TAG, "skip own app screenshot");
+                return null;
+            }
+            String text = cleanOcrText(raw);
+            return new OcrShot(guessAmount(text), text);
         } catch (Throwable t) {
             return null;
         } finally {
@@ -565,6 +573,37 @@ public class ScreenshotWatchService extends Service {
             }
         }
         return null;
+    }
+
+    /** 整张截图是不是我们自己的界面：四个 tab 名同时出现基本就能确定。 */
+    private static boolean looksLikeOurApp(String raw) {
+        return raw.contains("首页") && raw.contains("明细") && raw.contains("统计") && raw.contains("我的");
+    }
+
+    /**
+     * 去掉属于本 App 自己的那几行（通知横幅标题、按钮、常驻通知、我的页说明）。
+     * 我们自己的通知盖在支付页上时，只去掉横幅那几行，剩下的金额照常认。
+     */
+    private static String cleanOcrText(String raw) {
+        if (raw == null || raw.isEmpty()) return "";
+        StringBuilder kept = new StringBuilder();
+        for (String line : raw.split("\n")) {
+            String t = line.trim();
+            if (t.isEmpty() || isOwnUi(t)) continue;
+            if (kept.length() > 0) kept.append('\n');
+            kept.append(t);
+        }
+        return kept.toString();
+    }
+
+    private static boolean isOwnUi(String line) {
+        if (line.contains("直接记一笔") || line.contains("截图记账") || line.contains("马上入账")
+                || line.contains("截屏后弹出通知") || line.contains("正在认金额") || line.contains("已记账")
+                || line.contains("不用切回") || line.contains("截图只在这台手机上识别")) {
+            return true;
+        }
+        // 我们自己的通知标题「识别到 ¥12.34」
+        return line.matches(".*识别到\\s*[\u00a5\uffe5]\\s*[0-9].*");
     }
 
     /**

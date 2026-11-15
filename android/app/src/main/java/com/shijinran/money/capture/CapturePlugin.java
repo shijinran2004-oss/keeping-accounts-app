@@ -79,6 +79,8 @@ public class CapturePlugin extends Plugin {
         }
         if (CaptureStore.isEnabled(getContext()) && !ScreenshotWatchService.running) {
             startService();
+            // 后台限制下服务可能拉不起来，把自检闹钟排上，30 秒后再试
+            ScreenshotWatchService.scheduleHeartbeat(getContext());
         }
     }
 
@@ -290,6 +292,8 @@ public class CapturePlugin extends Plugin {
     @PluginMethod
     public void disableWatch(PluginCall call) {
         CaptureStore.setEnabled(getContext(), false);
+        // 只有用户主动关闭才取消自检闹钟；系统停服务时闹钟必须留着
+        ScreenshotWatchService.cancelHeartbeat(getContext());
         // 关掉以后不该留着「识别到 ¥X」和它指向的截图，否则点开是个没用的弹层
         CaptureStore.clearPendingPath(getContext());
         try {

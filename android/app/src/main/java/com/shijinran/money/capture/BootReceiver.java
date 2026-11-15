@@ -33,6 +33,9 @@ public class BootReceiver extends BroadcastReceiver {
             Log.w(TAG, "watch enabled but image permission missing, skip boot start");
             return;
         }
+        // 先把自检闹钟排上：Android 15 起开机广播里不一定允许直接拉前台服务，
+        // 闹钟是后面把监听接回来的兜底。
+        ScreenshotWatchService.scheduleHeartbeat(context);
         try {
             Intent service = new Intent(context, ScreenshotWatchService.class);
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -45,7 +48,6 @@ public class BootReceiver extends BroadcastReceiver {
             // Android 15 起，BOOT_COMPLETED 里不允许直接拉前台服务。
             // 退回 30 秒一次的自检闹钟：能拉起来就拉，拉不动就提醒用户点一下 App。
             Log.w(TAG, "boot restart failed, fallback to heartbeat", t);
-            ScreenshotWatchService.scheduleHeartbeat(context);
         }
     }
 }

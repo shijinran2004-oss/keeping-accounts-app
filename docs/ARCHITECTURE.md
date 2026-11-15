@@ -160,7 +160,7 @@ App / main
 
 分享 / 截图进来时走另一条入口：原生层把图缩到 1600px 存成 dataUrl（分享读 `ACTION_SEND` 的 `content://`，截图由前台服务监听 MediaStore 新增），前端 `lib/capture` 取出后交给 `AddSheet`，与「拍小票」共用 `recognizeReceipt → parseReceipt → 回填`，仍然由用户点保存才写库。截图监听默认关闭，开关状态存在原生 `SharedPreferences('shijinran.capture')`；服务按 `DATE_ADDED` 时间游标加已处理 ID 去重来找新截图（媒体库的 `_ID` 会被回收重用，不能当游标），只认文件名像截图、时间在开启之后的图片；一次截图常触发多次媒体库回调，会合并成一次扫描；开机或覆盖安装后由 `BootReceiver` 把服务重新拉起。识别一次就把结果留住：服务在后台 OCR 时同时拿到金额和整段文字，连同缓存图存进待确认队列（`CaptureStore` 的 `pendingShots`，最多 4 张），之后点通知打开记一笔直接拿这段文字解析，不再对图片识别第二遍。每张截图各发一条高优先级通知（编号 4301–4499 循环），系统会在屏幕顶部弹出 QQ 消息式卡片，标题是金额，底部带「直接记一笔」「取消」两个按钮：「直接记一笔」由 `CaptureCancelReceiver` 把金额和整段文字存进本地队列，不拉起 Activity，App 在前台时由 `CapturePlugin.pingAutoRecord()` 立刻通知前端冲刷，否则等启动或回前台时用 `drainAutoRecords()` 取走，交给 `data/auto.ts` 的 `autoRecordToTx()` 补商户、分类、日期后写库；「取消」直接丢掉这张待确认的截图并收起通知（两者都由 `CaptureCancelReceiver` 自己处理，不依赖服务是否还活着）。扫描（`scanner` 线程，只查媒体库）与识图（`recognizer` 线程，OCR 串行）分开，扫描重试最多 2 次。`watchStatus()` 同时返回通知总开关、渠道重要性和勿扰状态，前端据此在「我的」里提示横幅为什么没弹，并提供 `openNoticeSettings()` 跳转到系统的渠道设置页；还会返回 `battery`（是否已允许绕过电池优化）和 `lastCheckAt`（上次扫媒体库的时间），没白名单时「我的」多一行「后台限制」，点进去是 `requestIgnoreBattery()`。
 
-后台不被冻住靠两条保险：服务每 30 秒给自己排一个 `AlarmManager`（`ELAPSED_REALTIME`，不要求精确闹钟权限）发给 `CaptureHeartbeatReceiver`，闹钟到点就让服务补扫一次，服务已经没了就重新拉起，拉不起来才发一条「截图记账需要打开一次 App」的通知；开机、覆盖安装由 `BootReceiver` 重新拉起（Android 15 起开机广播里禁止直接启动前台服务，失败就退回这条闹钟自检）。截图一进来先发一条不放大的「正在认金额…」占位通知，识别完原地更新成金额，认不出或超时（15 秒）再收起来。
+后台不被冻住靠两条保险：服务每 30 秒给自己排一个 `AlarmManager`（`ELAPSED_REALTIME`，不要求精确闹钟权限）发给 `CaptureHeartbeatReceiver`，闹钟到点就让服务补扫一次，服务已经没了就重新拉起，拉不起来才发一条「截图记账需要打开一次 App」的通知；这个闹钟只在用户主动关闭开关时取消——服务被系统回收或冻住同样会走 `onDestroy`，那里如果顺手取消闹钟就再没人把服务叫回来了（这是 1.4.11 修掉的问题）。开机、覆盖安装由 `BootReceiver` 重新拉起并先排好闹钟（Android 15 起开机广播里禁止直接启动前台服务，失败就靠闹钟自检）。另外识别前会先判断这张图是不是本 App 自己的界面或通知（`looksLikeOurApp` / `isOwnUi`），是就跳过，避免把自己「识别到 ¥X」的横幅当成金额记一笔假账。截图一进来先发一条不放大的「正在认金额…」占位通知，识别完原地更新成金额，认不出或超时（15 秒）再收起来。
 
 读的时候反过来：`useLedger().state` → `lib/stats.ts` 按区间汇总 → 页面渲染。
 
@@ -182,7 +182,7 @@ App / main
 
 ## 版本与构建
 
-- `versionCode 50` / `versionName 1.4.10`（`android/app/build.gradle`）
+- `versionCode 51` / `versionName 1.4.11`（`android/app/build.gradle`）
 - 数据版本 `LedgerState.version = 1`，`normalize()` 读取时补全新增分类与设置
 - 存储：IndexedDB（库 `shijinran`，`txs` / `meta` / `snapshots` 三个 store），首次启动从 `localStorage` 一次性迁移；`localStorage['shijinran.storage.engine']='ls'` 可强制回退旧引擎
 - 备份：v2 容器带 `schema` / `checksum`，默认 gzip；导入先预览，支持覆盖 / 合并 / 仅设置与分类；导入、清空、恢复前自动快照（保留 5 份）
