@@ -8,5 +8,6 @@ export {
   disableWatch,
   enableWatch,
   onCapture,
+  openNoticeSettings,
   watchStatus,
 } from './plugin'

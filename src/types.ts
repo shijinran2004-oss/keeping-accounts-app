@@ -521,4 +521,18 @@ export interface WatchStatus {
   running: boolean
   /** 相册权限：未申请 / 已拒绝 / 已允许 */
   permission: 'prompt' | 'denied' | 'granted'
+  /** 通知能不能从顶部弹出（横幅）；系统把渠道关掉时这里会告诉用户 */
+  notice?: NoticeStatus
+}
+
+/** 通知横幅的可用状态，来自原生插件 */
+export interface NoticeStatus {
+  /** App 通知总开关是否打开 */
+  notifications: boolean
+  /** 「截图记账提醒」渠道的重要性，4 = 高（会弹横幅），其余不会弹 */
+  importance: number
+  /** 渠道 id */
+  channel: string
+  /** 系统是否处于勿扰模式 */
+  dnd: boolean
 }

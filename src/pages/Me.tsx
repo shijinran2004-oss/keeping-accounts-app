@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import {
+  BellRing,
   CalendarClock,
   Camera,
   ChevronRight,
@@ -26,14 +27,26 @@ import {
   fileToAvatar,
   formatDay,
   formatMoney,
+  openNoticeSettings,
   themeName,
   todayStr,
   watchStatus,
 } from '../lib'
 import { Seal, SectionTitle, useToast } from '../ui'
 import { BudgetSheet, CategorySheet, DataSheet, NameSheet, PaydaySheet } from '../sheets'
-import type { WatchStatus } from '../types'
+import type { NoticeStatus, WatchStatus } from '../types'
 import appIcon from '../assets/app-icon.png'
+
+/** 通知横幅被系统挡住时，告诉用户该去开哪一项 */
+function noticeIssue(notice?: NoticeStatus): { label: string; sub: string } | null {
+  if (!notice) return null
+  if (!notice.notifications) return { label: '通知权限', sub: '系统把 App 通知关了，截屏后收不到提醒' }
+  if (notice.importance >= 0 && notice.importance < 4) {
+    return { label: '顶部横幅', sub: '「截图记账提醒」没设成横幅，截屏后只会待在下拉通知栏里' }
+  }
+  if (notice.dnd) return { label: '勿扰模式', sub: '系统勿扰会挡掉横幅；下拉通知栏里仍能点「确认记录」' }
+  return null
+}
 
 /**
  * 我的：头像、主题、收入预算、发薪日、分类、备份和重置。
@@ -55,7 +68,13 @@ export function Me() {
 
   useEffect(() => {
     if (!canWatch) return
-    void watchStatus().then(setWatch)
+    const sync = () => {
+      void watchStatus().then(setWatch)
+    }
+    sync()
+    // 从系统设置页回来时重新读一遍，横幅开关改完能立刻反映
+    window.addEventListener('focus', sync)
+    return () => window.removeEventListener('focus', sync)
   }, [canWatch])
 
   const toggleWatch = async () => {
@@ -63,14 +82,22 @@ export function Me() {
     setWatchBusy(true)
     try {
       const next = watch?.enabled ? await disableWatch() : await enableWatch()
+      const fresh = await watchStatus()
       setWatch((prev) => ({
         supported: true,
         enabled: next.enabled,
         running: next.running,
         permission: next.permission ?? prev?.permission ?? 'prompt',
+        notice: fresh.notice ?? prev?.notice,
       }))
       if (next.enabled) {
-        toast('截图记账已开启，截屏后会弹出通知让你确认')
+        const issue = noticeIssue(fresh.notice)
+        toast(
+          issue
+            ? `截图记账已开启，但${issue.label}没打开，截屏后不会从顶部弹出`
+            : '截图记账已开启，截屏后会弹出通知让你确认',
+          issue ? 'error' : undefined,
+        )
       } else {
         toast('截图记账已关闭')
       }
@@ -81,6 +108,16 @@ export function Me() {
     }
   }
 
+  const openNotice = async () => {
+    try {
+      await openNoticeSettings()
+      toast('把「横幅」打开，截屏后就会像 QQ 一样从顶部弹出')
+    } catch (error) {
+      toast(error instanceof Error ? error.message : '没打开设置，可以手动去系统设置里打开横幅', 'error')
+    }
+  }
+
+  const notice = watch?.enabled ? noticeIssue(watch.notice) : null
   const days = new Set(state.txs.map((t) => t.date)).size
   const first = [...state.txs].sort((a, b) => a.date.localeCompare(b.date))[0]
   const theme = state.settings.theme ?? 'light'
@@ -259,6 +296,15 @@ export function Me() {
               }
               value={watchBusy ? '…' : watch?.enabled ? '已开启' : '已关闭'}
               onClick={toggleWatch}
+            />
+          )}
+          {canWatch && notice && (
+            <Row
+              icon={BellRing}
+              label={notice.label}
+              sub={notice.sub}
+              value="去打开"
+              onClick={openNotice}
             />
           )}
         </div>

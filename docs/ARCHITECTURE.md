@@ -158,7 +158,7 @@ App / main
 校验失败清空 IDB 并回退旧存储（旧键保持只读，不删）。`localStorage['shijinran.storage.engine']='ls'` 可强制回退。每次写入成功后同步刷新 localStorage 镜像，回退时能读到最新账本。
 ```
 
-分享 / 截图进来时走另一条入口：原生层把图缩到 1600px 存成 dataUrl（分享读 `ACTION_SEND` 的 `content://`，截图由前台服务监听 MediaStore 新增），前端 `lib/capture` 取出后交给 `AddSheet`，与「拍小票」共用 `recognizeReceipt → parseReceipt → 回填`，仍然由用户点保存才写库。截图监听默认关闭，开关状态存在原生 `SharedPreferences('shijinran.capture')`；服务按 `DATE_ADDED` 时间游标加已处理 ID 去重来找新截图（媒体库的 `_ID` 会被回收重用，不能当游标），只认文件名像截图、时间在开启之后的图片；一次截图常触发多次媒体库回调，会合并成一次扫描；开机或覆盖安装后由 `BootReceiver` 把服务重新拉起。认出金额后发一条高优先级通知：系统会在屏幕顶部弹出一张 QQ 消息式卡片，标题是金额，底部带「确认记录」「取消」两个按钮（取消由 `CaptureCancelReceiver` 自己处理，不依赖服务是否还活着）。
+分享 / 截图进来时走另一条入口：原生层把图缩到 1600px 存成 dataUrl（分享读 `ACTION_SEND` 的 `content://`，截图由前台服务监听 MediaStore 新增），前端 `lib/capture` 取出后交给 `AddSheet`，与「拍小票」共用 `recognizeReceipt → parseReceipt → 回填`，仍然由用户点保存才写库。截图监听默认关闭，开关状态存在原生 `SharedPreferences('shijinran.capture')`；服务按 `DATE_ADDED` 时间游标加已处理 ID 去重来找新截图（媒体库的 `_ID` 会被回收重用，不能当游标），只认文件名像截图、时间在开启之后的图片；一次截图常触发多次媒体库回调，会合并成一次扫描；开机或覆盖安装后由 `BootReceiver` 把服务重新拉起。认出金额后发一条高优先级通知：系统会在屏幕顶部弹出一张 QQ 消息式卡片，标题是金额，底部带「确认记录」「取消」两个按钮（取消由 `CaptureCancelReceiver` 自己处理，不依赖服务是否还活着）。`watchStatus()` 同时返回通知总开关、渠道重要性和勿扰状态，前端据此在「我的」里提示横幅为什么没弹，并提供 `openNoticeSettings()` 跳转到系统的渠道设置页。
 
 读的时候反过来：`useLedger().state` → `lib/stats.ts` 按区间汇总 → 页面渲染。
 
@@ -180,7 +180,7 @@ App / main
 
 ## 版本与构建
 
-- `versionCode 45` / `versionName 1.4.5`（`android/app/build.gradle`）
+- `versionCode 46` / `versionName 1.4.6`（`android/app/build.gradle`）
 - 数据版本 `LedgerState.version = 1`，`normalize()` 读取时补全新增分类与设置
 - 存储：IndexedDB（库 `shijinran`，`txs` / `meta` / `snapshots` 三个 store），首次启动从 `localStorage` 一次性迁移；`localStorage['shijinran.storage.engine']='ls'` 可强制回退旧引擎
 - 备份：v2 容器带 `schema` / `checksum`，默认 gzip；导入先预览，支持覆盖 / 合并 / 仅设置与分类；导入、清空、恢复前自动快照（保留 5 份）

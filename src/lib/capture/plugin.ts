@@ -10,6 +10,7 @@ interface CaptureApi {
   consume(): Promise<{ dataUrl?: string; source?: string }>
   watchStatus(): Promise<WatchStatus>
   enableWatch(): Promise<WatchStatus>
+  openNoticeSettings(): Promise<void>
   disableWatch(): Promise<WatchStatus>
   addListener(
     event: 'capture',
@@ -63,6 +64,12 @@ export async function watchStatus(): Promise<WatchStatus> {
   } catch {
     return WATCH_OFF
   }
+}
+
+/** 跳到系统的「截图记账提醒」通知设置，让用户把横幅打开 */
+export async function openNoticeSettings(): Promise<void> {
+  if (!captureAvailable()) return
+  await capture().openNoticeSettings()
 }
 
 /** 打开截图监听：会申请相册（与通知）权限，成功后常驻一条通知 */

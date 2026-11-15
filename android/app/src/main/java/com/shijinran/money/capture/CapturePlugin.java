@@ -1,6 +1,7 @@
 package com.shijinran.money.capture;
 
 import android.Manifest;
+import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.content.ClipData;
 import android.content.Context;
@@ -10,6 +11,7 @@ import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.net.Uri;
 import android.os.Build;
+import android.provider.Settings;
 import android.util.Base64;
 
 import androidx.core.content.ContextCompat;
@@ -123,7 +125,46 @@ public class CapturePlugin extends Plugin {
         ret.put("enabled", CaptureStore.isEnabled(getContext()));
         ret.put("running", ScreenshotWatchService.running);
         ret.put("permission", imagePermission());
+
+        // 通知是否真的能弹横幅：权限在、渠道重要性是「高」、没开勿扰，三者缺一系统就不会从顶部弹出
+        JSObject notice = new JSObject();
+        NotificationManager nm = (NotificationManager) getContext().getSystemService(Context.NOTIFICATION_SERVICE);
+        boolean notifications = nm == null || nm.areNotificationsEnabled();
+        int importance = -1;
+        if (nm != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            NotificationChannel channel = nm.getNotificationChannel(ScreenshotWatchService.CHANNEL_FOUND);
+            if (channel != null) importance = channel.getImportance();
+        }
+        boolean dnd = Settings.Global.getInt(getContext().getContentResolver(), "zen_mode", 0) != 0;
+        notice.put("notifications", notifications);
+        notice.put("importance", importance);
+        notice.put("channel", ScreenshotWatchService.CHANNEL_FOUND);
+        notice.put("dnd", dnd);
+        ret.put("notice", notice);
+
         call.resolve(ret);
+    }
+
+    /** 跳到「截图记账提醒」这条通知渠道的系统设置页，让用户把横幅打开 */
+    @PluginMethod
+    public void openNoticeSettings(PluginCall call) {
+        try {
+            Intent intent;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                intent = new Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS);
+                intent.putExtra(Settings.EXTRA_APP_PACKAGE, getContext().getPackageName());
+                intent.putExtra(Settings.EXTRA_CHANNEL_ID, ScreenshotWatchService.CHANNEL_FOUND);
+            } else {
+                intent = new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS);
+                intent.putExtra("app_package", getContext().getPackageName());
+                intent.putExtra("app_uid", getContext().getApplicationInfo().uid);
+            }
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            getContext().startActivity(intent);
+            call.resolve();
+        } catch (Throwable t) {
+            call.reject("打不开通知设置，请手动到系统设置里允许「截图记账提醒」弹出横幅", "capture_settings_failed");
+        }
     }
 
     @PluginMethod
