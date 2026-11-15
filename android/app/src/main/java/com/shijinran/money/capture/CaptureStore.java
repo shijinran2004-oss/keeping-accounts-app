@@ -3,6 +3,9 @@ package com.shijinran.money.capture;
 import android.content.Context;
 import android.content.SharedPreferences;
 
+import org.json.JSONArray;
+import org.json.JSONObject;
+
 import java.util.HashSet;
 import java.util.Set;
 
@@ -20,7 +23,9 @@ final class CaptureStore {
     private static final String KEY_LAST_NOTICE = "lastNoticeAt";
     private static final String KEY_LAST_SEEN = "lastSeenAt";
     private static final String KEY_SEEN_IDS = "seenIds";
+    private static final String KEY_AUTO = "autoRecords";
     private static final int SEEN_IDS_KEEP = 40;
+    private static final int AUTO_KEEP = 30;
 
     private CaptureStore() {}
 
@@ -110,5 +115,40 @@ final class CaptureStore {
 
     static void setLastNoticeAt(Context context, long at) {
         prefs(context).edit().putLong(KEY_LAST_NOTICE, at).apply();
+    }
+
+    /**
+     * 通知里点了「直接记一笔」：先把金额和识别文字暂存在这里，
+     * 等前端下次启动/回到前台时取走写进账本。App 没在跑也能先记下来。
+     */
+    static synchronized void pushAutoRecord(Context context, long amountCents, String text) {
+        try {
+            JSONArray arr = autoRecords(context);
+            JSONObject item = new JSONObject();
+            item.put("amountCents", amountCents);
+            item.put("text", text == null ? "" : text);
+            item.put("createdAt", System.currentTimeMillis());
+            arr.put(item);
+            while (arr.length() > AUTO_KEEP) arr.remove(0);
+            prefs(context).edit().putString(KEY_AUTO, arr.toString()).apply();
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /** 取走所有待入账的记录并清空；前端拿到的就是原生识别的那一刻的结果。 */
+    static synchronized String takeAutoRecords(Context context) {
+        String raw = prefs(context).getString(KEY_AUTO, "");
+        prefs(context).edit().remove(KEY_AUTO).apply();
+        return raw == null ? "" : raw;
+    }
+
+    private static JSONArray autoRecords(Context context) {
+        String raw = prefs(context).getString(KEY_AUTO, "");
+        if (raw == null || raw.isEmpty()) return new JSONArray();
+        try {
+            return new JSONArray(raw);
+        } catch (Throwable t) {
+            return new JSONArray();
+        }
     }
 }

@@ -15,6 +15,8 @@ import type {
 } from '../types'
 import { freshState, normalize, uid } from './normalize'
 import { openLedger, writeLegacyMirror } from './db'
+import { autoRecordToTx } from './auto'
+import { drainAutoRecords as readAutoRecords } from '../lib'
 import {
   applyImport,
   createSnapshot,
@@ -37,17 +39,51 @@ export function LedgerProvider({ children }: { children: React.ReactNode }) {
   const stateRef = useRef<LedgerState | null>(null)
   stateRef.current = state
 
+  /**
+   * 通知里点「直接记一笔」时，App 可能根本没在前台；
+   * 原生先按金额入队，等这里用和小票同一套规则补商户、分类、日期，再真正写进账本。
+   */
+  const applyAutoRecords = useCallback(
+    async (repo: LedgerRepository, current: LedgerState): Promise<LedgerState> => {
+      const items = await readAutoRecords()
+      if (!items.length) return current
+      const added: Tx[] = []
+      for (const item of items) {
+        const tx = autoRecordToTx(item, current.categories)
+        if (tx) added.push(tx)
+      }
+      if (!added.length) return current
+      try {
+        await Promise.all(added.map((tx) => repo.putTx(tx)))
+      } catch (error) {
+        console.error('[ledger] 自动记账写入失败', error)
+        return current
+      }
+      return { ...current, txs: [...added.reverse(), ...current.txs] }
+    },
+    [],
+  )
+
   // 打开账本：优先 IndexedDB，必要时把旧 localStorage 搬过来；失败才显示错误页
   useEffect(() => {
     let alive = true
     openLedger()
-      .then((opened) => {
+      .then(async (opened) => {
         if (!alive) return
         repoRef.current = opened.repo
         stateRef.current = opened.state
-        setState(opened.state)
+        let initial = opened.state
+        try {
+          // 先把通知里已经确认过的记录补上，再渲染，避免首页先闪一下没有的账
+          initial = await applyAutoRecords(opened.repo, opened.state)
+        } catch (error) {
+          console.error('[ledger] 取自动记账记录失败', error)
+        }
+        if (!alive) return
+        stateRef.current = initial
+        setState(initial)
         // 一周没备份就自动补一份，失败只写日志
-        void maybeWeeklySnapshot(opened.repo, opened.state)
+        void maybeWeeklySnapshot(opened.repo, initial)
       })
       .catch((error: unknown) => {
         if (!alive) return
@@ -56,7 +92,29 @@ export function LedgerProvider({ children }: { children: React.ReactNode }) {
     return () => {
       alive = false
     }
-  }, [])
+  }, [applyAutoRecords])
+
+  // 通知里点「直接记一笔」时 App 只是切到后台的话，回到前台立刻补上
+  useEffect(() => {
+    const sync = () => {
+      const repo = repoRef.current
+      const current = stateRef.current
+      if (!repo || !current) return
+      void applyAutoRecords(repo, current)
+        .then((next) => {
+          if (next === current || stateRef.current !== current) return
+          stateRef.current = next
+          setState(next)
+        })
+        .catch((error: unknown) => console.error('[ledger] 自动记账失败', error))
+    }
+    window.addEventListener('focus', sync)
+    document.addEventListener('visibilitychange', sync)
+    return () => {
+      window.removeEventListener('focus', sync)
+      document.removeEventListener('visibilitychange', sync)
+    }
+  }, [applyAutoRecords])
 
   // 主数据在 IndexedDB；localStorage 留一份最新镜像，回退到旧存储时不至于读到旧账
   useEffect(() => {

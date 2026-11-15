@@ -1,5 +1,5 @@
 import { Capacitor, registerPlugin, type PluginListenerHandle } from '@capacitor/core'
-import type { CaptureImage, CaptureSource, WatchStatus } from '../../types'
+import type { AutoRecord, CaptureImage, CaptureSource, WatchStatus } from '../../types'
 
 /**
  * 原生 Capture 插件（Android 侧见 capture/CapturePlugin.java）。
@@ -8,6 +8,7 @@ import type { CaptureImage, CaptureSource, WatchStatus } from '../../types'
  */
 interface CaptureApi {
   consume(): Promise<{ dataUrl?: string; source?: string }>
+  drainAutoRecords(): Promise<{ records?: AutoRecord[] }>
   watchStatus(): Promise<WatchStatus>
   enableWatch(): Promise<WatchStatus>
   openNoticeSettings(): Promise<void>
@@ -53,6 +54,17 @@ export async function consumeCapture(): Promise<CaptureImage | null> {
     return { dataUrl: result.dataUrl, source: asSource(result.source) }
   } catch {
     return null
+  }
+}
+
+/** 取走通知里「直接记一笔」攒下的记录，取完原生存档就清空 */
+export async function drainAutoRecords(): Promise<AutoRecord[]> {
+  if (!captureAvailable()) return []
+  try {
+    const result = await capture().drainAutoRecords()
+    return result?.records ?? []
+  } catch {
+    return []
   }
 }
 

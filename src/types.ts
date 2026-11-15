@@ -511,6 +511,16 @@ export interface CaptureImage {
   source: CaptureSource
 }
 
+/** 通知里点了「直接记一笔」后原生暂存、等前端写进账本的一笔 */
+export interface AutoRecord {
+  /** 金额，单位：分 */
+  amountCents: number
+  /** OCR 出的整段文字，前端再用 parseReceipt 补商户、分类和日期 */
+  text: string
+  /** 入队时间戳（毫秒） */
+  createdAt: number
+}
+
 /** 截图监听的开关状态，来自原生 Capture 插件 */
 export interface WatchStatus {
   /** 系统版本够不够（Android 6+） */

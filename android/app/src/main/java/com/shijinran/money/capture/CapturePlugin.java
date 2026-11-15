@@ -13,9 +13,11 @@ import android.net.Uri;
 import android.os.Build;
 import android.provider.Settings;
 import android.util.Base64;
+import android.util.Log;
 
 import androidx.core.content.ContextCompat;
 
+import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.PermissionState;
 import com.getcapacitor.Plugin;
@@ -24,6 +26,9 @@ import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 import com.getcapacitor.annotation.Permission;
 import com.getcapacitor.annotation.PermissionCallback;
+
+import org.json.JSONArray;
+import org.json.JSONObject;
 
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
@@ -116,6 +121,35 @@ public class CapturePlugin extends Plugin {
             ret.put("source", source == null ? "share" : source);
             call.resolve(ret);
         });
+    }
+
+    /**
+     * 取走通知里「直接记一笔」暂存的记录。
+     * App 没在前台时也能先点确认，等下次启动/回到前台再真正写进账本。
+     */
+    @PluginMethod
+    public void drainAutoRecords(PluginCall call) {
+        JSArray records = new JSArray();
+        String raw = CaptureStore.takeAutoRecords(getContext());
+        if (!raw.isEmpty()) {
+            try {
+                JSONArray arr = new JSONArray(raw);
+                for (int i = 0; i < arr.length(); i++) {
+                    JSONObject item = arr.optJSONObject(i);
+                    if (item == null) continue;
+                    JSObject one = new JSObject();
+                    one.put("amountCents", item.optLong("amountCents", 0L));
+                    one.put("text", item.optString("text", ""));
+                    one.put("createdAt", item.optLong("createdAt", 0L));
+                    records.put(one);
+                }
+            } catch (Throwable t) {
+                Log.w("SnoopyCapture", "drain records failed", t);
+            }
+        }
+        JSObject ret = new JSObject();
+        ret.put("records", records);
+        call.resolve(ret);
     }
 
     @PluginMethod

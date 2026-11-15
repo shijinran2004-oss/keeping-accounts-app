@@ -6,6 +6,7 @@ export {
   captureAvailable,
   consumeCapture,
   disableWatch,
+  drainAutoRecords,
   enableWatch,
   onCapture,
   openNoticeSettings,

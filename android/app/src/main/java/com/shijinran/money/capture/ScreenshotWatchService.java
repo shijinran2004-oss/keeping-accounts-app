@@ -56,6 +56,10 @@ public class ScreenshotWatchService extends Service {
     private static final String CHANNEL_FOUND_LEGACY = "screenshot_found";
     static final int FOREGROUND_ID = 4101;
     static final int NOTIFY_FOUND_ID = 4301;
+    /** 通知按钮带出来的东西：金额（分）与整段识别文字，前端拿去做正式解析 */
+    static final String EXTRA_AMOUNT = "capture_amount";
+    static final String EXTRA_TEXT = "capture_text";
+    static final String EXTRA_PATH = "capture_path";
     static volatile boolean running = false;
 
     private static final String TAG = "SnoopyCapture";
@@ -117,7 +121,7 @@ public class ScreenshotWatchService extends Service {
         Notification notice = new NotificationCompat.Builder(this, CHANNEL_WATCH)
                 .setSmallIcon(R.mipmap.ic_launcher)
                 .setContentTitle("截图记账已开启")
-                .setContentText("截屏后弹出通知，点「确认记录」才入账")
+                .setContentText("截屏后弹出通知，点「直接记一笔」马上入账")
                 .setOngoing(true)
                 .setPriority(NotificationCompat.PRIORITY_MIN)
                 // 单独一个 group：系统就不会把它和「识别到 ¥X」折叠成一个分组
@@ -305,7 +309,8 @@ public class ScreenshotWatchService extends Service {
             }
             CaptureStore.setPendingPath(this, saved.getAbsolutePath());
             CaptureStore.setPendingSource(this, "screenshot");
-            String amount = ocrAmount(bitmap);
+            OcrShot shot = ocrShot(bitmap);
+            String amount = shot == null ? null : shot.amount;
             if (amount == null) {
                 // 聊天、网页之类没有金额的截图，静默跳过
                 saved.delete();
@@ -315,7 +320,7 @@ public class ScreenshotWatchService extends Service {
                 Log.d(TAG, "skip id=" + id + " no amount in " + (System.currentTimeMillis() - begin) + "ms");
                 return;
             }
-            notifyFound(amount, saved.getAbsolutePath());
+            notifyFound(amount, saved.getAbsolutePath(), shot.text);
             Log.d(TAG, "handled id=" + id + " ¥" + amount + " in " + (System.currentTimeMillis() - begin) + "ms");
             CaptureStore.setLastNoticeAt(this, System.currentTimeMillis());
         } catch (Throwable t) {
@@ -378,7 +383,18 @@ public class ScreenshotWatchService extends Service {
         for (int i = 0; i < files.length - 4; i++) files[i].delete();
     }
 
-    private String ocrAmount(Bitmap bitmap) {
+    /** 一次识别拿两样东西：够不够格提醒（金额），以及交给前端正式解析的原文。 */
+    private static final class OcrShot {
+        final String amount;
+        final String text;
+
+        OcrShot(String amount, String text) {
+            this.amount = amount;
+            this.text = text == null ? "" : text;
+        }
+    }
+
+    private OcrShot ocrShot(Bitmap bitmap) {
         try {
             Bitmap box = Bitmap.createBitmap(bitmap.getWidth(), bitmap.getHeight(), Bitmap.Config.ARGB_8888);
             OcrResult result = OcrEngineHolder.detect(getApplicationContext(), bitmap, box, MAX_SIDE);
@@ -388,7 +404,8 @@ public class ScreenshotWatchService extends Service {
                     if (block != null && block.getText() != null) text.append(block.getText()).append('\n');
                 }
             }
-            return guessAmount(text.toString());
+            String raw = text.toString();
+            return new OcrShot(guessAmount(raw), raw);
         } catch (Throwable t) {
             return null;
         }
@@ -416,8 +433,8 @@ public class ScreenshotWatchService extends Service {
      * 认到金额就发一条能直接操作的通知：系统会把它当成高优先级消息从顶部弹出来，
      * 卡片上带「确认记录」「取消」两个按钮，不用先切回 App。
      */
-    private void notifyFound(String amount, String path) {
-        String text = "点「确认记录」记账，点「取消」忽略这张截图";
+    private void notifyFound(String amount, String path, String ocrText) {
+        String text = "点「直接记一笔」马上入账，点「取消」忽略这张截图";
         // 连续截好几张时，只有第一条振动，避免口袋里的手机连震一串
         boolean vibrate = System.currentTimeMillis() - CaptureStore.lastNoticeAt(this) > QUIET_VIBRATE_MS;
         NotificationCompat.Builder builder = new NotificationCompat.Builder(this, CHANNEL_FOUND)
@@ -431,14 +448,39 @@ public class ScreenshotWatchService extends Service {
                 .setDefaults(vibrate ? NotificationCompat.DEFAULT_VIBRATE : 0)
                 .setSilent(!vibrate)
                 .setAutoCancel(true)
+                // 点通知本身还是进 App 看/改；点按钮则完全留在后台
                 .setContentIntent(openApp(path, 11))
-                .addAction(0, "确认记录", openApp(path, 12))
+                .addAction(0, "直接记一笔", recordIntent(amount, path, ocrText))
                 .addAction(0, "取消", cancelIntent(13));
         try {
             NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
             // 固定 id：新截图直接替换上一条，通知栏不会堆一串旧提醒
             if (nm != null) nm.notify(NOTIFY_FOUND_ID, builder.build());
         } catch (Throwable ignored) {
+        }
+    }
+
+    /** 「直接记一笔」：把金额和原文交给接收器排队，不需要把 App 拉到前台。 */
+    private PendingIntent recordIntent(String amount, String path, String text) {
+        Intent intent = new Intent(this, CaptureCancelReceiver.class);
+        intent.setAction(CaptureCancelReceiver.ACTION_RECORD);
+        intent.putExtra(EXTRA_AMOUNT, centsOf(amount));
+        intent.putExtra(EXTRA_TEXT, text);
+        intent.putExtra(EXTRA_PATH, path);
+        return PendingIntent.getBroadcast(this, 12, intent,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+    }
+
+    /** "28.20" → 2820，交给前端时统一按分算 */
+    static long centsOf(String amount) {
+        if (amount == null || amount.isEmpty()) return 0L;
+        try {
+            return new java.math.BigDecimal(amount)
+                    .movePointRight(2)
+                    .setScale(0, java.math.RoundingMode.HALF_UP)
+                    .longValue();
+        } catch (Throwable t) {
+            return 0L;
         }
     }
 

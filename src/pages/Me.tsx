@@ -44,7 +44,7 @@ function noticeIssue(notice?: NoticeStatus): { label: string; sub: string } | nu
   if (notice.importance >= 0 && notice.importance < 4) {
     return { label: '顶部横幅', sub: '「截图记账提醒」没设成横幅，截屏后只会待在下拉通知栏里' }
   }
-  if (notice.dnd) return { label: '勿扰模式', sub: '系统勿扰会挡掉横幅；下拉通知栏里仍能点「确认记录」' }
+  if (notice.dnd) return { label: '勿扰模式', sub: '系统勿扰会挡掉横幅；下拉通知栏里仍能点「直接记一笔」' }
   return null
 }
 
@@ -95,7 +95,7 @@ export function Me() {
         toast(
           issue
             ? `截图记账已开启，但${issue.label}没打开，截屏后不会从顶部弹出`
-            : '截图记账已开启，截屏后会弹出通知让你确认',
+            : '截图记账已开启，截屏后弹出通知，点「直接记一笔」就行',
           issue ? 'error' : undefined,
         )
       } else {
@@ -291,7 +291,7 @@ export function Me() {
               label="截图记账"
               sub={
                 watch?.enabled
-                  ? '已开启：截屏后弹出通知，点「确认记录」才入账'
+                  ? '已开启：截屏后弹出通知，点「直接记一笔」马上入账'
                   : '默认关闭；开启后下拉栏会常驻一条通知'
               }
               value={watchBusy ? '…' : watch?.enabled ? '已开启' : '已关闭'}
@@ -309,7 +309,7 @@ export function Me() {
           )}
         </div>
         {canWatch && (
-          <p className="field-note">截图只在这台手机上识别；通知里点「确认记录」才会入账，点「取消」就直接丢掉。</p>
+          <p className="field-note">截图只在这台手机上识别；通知里点「直接记一笔」就记好了，不用切回 App，点「取消」就直接丢掉。</p>
         )}
       </section>
 
