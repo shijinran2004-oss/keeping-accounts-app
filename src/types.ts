@@ -535,6 +535,10 @@ export interface WatchStatus {
   permission: 'prompt' | 'denied' | 'granted'
   /** 通知能不能从顶部弹出（横幅）；系统把渠道关掉时这里会告诉用户 */
   notice?: NoticeStatus
+  /** 是否不受电池优化限制；false 表示厂商省电可能把监听冻住 */
+  battery?: boolean
+  /** 上一次检查媒体库的时间（毫秒），用来判断服务是不是被冻住了 */
+  lastCheckAt?: number
 }
 
 /** 通知横幅的可用状态，来自原生插件 */

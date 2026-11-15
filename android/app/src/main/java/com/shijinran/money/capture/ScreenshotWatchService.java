@@ -1,11 +1,13 @@
 package com.shijinran.money.capture;
 
+import android.app.AlarmManager;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
 import android.content.ContentResolver;
+import android.content.Context;
 import android.content.ContentUris;
 import android.content.Intent;
 import android.content.pm.ServiceInfo;
@@ -18,6 +20,7 @@ import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
+import android.os.SystemClock;
 import android.provider.MediaStore;
 import android.util.Log;
 
@@ -69,10 +72,17 @@ public class ScreenshotWatchService extends Service {
     static final String EXTRA_PATH = "capture_path";
 
     static volatile boolean running = false;
+    /** 服务实例：闹钟自检醒来时直接戳它，不用重新拉起服务 */
+    static volatile ScreenshotWatchService instance;
+
+    /** 闹钟自检的 action */
+    static final String ACTION_SCAN = "com.shijinran.money.capture.SCAN";
+    private static final long HEARTBEAT_MS = 30_000L;
 
     private static final String TAG = "SnoopyCapture";
     private static final int MAX_SIDE = 1280;
-    private static final long HISTORY_GUARD_MS = 10_000L;
+    /** 「正在认金额…」的固定通知位：识别是串行的，同一时间只有一张在认 */
+    private static final int NOTIFY_PROGRESS_ID = 4102;
     /** 连拍多张时，8 秒内不再重复振动/响铃 */
     private static final long QUIET_VIBRATE_MS = 8_000L;
     /** 媒体库写入比广播慢，首次没扫到最多再补 2 次（原来要重试 10 次） */
@@ -94,6 +104,7 @@ public class ScreenshotWatchService extends Service {
     public void onCreate() {
         super.onCreate();
         running = true;
+        instance = this;
         startedAt = System.currentTimeMillis();
         createChannels();
         startForegroundCompat();
@@ -101,11 +112,15 @@ public class ScreenshotWatchService extends Service {
         registerObserver();
         submit(recognizer, () -> OcrEngineHolder.warmUp(this));
         requestScan();
+        scheduleHeartbeat(this);
     }
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         if (observer == null) registerObserver();
+        // 闹钟自检：服务被冻结过时，这条命令会把它叫醒并补扫积压的截图
+        if (intent != null && ACTION_SCAN.equals(intent.getAction())) requestScan();
+        scheduleHeartbeat(this);
         return START_STICKY;
     }
 
@@ -117,6 +132,9 @@ public class ScreenshotWatchService extends Service {
     @Override
     public void onDestroy() {
         running = false;
+        instance = null;
+        cancelHeartbeat(this);
+        cancelProgress();
         // 先掐掉还在排队的补扫：否则它会在线程池 shutdown 之后再 execute，主线程直接崩
         mainHandler.removeCallbacksAndMessages(null);
         if (observer != null) {
@@ -223,8 +241,6 @@ public class ScreenshotWatchService extends Service {
                     lastSeen = addedSec;
                     CaptureStore.setLastSeenAt(this, lastSeen);
                 }
-                long addedMs = addedSec * 1000L;
-                if (addedMs < startedAt - HISTORY_GUARD_MS) continue;
                 if (!looksLikeScreenshot(name)) continue;
                 // 扫描只负责发现，识别丢给另一个线程排队
                 final long shotId = id;
@@ -235,8 +251,14 @@ public class ScreenshotWatchService extends Service {
         } finally {
             if (cursor != null) cursor.close();
         }
+        CaptureStore.setLastCheckAt(this, System.currentTimeMillis());
         if (found > 0) Log.d(TAG, "queued " + found + " new shot(s) for OCR");
         return found > 0;
+    }
+
+    /** 闹钟自检醒来时从外部戳一下：只补扫积压，不做别的 */
+    void requestScanNow() {
+        requestScan();
     }
 
     private void requestScan() {
@@ -264,6 +286,40 @@ public class ScreenshotWatchService extends Service {
             long delay = attempt == 0 ? 200L : 400L;
             mainHandler.postDelayed(() -> scheduleScan(attempt + 1), delay);
         });
+    }
+
+    /**
+     * 30 秒一次的自检闹钟。
+     * 系统在某些机型上会把后台进程冻住，观察者回调就跟着停掉：
+     * 截屏时没反应，等用户回到 App 进程解冻，积压的图才一起弹出来。
+     * 用不唤醒 CPU 的 ELAPSED_REALTIME（截图必然发生在屏幕亮着的时候），
+     * 到点唤醒广播 → 服务进程解冻 → 立刻补扫。
+     */
+    static void scheduleHeartbeat(Context context) {
+        AlarmManager am = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
+        if (am == null) return;
+        try {
+            am.set(AlarmManager.ELAPSED_REALTIME,
+                    SystemClock.elapsedRealtime() + HEARTBEAT_MS, heartbeatIntent(context));
+        } catch (Throwable t) {
+            Log.w(TAG, "heartbeat schedule failed", t);
+        }
+    }
+
+    static void cancelHeartbeat(Context context) {
+        AlarmManager am = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
+        if (am == null) return;
+        try {
+            am.cancel(heartbeatIntent(context));
+        } catch (Throwable ignored) {
+        }
+    }
+
+    private static PendingIntent heartbeatIntent(Context context) {
+        Intent intent = new Intent(context, CaptureHeartbeatReceiver.class);
+        intent.setAction(CaptureHeartbeatReceiver.ACTION_HEARTBEAT);
+        return PendingIntent.getBroadcast(context, FOREGROUND_ID + 1, intent,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
     }
 
     /**
@@ -316,6 +372,9 @@ public class ScreenshotWatchService extends Service {
     /** 识别线程：解码 → 存缓存 → OCR（只做一次，文字随截图一起存起来）→ 入队 + 一条通知。 */
     private void handleShot(long id) {
         long begin = System.currentTimeMillis();
+        // 先把提醒弹出来再识别：先看到「正在认金额…」，认完原地变成金额，
+        // 不用等 OCR 跑完才第一次出现（大图/冷启动时能差一秒多）
+        notifyProgress();
         Uri uri = ContentUris.withAppendedId(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, id);
         File saved = null;
         Bitmap bitmap = null;
@@ -352,6 +411,37 @@ public class ScreenshotWatchService extends Service {
         } finally {
             // 位图用完立刻回收，连拍时不至于堆一堆大图把内存撑爆
             if (bitmap != null && !bitmap.isRecycled()) bitmap.recycle();
+            cancelProgress();
+        }
+    }
+
+    /** 一检测到新截图就弹的占位提醒，纯提示进度，没有按钮 */
+    private void notifyProgress() {
+        try {
+            NotificationCompat.Builder builder = new NotificationCompat.Builder(this, CHANNEL_FOUND)
+                    .setSmallIcon(R.mipmap.ic_launcher)
+                    .setContentTitle("正在认金额…")
+                    .setContentText("截图记账正在读这张截图，马上就好")
+                    .setCategory(NotificationCompat.CATEGORY_PROGRESS)
+                    .setPriority(NotificationCompat.PRIORITY_HIGH)
+                    .setGroup(GROUP_FOUND)
+                    .setDefaults(0)
+                    .setVibrate(new long[] { 0 })
+                    .setOngoing(true)
+                    .setOnlyAlertOnce(true)
+                    // 万一进程在识别中途被杀，这条占位通知自己消失，不会一直挂着
+                    .setTimeoutAfter(15_000L);
+            NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+            if (nm != null) nm.notify(NOTIFY_PROGRESS_ID, builder.build());
+        } catch (Throwable ignored) {
+        }
+    }
+
+    private void cancelProgress() {
+        try {
+            NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+            if (nm != null) nm.cancel(NOTIFY_PROGRESS_ID);
+        } catch (Throwable ignored) {
         }
     }
 
@@ -492,8 +582,10 @@ public class ScreenshotWatchService extends Service {
                 .setCategory(NotificationCompat.CATEGORY_MESSAGE)
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
                 .setGroup(GROUP_FOUND)
-                .setDefaults(vibrate ? NotificationCompat.DEFAULT_VIBRATE : 0)
-                .setSilent(!vibrate)
+                // 不要用 setSilent：部分机型把静音通知直接挡在横幅之外；
+                // 这里只把振动压掉，横幅照旧弹
+                .setDefaults(0)
+                .setVibrate(vibrate ? new long[] { 0, 200, 120, 200 } : new long[] { 0 })
                 .setAutoCancel(true)
                 // 点通知本身进 App 看/改这个金额；点按钮则完全留在后台
                 .setContentIntent(openApp(path, 10000 + notifyId))

@@ -29,7 +29,11 @@ final class CaptureStore {
     private static final String KEY_AUTO = "autoRecords";
     private static final String KEY_SHOTS = "pendingShots";
     private static final String KEY_NOTIFY_SEQ = "notifySeq";
+    private static final String KEY_LAST_CHECK = "lastCheckAt";
+    /** 已经记过账的截图 key：防止重复点「直接记一笔」记两笔 */
+    private static final String KEY_RECORDED = "recordedKeys";
     private static final int SEEN_IDS_KEEP = 40;
+    private static final int RECORDED_KEEP = 40;
     private static final int AUTO_KEEP = 30;
     static final int SHOTS_KEEP = 5;
     private static final int NOTIFY_SEQ_MIN = 4301;
@@ -87,6 +91,15 @@ final class CaptureStore {
         prefs(context).edit().putLong(KEY_LAST_NOTICE, at).apply();
     }
 
+    /** 后台最近一次成功扫过媒体库的时间；用来判断监听是不是被系统冻住了。 */
+    static long lastCheckAt(Context context) {
+        return prefs(context).getLong(KEY_LAST_CHECK, 0L);
+    }
+
+    static void setLastCheckAt(Context context, long at) {
+        prefs(context).edit().putLong(KEY_LAST_CHECK, at).apply();
+    }
+
     /** 已经扫到过的最大 DATE_ADDED（秒）。MediaStore 的 _ID 会被回收重用，不能当游标。 */
     static long lastSeenAt(Context context) {
         return prefs(context).getLong(KEY_LAST_SEEN, 0L);
@@ -124,6 +137,37 @@ final class CaptureStore {
             sb.append(parts[i]);
         }
         prefs(context).edit().putString(KEY_SEEN_IDS, sb.toString()).apply();
+    }
+
+    /** 这条截图是不是已经记过账了（同一个 key 再点也不会记第二笔）。 */
+    static boolean isRecorded(Context context, long key) {
+        if (key == 0) return false;
+        String raw = prefs(context).getString(KEY_RECORDED, "");
+        if (raw == null || raw.isEmpty()) return false;
+        for (String part : raw.split(",")) {
+            if (part.isEmpty()) continue;
+            try {
+                if (Long.parseLong(part) == key) return true;
+            } catch (NumberFormatException ignored) {
+            }
+        }
+        return false;
+    }
+
+    static void markRecorded(Context context, long key) {
+        if (key == 0) return;
+        String raw = prefs(context).getString(KEY_RECORDED, "");
+        if (raw == null) raw = "";
+        raw = raw.isEmpty() ? String.valueOf(key) : raw + "," + key;
+        String[] parts = raw.split(",");
+        StringBuilder sb = new StringBuilder();
+        int start = Math.max(0, parts.length - RECORDED_KEEP);
+        for (int i = start; i < parts.length; i++) {
+            if (parts[i].isEmpty()) continue;
+            if (sb.length() > 0) sb.append(',');
+            sb.append(parts[i]);
+        }
+        prefs(context).edit().putString(KEY_RECORDED, sb.toString()).apply();
     }
 
     /** 每条提醒一个固定但可重复利用的 id，两张截图同时待确认时不会互相盖掉。 */
@@ -210,6 +254,25 @@ final class CaptureStore {
             return removed;
         } catch (Throwable t) {
             return null;
+        }
+    }
+
+    /** 识别完成后把金额和原文补进队列里的那条。 */
+    static synchronized boolean updateShot(Context context, long key, long amountCents, String text) {
+        try {
+            JSONArray arr = shots(context);
+            boolean hit = false;
+            for (int i = 0; i < arr.length(); i++) {
+                JSONObject item = arr.optJSONObject(i);
+                if (item == null || item.optLong("key", 0L) != key) continue;
+                item.put("amountCents", amountCents);
+                item.put("text", text == null ? "" : text);
+                hit = true;
+            }
+            if (hit) prefs(context).edit().putString(KEY_SHOTS, arr.toString()).apply();
+            return hit;
+        } catch (Throwable t) {
+            return false;
         }
     }
 

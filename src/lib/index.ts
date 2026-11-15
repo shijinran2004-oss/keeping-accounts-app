@@ -46,5 +46,6 @@ export {
   onAutoRecord,
   onCapture,
   openNoticeSettings,
+  requestIgnoreBattery,
   watchStatus,
 } from './capture'

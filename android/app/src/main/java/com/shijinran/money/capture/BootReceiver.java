@@ -42,7 +42,10 @@ public class BootReceiver extends BroadcastReceiver {
             }
             Log.d(TAG, "watch restored after " + action);
         } catch (Throwable t) {
-            Log.w(TAG, "boot restart failed", t);
+            // Android 15 起，BOOT_COMPLETED 里不允许直接拉前台服务。
+            // 退回 30 秒一次的自检闹钟：能拉起来就拉，拉不动就提醒用户点一下 App。
+            Log.w(TAG, "boot restart failed, fallback to heartbeat", t);
+            ScreenshotWatchService.scheduleHeartbeat(context);
         }
     }
 }

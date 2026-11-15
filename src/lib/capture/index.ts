@@ -11,5 +11,6 @@ export {
   onAutoRecord,
   onCapture,
   openNoticeSettings,
+  requestIgnoreBattery,
   watchStatus,
 } from './plugin'

@@ -11,6 +11,7 @@ import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.net.Uri;
 import android.os.Build;
+import android.os.PowerManager;
 import android.provider.Settings;
 import android.util.Base64;
 import android.util.Log;
@@ -203,7 +204,40 @@ public class CapturePlugin extends Plugin {
         notice.put("dnd", dnd);
         ret.put("notice", notice);
 
+        // 厂商省电策略会把后台冻住：截屏时没反应，等回到 App 积压的才一起弹。
+        // 让用户一键把 App 加进「不受电池优化限制」，是这类问题唯一可靠的解法。
+        boolean battery;
+        try {
+            PowerManager pm = (PowerManager) getContext().getSystemService(Context.POWER_SERVICE);
+            battery = pm == null || pm.isIgnoringBatteryOptimizations(getContext().getPackageName());
+        } catch (Throwable t) {
+            battery = true;
+        }
+        ret.put("battery", battery);
+        ret.put("lastCheckAt", CaptureStore.lastCheckAt(getContext()));
+
         call.resolve(ret);
+    }
+
+    /** 弹系统的「不受电池优化限制」确认框；用户允许后后台就不容易被冻住 */
+    @PluginMethod
+    public void requestIgnoreBattery(PluginCall call) {
+        try {
+            Intent intent = new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS);
+            intent.setData(Uri.parse("package:" + getContext().getPackageName()));
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            getContext().startActivity(intent);
+            call.resolve();
+        } catch (Throwable t) {
+            try {
+                Intent fallback = new Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS);
+                fallback.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                getContext().startActivity(fallback);
+                call.resolve();
+            } catch (Throwable second) {
+                call.reject("打不开电池设置，请手动到系统设置里把「使劲燃的钱」设为不受限制", "capture_battery_failed");
+            }
+        }
     }
 
     /** 跳到「截图记账提醒」这条通知渠道的系统设置页，让用户把横幅打开 */

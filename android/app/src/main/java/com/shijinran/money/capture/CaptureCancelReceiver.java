@@ -43,7 +43,12 @@ public class CaptureCancelReceiver extends BroadcastReceiver {
         }
     }
 
-    /** 只认通知当前指向的那一张，连点两下也只会记一笔。 */
+    /**
+     * 只认通知当前指向的那一张，连点两下也只会记一笔。
+     * 队列里找不到它时不能默默收掉通知：用户看到「有反应」却什么都没记，
+     * 那是最糟的一种失败。所以按「记过没有」分两种情况处理：
+     * 已记过 → 收通知（防重复两笔）；没记过 → 用通知自带的金额补记。
+     */
     private void record(Context context, Intent intent) {
         try {
             long key = intent.getLongExtra(ScreenshotWatchService.EXTRA_KEY, 0L);
@@ -52,27 +57,37 @@ public class CaptureCancelReceiver extends BroadcastReceiver {
             String text = intent.getStringExtra(ScreenshotWatchService.EXTRA_TEXT);
 
             NotificationManager nm = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
-            if (key != 0) {
-                // 新通知都带 key：金额和文字只认待确认队列里那一条。
-                // 如果队列里已经没有它（已经记过、或者刚点了取消），说明这是重复点击，
-                // 直接收掉通知返回——绝不能回退去用 intent 里的金额再记第二笔。
-                JSONObject shot = CaptureStore.removeShot(context, key);
-                if (shot == null) {
-                    if (nm != null && notifyId > 0) nm.cancel(notifyId);
-                    Log.d(TAG, "record ignored, shot gone key=" + key);
-                    return;
-                }
+            JSONObject shot = key != 0 ? CaptureStore.removeShot(context, key) : null;
+            if (shot != null) {
                 amount = shot.optLong("amountCents", amount);
                 text = shot.optString("text", text);
                 deleteFile(shot);
+            } else if (key != 0) {
+                // 队列里没有这张：多半是点通知正文进来时已经被 consume 取走，
+                // 或者进程被回收后队列刚好被挤掉。只要还没记过，就用通知里的金额补上。
+                if (CaptureStore.isRecorded(context, key)) {
+                    if (nm != null && notifyId > 0) nm.cancel(notifyId);
+                    Log.d(TAG, "record ignored, already recorded key=" + key);
+                    return;
+                }
+                Log.w(TAG, "shot gone, fallback to intent extras key=" + key);
             }
-            if (amount > 0) CaptureStore.pushAutoRecord(context, amount, text);
 
+            if (amount <= 0) {
+                // 兜底也拿不到金额：明确告诉用户没记上，而不是把通知收掉装作成功
+                if (nm != null && notifyId > 0) nm.cancel(notifyId);
+                notifyFailed(context);
+                Log.w(TAG, "record failed, no amount key=" + key);
+                return;
+            }
+
+            CaptureStore.pushAutoRecord(context, amount, text);
+            if (key != 0) CaptureStore.markRecorded(context, key);
             if (nm != null && notifyId > 0) nm.cancel(notifyId);
-            if (amount > 0) notifyDone(context, amount);
+            notifyDone(context, amount);
             // App 在前台时让 JS 立刻把队列写进账本，不用等切到后台再回来
-            if (amount > 0) CapturePlugin.pingAutoRecord();
-            Log.d(TAG, "record ¥" + amount + " queued=" + (amount > 0));
+            CapturePlugin.pingAutoRecord();
+            Log.d(TAG, "record ¥" + amount + " queued=true");
         } catch (Throwable t) {
             Log.w(TAG, "record failed", t);
         }
@@ -108,6 +123,29 @@ public class CaptureCancelReceiver extends BroadcastReceiver {
             String path = shot.optString("path", "");
             if (!path.isEmpty()) new File(path).delete();
         } catch (Throwable ignored) {
+        }
+    }
+
+    /** 实在记不上时给个明确交代，别让用户以为记好了。 */
+    private void notifyFailed(Context context) {
+        try {
+            NotificationManager nm = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
+            if (nm == null) return;
+            Intent open = new Intent(context, com.shijinran.money.MainActivity.class);
+            open.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+            android.app.PendingIntent tap = android.app.PendingIntent.getActivity(context, 4303, open,
+                    android.app.PendingIntent.FLAG_UPDATE_CURRENT | android.app.PendingIntent.FLAG_IMMUTABLE);
+            NotificationCompat.Builder builder = new NotificationCompat.Builder(context, ScreenshotWatchService.CHANNEL_WATCH)
+                    .setSmallIcon(R.mipmap.ic_launcher)
+                    .setContentTitle("这张截图没记上")
+                    .setContentText("金额没读出来，打开 App 手动记一笔吧")
+                    .setPriority(NotificationCompat.PRIORITY_MIN)
+                    .setContentIntent(tap)
+                    .setAutoCancel(true)
+                    .setTimeoutAfter(10_000L);
+            nm.notify(NOTIFY_DONE_ID + 1, builder.build());
+        } catch (Throwable t) {
+            Log.w(TAG, "failed notice error", t);
         }
     }
 

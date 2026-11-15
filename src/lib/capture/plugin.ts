@@ -12,6 +12,7 @@ interface CaptureApi {
   watchStatus(): Promise<WatchStatus>
   enableWatch(): Promise<WatchStatus>
   openNoticeSettings(): Promise<void>
+  requestIgnoreBattery(): Promise<void>
   disableWatch(): Promise<WatchStatus>
   addListener(
     event: 'capture',
@@ -83,6 +84,12 @@ export async function watchStatus(): Promise<WatchStatus> {
 export async function openNoticeSettings(): Promise<void> {
   if (!captureAvailable()) return
   await capture().openNoticeSettings()
+}
+
+/** 弹系统的「不受电池优化限制」确认框，让厂商省电别再冻住后台监听 */
+export async function requestIgnoreBattery(): Promise<void> {
+  if (!captureAvailable()) return
+  await capture().requestIgnoreBattery()
 }
 
 /** 打开截图监听：会申请相册（与通知）权限，成功后常驻一条通知 */

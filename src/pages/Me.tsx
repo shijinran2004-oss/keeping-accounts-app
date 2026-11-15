@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import {
   BellRing,
   CalendarClock,
+  BatteryWarning,
   Camera,
   ChevronRight,
   Download,
@@ -28,6 +29,7 @@ import {
   formatDay,
   formatMoney,
   openNoticeSettings,
+  requestIgnoreBattery,
   themeName,
   todayStr,
   watchStatus,
@@ -89,6 +91,8 @@ export function Me() {
         running: next.running,
         permission: next.permission ?? prev?.permission ?? 'prompt',
         notice: fresh.notice ?? prev?.notice,
+        battery: fresh.battery ?? prev?.battery,
+        lastCheckAt: fresh.lastCheckAt ?? prev?.lastCheckAt,
       }))
       if (next.enabled) {
         const issue = noticeIssue(fresh.notice)
@@ -117,7 +121,17 @@ export function Me() {
     }
   }
 
+  const openBattery = async () => {
+    try {
+      await requestIgnoreBattery()
+      toast('允许「不受限制」后，截屏提醒就不会被省电策略推迟')
+    } catch (error) {
+      toast(error instanceof Error ? error.message : '没打开设置，可以手动到系统设置里允许后台运行', 'error')
+    }
+  }
+
   const notice = watch?.enabled ? noticeIssue(watch.notice) : null
+  const batteryLimited = watch?.enabled && watch.battery === false
   const days = new Set(state.txs.map((t) => t.date)).size
   const first = [...state.txs].sort((a, b) => a.date.localeCompare(b.date))[0]
   const theme = state.settings.theme ?? 'light'
@@ -305,6 +319,15 @@ export function Me() {
               sub={notice.sub}
               value="去打开"
               onClick={openNotice}
+            />
+          )}
+          {batteryLimited && (
+            <Row
+              icon={BatteryWarning}
+              label="后台限制"
+              sub="系统省电会把截屏监听冻住，提醒要等你回到 App 才一起弹；允许后台运行就不会迟到"
+              value="去允许"
+              onClick={openBattery}
             />
           )}
         </div>
