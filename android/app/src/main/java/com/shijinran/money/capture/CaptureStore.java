@@ -27,6 +27,9 @@ final class CaptureStore {
     private static final String KEY_LAST_SEEN = "lastSeenAt";
     private static final String KEY_SEEN_IDS = "seenIds";
     private static final String KEY_AUTO = "autoRecords";
+    /** 已经交给前端、还没确认写进账本的那一批：进程中途死了也不会丢 */
+    private static final String KEY_AUTO_BACKUP = "autoRecordsInflight";
+    private static final String KEY_AUTO_SEQ = "autoRecordSeq";
     private static final String KEY_SHOTS = "pendingShots";
     private static final String KEY_NOTIFY_SEQ = "notifySeq";
     private static final String KEY_LAST_CHECK = "lastCheckAt";
@@ -34,7 +37,7 @@ final class CaptureStore {
     private static final String KEY_RECORDED = "recordedKeys";
     private static final int SEEN_IDS_KEEP = 40;
     private static final int RECORDED_KEEP = 40;
-    private static final int AUTO_KEEP = 30;
+    private static final int AUTO_KEEP = 100;
     static final int SHOTS_KEEP = 5;
     private static final int NOTIFY_SEQ_MIN = 4301;
     private static final int NOTIFY_SEQ_MAX = 4499;
@@ -291,6 +294,8 @@ final class CaptureStore {
         try {
             JSONArray arr = autoRecords(context);
             JSONObject item = new JSONObject();
+            // seq 是给前端的幂等 id：同一笔重复写进账本也只会有一条
+            item.put("seq", nextAutoSeq(context));
             item.put("amountCents", amountCents);
             item.put("text", text == null ? "" : text);
             item.put("createdAt", System.currentTimeMillis());
@@ -301,11 +306,46 @@ final class CaptureStore {
         }
     }
 
-    /** 取走所有待入账的记录并清空；前端拿到的就是原生识别的那一刻的结果。 */
+    private static synchronized int nextAutoSeq(Context context) {
+        int next = prefs(context).getInt(KEY_AUTO_SEQ, 1);
+        prefs(context).edit().putInt(KEY_AUTO_SEQ, next + 1).apply();
+        return next;
+    }
+
+    /**
+     * 取走所有待入账的记录。取的同时把这一批存进「在途」存档：
+     * 前端真的写进账本后才会 ack，中途进程被杀或写库失败，
+     * 下次一取还是这一批（seq 不变，前端按幂等 id 重写不会多记一笔）。
+     */
     static synchronized String takeAutoRecords(Context context) {
-        String raw = prefs(context).getString(KEY_AUTO, "");
-        prefs(context).edit().remove(KEY_AUTO).apply();
-        return raw == null ? "" : raw;
+        JSONArray merged = new JSONArray();
+        try {
+            mergeRecords(merged, prefs(context).getString(KEY_AUTO_BACKUP, ""));
+            mergeRecords(merged, prefs(context).getString(KEY_AUTO, ""));
+        } catch (Throwable ignored) {
+        }
+        if (merged.length() == 0) {
+            // 没东西可取就把在途存档也清掉，别留一个空的 "[]" 在 prefs 里
+            prefs(context).edit().remove(KEY_AUTO_BACKUP).remove(KEY_AUTO).apply();
+            return "";
+        }
+        String raw = merged.toString();
+        prefs(context).edit().putString(KEY_AUTO_BACKUP, raw).remove(KEY_AUTO).apply();
+        return raw;
+    }
+
+    /** 前端确认这一批已经写进账本，清掉在途存档。 */
+    static synchronized void ackAutoRecords(Context context) {
+        prefs(context).edit().remove(KEY_AUTO_BACKUP).apply();
+    }
+
+    private static void mergeRecords(JSONArray target, String raw) throws Exception {
+        if (raw == null || raw.isEmpty()) return;
+        JSONArray arr = new JSONArray(raw);
+        for (int i = 0; i < arr.length(); i++) {
+            JSONObject item = arr.optJSONObject(i);
+            if (item != null) target.put(item);
+        }
     }
 
     private static JSONArray autoRecords(Context context) {

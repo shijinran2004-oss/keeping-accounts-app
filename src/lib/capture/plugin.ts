@@ -9,6 +9,8 @@ import type { AutoRecord, CaptureImage, CaptureSource, WatchStatus } from '../..
 interface CaptureApi {
   consume(): Promise<{ dataUrl?: string; source?: string; text?: string }>
   drainAutoRecords(): Promise<{ records?: AutoRecord[] }>
+  /** 告诉原生这批记录已经写进账本；不清的话下次还会再给一遍 */
+  ackAutoRecords(): Promise<void>
   watchStatus(): Promise<WatchStatus>
   enableWatch(): Promise<WatchStatus>
   openNoticeSettings(): Promise<void>
@@ -68,6 +70,19 @@ export async function drainAutoRecords(): Promise<AutoRecord[]> {
     return result?.records ?? []
   } catch {
     return []
+  }
+}
+
+/**
+ * 确认这批自动记账已经落库。写库失败时不要调用，
+ * 原生存档会留着，下一轮按幂等 id 重写，不会多记也不会漏记。
+ */
+export async function ackAutoRecords(): Promise<void> {
+  if (!captureAvailable()) return
+  try {
+    await capture().ackAutoRecords()
+  } catch {
+    // 原生没清掉也没关系：下一轮拿到的还是这一批，按 id 去重
   }
 }
 

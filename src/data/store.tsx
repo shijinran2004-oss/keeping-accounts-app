@@ -16,7 +16,7 @@ import type {
 import { freshState, normalize, uid } from './normalize'
 import { openLedger, writeLegacyMirror } from './db'
 import { autoRecordToTx } from './auto'
-import { drainAutoRecords as readAutoRecords, onAutoRecord } from '../lib'
+import { ackAutoRecords, drainAutoRecords as readAutoRecords, onAutoRecord } from '../lib'
 import {
   applyImport,
   createSnapshot,
@@ -39,27 +39,52 @@ export function LedgerProvider({ children }: { children: React.ReactNode }) {
   const stateRef = useRef<LedgerState | null>(null)
   stateRef.current = state
 
+  /** 补账流程串行跑：两次确认几乎同时到达时排队写，避免各自拿旧状态互相覆盖 */
+  const syncChain = useRef<Promise<unknown>>(Promise.resolve())
+
   /**
    * 通知里点「直接记一笔」时，App 可能根本没在前台；
    * 原生先按金额入队，等这里用和小票同一套规则补商户、分类、日期，再真正写进账本。
+   *
+   * 并发保护有三层：
+   * 1) 所有补账串成一条链，同一时刻只有一轮在读原生、写库；
+   * 2) 原生 seq 变成确定性 id，同一笔重复写只会覆盖自己，不会多记；
+   * 3) 落库成功后才 ack 原生存档，写失败/进程被杀下一轮还能拿回来，不会漏记。
    */
   const applyAutoRecords = useCallback(
-    async (repo: LedgerRepository, current: LedgerState): Promise<LedgerState> => {
-      const items = await readAutoRecords()
-      if (!items.length) return current
-      const added: Tx[] = []
-      for (const item of items) {
-        const tx = autoRecordToTx(item, current.categories)
-        if (tx) added.push(tx)
+    (repo: LedgerRepository, fallback: LedgerState): Promise<LedgerState> => {
+      const run = async (): Promise<LedgerState> => {
+        const base = stateRef.current ?? fallback
+        const items = await readAutoRecords()
+        if (!items.length) return base
+        const known = new Set(base.txs.map((tx) => tx.id))
+        const added: Tx[] = []
+        for (const item of items) {
+          const tx = autoRecordToTx(item, base.categories)
+          if (tx && !known.has(tx.id)) added.push(tx)
+        }
+        if (added.length) {
+          try {
+            await Promise.all(added.map((tx) => repo.putTx(tx)))
+          } catch (error) {
+            console.error('[ledger] 自动记账写入失败', error)
+            return base
+          }
+        }
+        await ackAutoRecords()
+        if (!added.length) return base
+        const latest = stateRef.current ?? base
+        const inState = new Set(latest.txs.map((tx) => tx.id))
+        const fresh = added.filter((tx) => !inState.has(tx.id)).reverse()
+        if (!fresh.length) return latest
+        const next = { ...latest, txs: [...fresh, ...latest.txs] }
+        stateRef.current = next
+        setState(next)
+        return next
       }
-      if (!added.length) return current
-      try {
-        await Promise.all(added.map((tx) => repo.putTx(tx)))
-      } catch (error) {
-        console.error('[ledger] 自动记账写入失败', error)
-        return current
-      }
-      return { ...current, txs: [...added.reverse(), ...current.txs] }
+      const next = syncChain.current.then(run, run)
+      syncChain.current = next.catch(() => undefined)
+      return next
     },
     [],
   )
@@ -100,13 +125,10 @@ export function LedgerProvider({ children }: { children: React.ReactNode }) {
       const repo = repoRef.current
       const current = stateRef.current
       if (!repo || !current) return
-      void applyAutoRecords(repo, current)
-        .then((next) => {
-          if (next === current || stateRef.current !== current) return
-          stateRef.current = next
-          setState(next)
-        })
-        .catch((error: unknown) => console.error('[ledger] 自动记账失败', error))
+      // 状态由 applyAutoRecords 自己更新（串行链保证是基于最新状态合并的）
+      void applyAutoRecords(repo, current).catch((error: unknown) =>
+        console.error('[ledger] 自动记账失败', error),
+      )
     }
     window.addEventListener('focus', sync)
     document.addEventListener('visibilitychange', sync)

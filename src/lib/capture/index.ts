@@ -3,6 +3,7 @@
  */
 export {
   WATCH_OFF,
+  ackAutoRecords,
   captureAvailable,
   consumeCapture,
   disableWatch,

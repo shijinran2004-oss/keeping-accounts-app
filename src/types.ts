@@ -515,6 +515,8 @@ export interface CaptureImage {
 
 /** 通知里点了「直接记一笔」后原生暂存、等前端写进账本的一笔 */
 export interface AutoRecord {
+  /** 原生自增序号：拿来当幂等 id，重复写入也只会有一条 */
+  seq?: number
   /** 金额，单位：分 */
   amountCents: number
   /** OCR 出的整段文字，前端再用 parseReceipt 补商户、分类和日期 */

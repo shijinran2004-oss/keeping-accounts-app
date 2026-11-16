@@ -38,6 +38,7 @@ export {
 export type { AmountCandidate, DateCandidate, MerchantCandidate, ParseOptions } from './ocr'
 export {
   WATCH_OFF,
+  ackAutoRecords,
   captureAvailable,
   consumeCapture,
   disableWatch,

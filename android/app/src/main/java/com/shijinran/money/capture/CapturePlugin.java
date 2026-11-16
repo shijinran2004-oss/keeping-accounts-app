@@ -168,6 +168,7 @@ public class CapturePlugin extends Plugin {
                     JSONObject item = arr.optJSONObject(i);
                     if (item == null) continue;
                     JSObject one = new JSObject();
+                    one.put("seq", item.optInt("seq", 0));
                     one.put("amountCents", item.optLong("amountCents", 0L));
                     one.put("text", item.optString("text", ""));
                     one.put("createdAt", item.optLong("createdAt", 0L));
@@ -180,6 +181,16 @@ public class CapturePlugin extends Plugin {
         JSObject ret = new JSObject();
         ret.put("records", records);
         call.resolve(ret);
+    }
+
+    /**
+     * 前端写完账本后确认这一批已落库，原生才把「在途」存档清掉。
+     * 不确认就一直保留，进程被杀/写库失败都不会丢记录。
+     */
+    @PluginMethod
+    public void ackAutoRecords(PluginCall call) {
+        CaptureStore.ackAutoRecords(getContext());
+        call.resolve();
     }
 
     @PluginMethod

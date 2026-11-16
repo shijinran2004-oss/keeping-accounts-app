@@ -33,7 +33,8 @@ export function autoRecordToTx(
       ? draft.categoryId
       : 'other'
   return {
-    id: uid(),
+    // 有 seq 就用它做确定性 id：同一笔重复落库只会覆盖自己，不会多记一笔
+    id: record.seq ? `auto-${record.seq}` : uid(),
     type: 'expense',
     amount,
     categoryId,
