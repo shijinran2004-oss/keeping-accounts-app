@@ -12,7 +12,8 @@ async function initNative() {
   if (!Capacitor.isNativePlatform()) return
   const light = document.documentElement.dataset.theme === 'light'
   try {
-    await StatusBar.setStyle({ style: light ? Style.Dark : Style.Light })
+    // Style.Light = 浅色背景用深色字，浅色主题要它；写反了状态栏图标会白到看不见
+    await StatusBar.setStyle({ style: light ? Style.Light : Style.Dark })
     await StatusBar.setBackgroundColor({ color: light ? '#F2F2F7' : '#000000' })
   } catch {
     /* plugin unavailable */

@@ -13,7 +13,7 @@ import { LaunchScreen, TabBar, ToastProvider } from './ui'
 /**
  * 应用壳：四个 tab、记账/详情弹层、Android 返回键和主题/状态栏同步。
  */
-function Shell() {
+function Shell({ launching }: { launching: boolean }) {
   const { state, storageError, dismissStorageError } = useLedger()
   const [tab, setTab] = useState<Tab>('home')
   const [addOpen, setAddOpen] = useState(false)
@@ -28,17 +28,20 @@ function Shell() {
     const sync = () => {
       const resolved = applyTheme(theme, accent)
       if (!Capacitor.isNativePlatform()) return
-      StatusBar.setStyle({ style: resolved === 'light' ? Style.Dark : Style.Light }).catch(() => {})
-      StatusBar.setBackgroundColor({ color: resolved === 'light' ? '#F2F2F7' : '#000000' }).catch(
-        () => {},
-      )
+      // 冷启动海报是整屏奶油色，这段时间状态栏也刷成海报顶边色，别留一条灰带
+      const light = resolved === 'light'
+      StatusBar.setBackgroundColor({
+        color: launching ? '#FCFEF8' : light ? '#F2F2F7' : '#000000',
+      })
+        .then(() => StatusBar.setStyle({ style: light ? Style.Light : Style.Dark }))
+        .catch(() => {})
     }
     sync()
     if (theme !== 'system' || !window.matchMedia) return
     const media = window.matchMedia('(prefers-color-scheme: dark)')
     media.addEventListener('change', sync)
     return () => media.removeEventListener('change', sync)
-  }, [theme, accent])
+  }, [theme, accent, launching])
 
   const openAdd = (tx?: Tx, nextSeed?: { type?: TxType; categoryId?: string }) => {
     setEditing(tx ?? null)
@@ -146,7 +149,7 @@ export default function App() {
     <>
       <LedgerProvider>
         <ToastProvider>
-          <Shell />
+          <Shell launching={launching} />
         </ToastProvider>
       </LedgerProvider>
       {launching && <LaunchScreen onDone={() => setLaunching(false)} />}
