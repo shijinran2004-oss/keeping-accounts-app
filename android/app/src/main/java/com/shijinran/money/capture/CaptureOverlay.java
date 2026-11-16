@@ -115,45 +115,61 @@ public final class CaptureOverlay {
         return intent;
     }
 
-    /** 刚截到图、还没认出金额：先把卡片滑下来，别让人等 OCR */
-    public static void showProgress(Context context, long key, int notifyId, String path, Bitmap thumb) {
+    /**
+     * 认出金额之后才把卡片滑下来。
+     * 以前是「一截到图先弹『正在认金额…』、认不出再收走」，桌面、聊天这类
+     * 没有金额的截图也会在屏幕顶上闪一下卡片，看着像状态栏闪屏；现在认准了
+     * 才出现，认不出的截图一点动静都没有。
+     * 同步等 UI 线程挂上去，调用方接着用 isShowing() 判断 ROM 有没有拦窗口。
+     */
+    public static void showFound(Context context, long key, int notifyId, String path, Bitmap thumb,
+                                 final String amount, final long amountCents, final String text) {
         if (!permitted(context)) return;
         final Bitmap preview = thumb;
+        final java.util.concurrent.CountDownLatch done = new java.util.concurrent.CountDownLatch(1);
         UI.post(new Runnable() {
             @Override
             public void run() {
-                // 先把上一张收掉再挂新的。这里不能调 dismiss()：它自己还会再 post 一次，
-                // 等它跑到时 current 已经是新卡片，会把刚挂上的这张立刻收掉（看不见卡片）。
-                CaptureOverlay old = current;
-                current = null;
-                if (old != null) old.dismissSelf();
                 try {
+                    // 先把上一张收掉再挂新的。这里不能调 dismiss()：它自己还会再 post 一次，
+                    // 等它跑到时 current 已经是新卡片，会把刚挂上的这张立刻收掉（看不见卡片）。
+                    CaptureOverlay old = current;
+                    current = null;
+                    if (old != null) old.dismissSelf();
                     CaptureOverlay overlay = new CaptureOverlay(context, key, notifyId, path);
                     overlay.attach(preview);
+                    overlay.amountCents = amountCents;
+                    overlay.ocrText = text == null ? "" : text;
+                    overlay.titleView.setText("识别到 ¥" + amount);
+                    overlay.subtitleView.setText("点「确认记录」直接记一笔，不用打开 App");
+                    overlay.confirmView.setAlpha(1f);
+                    overlay.confirmView.setEnabled(true);
+                    overlay.restartTimer();
                     current = overlay;
+                    // addView 之后要等一次遍历，isShown() 才会变 true；调用方紧接着
+                    // 用 isShowing() 判断 ROM 有没有拦窗口，所以这里多等这一小会儿，
+                    // 否则卡片明明画出来了也会被当成「被拦掉」而退回通知。
+                    final View card = overlay.card;
+                    if (card == null) {
+                        done.countDown();
+                    } else {
+                        card.postDelayed(new Runnable() {
+                            @Override
+                            public void run() {
+                                done.countDown();
+                            }
+                        }, 150);
+                    }
                 } catch (Throwable t) {
                     Log.w("SnoopyCapture", "overlay attach failed", t);
+                    done.countDown();
                 }
             }
         });
-    }
-
-    /** 认出金额：原地把「正在认金额…」换成金额，并把「确认记录」点亮 */
-    public static void showAmount(final String amount, final long amountCents, final String text) {
-        UI.post(new Runnable() {
-            @Override
-            public void run() {
-                CaptureOverlay overlay = current;
-                if (overlay == null) return;
-                overlay.amountCents = amountCents;
-                overlay.ocrText = text == null ? "" : text;
-                overlay.titleView.setText("识别到 ¥" + amount);
-                overlay.subtitleView.setText("点「确认记录」直接记一笔，不用打开 App");
-                overlay.confirmView.setAlpha(1f);
-                overlay.confirmView.setEnabled(true);
-                overlay.restartTimer();
-            }
-        });
+        try {
+            done.await(800, java.util.concurrent.TimeUnit.MILLISECONDS);
+        } catch (InterruptedException ignored) {
+        }
     }
 
     /**

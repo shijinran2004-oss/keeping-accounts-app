@@ -403,8 +403,6 @@ public class ScreenshotWatchService extends Service {
                 Log.w(TAG, "cache write failed " + id);
                 return;
             }
-            // 图一存好就把卡片滑下来，先看到「正在认金额…」，认完原地变成金额
-            if (overlay) CaptureOverlay.showProgress(this, key, notifyId, saved.getAbsolutePath(), thumb(bitmap));
             OcrShot shot = ocrShot(bitmap);
             String amount = shot == null ? null : shot.amount;
             if (amount == null) {
@@ -417,12 +415,15 @@ public class ScreenshotWatchService extends Service {
             JSONObject evicted = CaptureStore.addShot(this, key, notifyId, saved.getAbsolutePath(),
                     centsOf(amount), shot.text);
             if (evicted != null) dropShot(evicted);
+            // 认出金额之后才把卡片滑下来：桌面、聊天这类没金额的截图全程一点动静都没有
+            // （以前先弹「正在认金额…」再收走，屏幕顶上会闪一下），卡片一出现就是金额版。
             // 悬浮窗被 ROM 拦掉时（appops 拒绝、后台弹窗限制等）卡片根本不会出现，
-            // 这时必须退回系统横幅，否则通知又是静音的，用户完全看不到反应
+            // 下面用 isShowing() 判断，拦掉了就退回系统横幅。
+            if (overlay) CaptureOverlay.showFound(this, key, notifyId, saved.getAbsolutePath(),
+                    thumb(bitmap), amount, centsOf(amount), shot.text);
             Log.d(TAG, "notice id=" + notifyId + " overlay=" + overlay
                     + " cardShowing=" + CaptureOverlay.isShowing());
             if (overlay && CaptureOverlay.isShowing()) {
-                CaptureOverlay.showAmount(amount, centsOf(amount), shot.text);
                 // 顶部卡片同一时间只留最新一张：连拍时把上一张没确认的清掉，
                 // 否则卡片换成了新的，通知栏里还堆着一排没人点的旧提醒
                 dropOtherShots(key);
@@ -668,6 +669,13 @@ public class ScreenshotWatchService extends Service {
                 Log.d(TAG, "skip own app screenshot");
                 return null;
             }
+            // 卡片还挂在屏幕上时又截了张图：卡片上那行「￥23.45 已写进账本」
+            // 会被 OCR 当成新金额再弹一次，确认后又写一张截图……自己喂自己。
+            // 这种整张都不算，别让桌面截图变成账单
+            if (looksLikeOurCard(raw)) {
+                Log.d(TAG, "skip own card screenshot");
+                return null;
+            }
             String text = cleanOcrText(raw);
             return new OcrShot(guessAmount(text), text);
         } catch (Throwable t) {
@@ -695,6 +703,18 @@ public class ScreenshotWatchService extends Service {
         return null;
     }
 
+    /**
+     * 截图里是不是拍到了我们自己的顶部卡片：认出金额那张写着「识别到 ¥X」和
+     * 「点「确认记录」…」，确认之后那张写着「已记一笔」「¥X 已写进账本」。
+     * 卡片的金额是 OCR 自己认出来的，再认回去就会无限重复记账。
+     */
+    private static boolean looksLikeOurCard(String raw) {
+        if (raw == null) return false;
+        // 这几个词只有我们自己的卡片会写，账单页面上不会出现
+        if (raw.contains("已写进账本") || raw.contains("已记一笔") || raw.contains("正在认金额")) return true;
+        return raw.contains("识别到") && raw.contains("确认记录");
+    }
+
     /** 整张截图是不是我们自己的界面：四个 tab 名同时出现基本就能确定。 */
     private static boolean looksLikeOurApp(String raw) {
         return raw.contains("首页") && raw.contains("明细") && raw.contains("统计") && raw.contains("我的");
@@ -719,7 +739,9 @@ public class ScreenshotWatchService extends Service {
     private static boolean isOwnUi(String line) {
         if (line.contains("直接记一笔") || line.contains("截图记账") || line.contains("马上入账")
                 || line.contains("截屏后弹出通知") || line.contains("正在认金额") || line.contains("已记账")
-                || line.contains("不用切回") || line.contains("截图只在这台手机上识别")) {
+                || line.contains("不用切回") || line.contains("截图只在这台手机上识别")
+                || line.contains("已写进账本") || line.contains("回 App 就能看到")
+                || line.contains("回App就能看到") || line.contains("点「确认记录」")) {
             return true;
         }
         // 我们自己的通知标题「识别到 ¥12.34」
