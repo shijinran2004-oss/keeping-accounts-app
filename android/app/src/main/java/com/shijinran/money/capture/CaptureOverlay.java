@@ -1,25 +1,29 @@
 package com.shijinran.money.capture;
 
+import android.app.AppOpsManager;
 import android.content.Context;
 import android.content.Intent;
+import android.content.res.ColorStateList;
 import android.graphics.Bitmap;
 import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.RippleDrawable;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
-import android.os.Process;
-import android.app.AppOpsManager;
 import android.provider.Settings;
 import android.util.Log;
 import android.view.Gravity;
 import android.view.View;
 import android.view.WindowManager;
+import android.view.animation.DecelerateInterpolator;
+import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
 import com.shijinran.money.MainActivity;
+import com.shijinran.money.R;
 
 /**
  * 截屏后从屏幕顶部滑下来的卡片，像 QQ 收到消息那样，不用下拉通知栏。
@@ -38,6 +42,7 @@ public final class CaptureOverlay {
     private static final int MUTE = 0xFF8A8F98;
     private static final int ACCENT = 0xFFC2563B;
     private static final int CANCEL_INK = 0xFF6F6A62;
+    private static final int CANCEL_BG = 0xFFF4EFE6;
     private static final int THUMB_BG = 0xFFF3EDE1;
 
     private static final Handler UI = new Handler(Looper.getMainLooper());
@@ -174,32 +179,50 @@ public final class CaptureOverlay {
         windowManager = (WindowManager) context.getSystemService(Context.WINDOW_SERVICE);
         if (windowManager == null) return;
 
+        // 外壳只负责留白：卡片四周的投影要地方画，不然会被窗口边界裁掉。
+        FrameLayout holder = new FrameLayout(context);
+        holder.setClipChildren(false);
+        holder.setClipToPadding(false);
+        holder.setPadding(dp(14), dp(8), dp(14), dp(16));
+
         LinearLayout root = new LinearLayout(context);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(dp(16), dp(14), dp(16), dp(12));
-        GradientDrawable bg = new GradientDrawable();
-        bg.setColor(CARD_BG);
-        bg.setCornerRadius(dp(18));
-        root.setBackground(bg);
-        root.setElevation(dp(10));
+        root.setPadding(dp(18), dp(16), dp(18), dp(16));
+        root.setBackground(cardBackground());
+        root.setElevation(dp(14));
+        holder.addView(root, new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT));
 
         LinearLayout row = new LinearLayout(context);
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(Gravity.CENTER_VERTICAL);
 
+        // 缩略图外面套一圈很淡的描边，截图本身是白底时也能看出边界
+        FrameLayout thumb = new FrameLayout(context);
+        int side = dp(48);
+        LinearLayout.LayoutParams thumbLp = new LinearLayout.LayoutParams(side, side);
+        thumbLp.setMarginEnd(dp(14));
+        thumb.setLayoutParams(thumbLp);
+        thumb.setPadding(dp(1), dp(1), dp(1), dp(1));
+        GradientDrawable ring = new GradientDrawable();
+        ring.setColor(THUMB_BG);
+        ring.setCornerRadius(dp(16));
+        ring.setStroke(dp(1), 0x14000000);
+        thumb.setBackground(ring);
+        thumb.setClipToOutline(true);
+
         ImageView icon = new ImageView(context);
-        int side = dp(44);
-        LinearLayout.LayoutParams iconLp = new LinearLayout.LayoutParams(side, side);
-        iconLp.setMarginEnd(dp(12));
-        icon.setLayoutParams(iconLp);
+        icon.setLayoutParams(new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
         icon.setScaleType(ImageView.ScaleType.CENTER_CROP);
         GradientDrawable round = new GradientDrawable();
         round.setColor(THUMB_BG);
-        round.setCornerRadius(dp(10));
+        round.setCornerRadius(dp(15));
         icon.setBackground(round);
         icon.setClipToOutline(true);
         if (thumbBmp != null) icon.setImageBitmap(thumbBmp);
-        row.addView(icon);
+        thumb.addView(icon);
+        row.addView(thumb);
 
         LinearLayout texts = new LinearLayout(context);
         texts.setOrientation(LinearLayout.VERTICAL);
@@ -210,7 +233,7 @@ public final class CaptureOverlay {
         titleView = new TextView(context);
         titleView.setText("正在认金额…");
         titleView.setTextColor(INK);
-        titleView.setTextSize(16f);
+        titleView.setTextSize(17f);
         titleView.setTypeface(null, android.graphics.Typeface.BOLD);
         titleView.setMaxLines(1);
         titleView.setEllipsize(android.text.TextUtils.TruncateAt.END);
@@ -224,7 +247,7 @@ public final class CaptureOverlay {
         subtitleView.setEllipsize(android.text.TextUtils.TruncateAt.END);
         LinearLayout.LayoutParams subLp = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        subLp.topMargin = dp(3);
+        subLp.topMargin = dp(4);
         subtitleView.setLayoutParams(subLp);
         texts.addView(subtitleView);
         row.addView(texts);
@@ -232,18 +255,20 @@ public final class CaptureOverlay {
 
         LinearLayout buttons = new LinearLayout(context);
         buttons.setOrientation(LinearLayout.HORIZONTAL);
-        buttons.setGravity(Gravity.END);
+        buttons.setGravity(Gravity.CENTER_VERTICAL);
         LinearLayout.LayoutParams buttonsLp = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        buttonsLp.topMargin = dp(10);
+        buttonsLp.topMargin = dp(14);
         buttons.setLayoutParams(buttonsLp);
 
         TextView cancel = new TextView(context);
         cancel.setText("取消");
         cancel.setTextColor(CANCEL_INK);
-        cancel.setTextSize(13f);
+        cancel.setTextSize(14f);
         cancel.setGravity(Gravity.CENTER);
-        cancel.setPadding(dp(14), dp(8), dp(14), dp(8));
+        cancel.setBackground(pill(CANCEL_BG, 22, 0x1A000000));
+        LinearLayout.LayoutParams cancelLp = new LinearLayout.LayoutParams(0, dp(44), 1f);
+        cancel.setLayoutParams(cancelLp);
         cancel.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -259,18 +284,17 @@ public final class CaptureOverlay {
         confirmView = new TextView(context);
         confirmView.setText("确认记录");
         confirmView.setTextColor(0xFFFFFFFF);
-        confirmView.setTextSize(13f);
+        confirmView.setTextSize(14f);
+        confirmView.setTypeface(null, android.graphics.Typeface.BOLD);
         confirmView.setGravity(Gravity.CENTER);
-        confirmView.setPadding(dp(16), dp(8), dp(16), dp(8));
-        GradientDrawable pill = new GradientDrawable();
-        pill.setColor(ACCENT);
-        pill.setCornerRadius(dp(18));
-        confirmView.setBackground(pill);
+        confirmView.setBackground(pill(ACCENT, 22, 0x40FFFFFF));
+        confirmView.setCompoundDrawablesRelativeWithIntrinsicBounds(R.drawable.ic_check, 0, 0, 0);
+        confirmView.setCompoundDrawablePadding(dp(6));
+        confirmView.setCompoundDrawableTintList(ColorStateList.valueOf(0xFFFFFFFF));
         confirmView.setEnabled(false);
         confirmView.setAlpha(0.45f);
-        LinearLayout.LayoutParams confirmLp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        confirmLp.setMarginStart(dp(8));
+        LinearLayout.LayoutParams confirmLp = new LinearLayout.LayoutParams(0, dp(44), 1f);
+        confirmLp.setMarginStart(dp(10));
         confirmView.setLayoutParams(confirmLp);
         confirmView.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -301,7 +325,7 @@ public final class CaptureOverlay {
             }
         });
 
-        card = root;
+        card = holder;
         WindowManager.LayoutParams lp = new WindowManager.LayoutParams(
                 WindowManager.LayoutParams.MATCH_PARENT,
                 WindowManager.LayoutParams.WRAP_CONTENT,
@@ -312,13 +336,35 @@ public final class CaptureOverlay {
                         | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
                 android.graphics.PixelFormat.TRANSLUCENT);
         lp.gravity = Gravity.TOP | Gravity.CENTER_HORIZONTAL;
-        lp.y = dp(26);
+        lp.y = dp(20);
         windowManager.addView(card, lp);
 
         card.setAlpha(0f);
-        card.setTranslationY(-dp(90));
-        card.animate().alpha(1f).translationY(0f).setDuration(220).start();
+        card.setTranslationY(-dp(40));
+        card.setScaleX(0.94f);
+        card.setScaleY(0.94f);
+        card.animate().alpha(1f).translationY(0f).scaleX(1f).scaleY(1f)
+                .setInterpolator(new DecelerateInterpolator(1.6f))
+                .setDuration(260).start();
         restartTimer();
+    }
+
+    private GradientDrawable cardBackground() {
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(CARD_BG);
+        bg.setCornerRadius(dp(28));
+        return bg;
+    }
+
+    /** 全圆角按钮：按下时有一圈很淡的水波纹，手感更像系统控件 */
+    private RippleDrawable pill(int fill, int radiusDp, int rippleColor) {
+        GradientDrawable content = new GradientDrawable();
+        content.setColor(fill);
+        content.setCornerRadius(dp(radiusDp));
+        GradientDrawable mask = new GradientDrawable();
+        mask.setColor(0xFFFFFFFF);
+        mask.setCornerRadius(dp(radiusDp));
+        return new RippleDrawable(ColorStateList.valueOf(rippleColor), content, mask);
     }
 
     private void restartTimer() {
@@ -337,7 +383,8 @@ public final class CaptureOverlay {
         windowManager = null;
         if (view == null || wm == null) return;
         try {
-            view.animate().alpha(0f).translationY(-dp(90)).setDuration(160)
+            view.animate().alpha(0f).translationY(-dp(36)).scaleX(0.96f).scaleY(0.96f)
+                    .setDuration(150)
                     .withEndAction(new Runnable() {
                         @Override
                         public void run() {

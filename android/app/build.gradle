@@ -3,13 +3,13 @@ apply plugin: 'com.android.application'
 android {
     namespace "com.shijinran.money"
     compileSdk rootProject.ext.compileSdkVersion
-    buildToolsVersion "35.0.1"
+    buildToolsVersion "36.0.0"
     defaultConfig {
         applicationId "com.shijinran.money"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 55
-        versionName "1.4.15"
+        versionCode 56
+        versionName "1.4.16"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         ndk {
             def abis = (project.findProperty('ocrAbi') ?: 'arm64-v8a,armeabi-v7a').toString().split(',')
@@ -37,7 +37,7 @@ repositories {
 
 dependencies {
     implementation fileTree(include: ['*.jar', '*.aar'], dir: 'libs')
-    implementation "org.jetbrains.kotlin:kotlin-stdlib:1.9.24"
+    implementation "org.jetbrains.kotlin:kotlin-stdlib:2.2.20"
     implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
     implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
     implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
