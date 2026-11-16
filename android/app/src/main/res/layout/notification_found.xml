@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 截图记账提醒：自己画一条带按钮的通知。
+     系统对普通（非媒体）通知只在「展开」后才显示 action 按钮，
+     小米/HyperOS 等机型默认折叠，用户根本看不到「直接记一笔」「取消」，
+     所以这里把两个按钮直接画进通知内容里，折叠状态下也能点。
+     注意：折叠态高度有限（约 64dp），内容必须压缩成「标题 + 一行按钮」，
+     多了就会被卡片下边缘裁掉半截。 -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical">
+
+    <TextView
+        android:id="@+id/nf_title"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:maxLines="1"
+        android:ellipsize="end"
+        android:textSize="15sp"
+        android:textStyle="bold"
+        android:textColor="#FF1A1713" />
+
+    <LinearLayout
+        android:id="@+id/nf_buttons"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:orientation="horizontal">
+
+        <TextView
+            android:id="@+id/nf_record"
+            android:layout_width="0dp"
+            android:layout_height="32dp"
+            android:layout_weight="1"
+            android:background="@drawable/nf_record_bg"
+            android:gravity="center"
+            android:text="直接记一笔"
+            android:textColor="#FFFFFFFF"
+            android:textSize="13sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/nf_cancel"
+            android:layout_width="0dp"
+            android:layout_height="32dp"
+            android:layout_marginStart="8dp"
+            android:layout_weight="1"
+            android:background="@drawable/nf_cancel_bg"
+            android:gravity="center"
+            android:text="取消"
+            android:textColor="#FF6F6A62"
+            android:textSize="13sp" />
+    </LinearLayout>
+</LinearLayout>

@@ -20,7 +20,7 @@ import java.util.Locale;
 
 /**
  * 截图提醒的两个动作：记账和丢弃。
- * 通知上的按钮走广播进到这里；顶部弹窗（{@link CaptureOverlay}）直接调下面两个静态方法，
+ * 通知上的按钮和截图记账卡片都走这两个静态方法，
  * 两条路共用同一份逻辑，不会一边记一边不记。
  */
 public class CaptureCancelReceiver extends BroadcastReceiver {

@@ -11,6 +11,7 @@ import android.content.Context;
 import android.content.ContentUris;
 import android.content.Intent;
 import android.content.pm.ServiceInfo;
+import android.content.res.Configuration;
 import android.database.ContentObserver;
 import android.database.Cursor;
 import android.graphics.Bitmap;
@@ -23,6 +24,7 @@ import android.os.Looper;
 import android.os.SystemClock;
 import android.provider.MediaStore;
 import android.util.Log;
+import android.widget.RemoteViews;
 
 import androidx.core.app.NotificationCompat;
 
@@ -646,19 +648,24 @@ public class ScreenshotWatchService extends Service {
         String text = "点「直接记一笔」马上入账，点「取消」忽略这张截图";
         // 连续截好几张时，只有第一条振动，避免口袋里的手机连震一串
         boolean vibrate = System.currentTimeMillis() - CaptureStore.lastNoticeAt(this) > QUIET_VIBRATE_MS;
+        // 按钮画进内容视图里：系统对普通通知只在展开后才显示 action 按钮，
+        // 小米这类默认折叠的机型上用户只会看到一行字，一个按钮都点不到
+        RemoteViews view = foundView(amount, key, notifyId, ocrText);
+
         NotificationCompat.Builder builder = new NotificationCompat.Builder(this, CHANNEL_FOUND)
                 .setSmallIcon(R.mipmap.ic_launcher)
                 .setContentTitle("识别到 ¥" + amount)
                 .setContentText(text)
-                .setStyle(new NotificationCompat.BigTextStyle().bigText(text))
+                .setStyle(new NotificationCompat.DecoratedCustomViewStyle())
+                .setCustomContentView(view)
                 .setCategory(NotificationCompat.CATEGORY_MESSAGE)
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
                 .setGroup(GROUP_FOUND)
                 .setAutoCancel(true)
                 // 点通知本身进 App 看/改这个金额；点按钮则完全留在后台
-                .setContentIntent(openApp(path, 10000 + notifyId))
-                .addAction(0, "直接记一笔", recordIntent(key, notifyId, amount, ocrText))
-                .addAction(0, "取消", cancelIntent(key, notifyId));
+                .setContentIntent(openApp(path, 10000 + notifyId));
+        // 不再加系统 action 按钮：按钮已经画在内容视图里了，
+        // 再挂一套 action 在展开时会并排出现两排一模一样的按钮
         if (pop) {
             // 不要用 setSilent：部分机型把静音通知直接挡在横幅之外；
             // 这里只把振动压掉，横幅照旧弹
@@ -670,9 +677,33 @@ public class ScreenshotWatchService extends Service {
         }
         try {
             NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
-            if (nm != null) nm.notify(notifyId, builder.build());
+            if (nm == null) return;
+            // 先撤掉占位那条再发：占位带 15 秒超时，直接覆盖会让整条提醒 15 秒后自己消失
+            nm.cancel(notifyId);
+            nm.notify(notifyId, builder.build());
         } catch (Throwable ignored) {
         }
+    }
+
+    /**
+     * 自绘的通知内容：标题 + 两个按钮。
+     * 系统自带的 action 按钮只在「展开」后才出现，国产 ROM 默认折叠，
+     * 用户看到的就是一条没有按钮的提醒；把按钮画进内容视图里，折叠状态也能点。
+     * 折叠态只有约 64dp 高，所以这里不放说明文字，多了会被卡片下边缘裁掉。
+     */
+    private RemoteViews foundView(String amount, long key, int notifyId, String ocrText) {
+        RemoteViews view = new RemoteViews(getPackageName(), R.layout.notification_found);
+        boolean night = (getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK)
+                == Configuration.UI_MODE_NIGHT_YES;
+        // 通知卡片的底色跟着系统深浅色走，文字颜色也得跟着换，否则白底白字
+        int ink = night ? 0xFFF3EFE7 : 0xFF1A1713;
+        int mute = night ? 0xFFB9B3A7 : 0xFF6F6A62;
+        view.setTextViewText(R.id.nf_title, "识别到 ¥" + amount);
+        view.setTextColor(R.id.nf_title, ink);
+        view.setTextColor(R.id.nf_cancel, mute);
+        view.setOnClickPendingIntent(R.id.nf_record, recordIntent(key, notifyId, amount, ocrText));
+        view.setOnClickPendingIntent(R.id.nf_cancel, cancelIntent(key, notifyId));
+        return view;
     }
 
     /** 「直接记一笔」：把这张截图交给接收器入队，不需要把 App 拉到前台。 */

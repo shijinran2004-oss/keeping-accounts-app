@@ -9,7 +9,7 @@ import type { LedgerState } from '../../types'
 export const BACKUP_FORMAT = 'shijinran.backup'
 export const BACKUP_SCHEMA = 2
 /** 与 package.json 的 version 保持一致，导入预览里展示 */
-export const APP_VERSION = '1.4.13'
+export const APP_VERSION = '1.4.14'
 
 export interface BackupEnvelope {
   format: typeof BACKUP_FORMAT
