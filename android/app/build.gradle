@@ -8,8 +8,8 @@ android {
         applicationId "com.shijinran.money"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 59
-        versionName "1.4.19"
+        versionCode 60
+        versionName "1.4.20"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         ndk {
             def abis = (project.findProperty('ocrAbi') ?: 'arm64-v8a,armeabi-v7a').toString().split(',')
