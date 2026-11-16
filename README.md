@@ -114,7 +114,17 @@ cd android && ./gradlew assembleDebug -PocrAbi=arm64-v8a,armeabi-v7a
 | --- | --- | --- |
 | ![](docs/screenshots/web/02-home.png) | ![](docs/screenshots/web/09-ledger.png) | ![](docs/screenshots/web/13-success.png) |
 
-浅色主题与强调色设置见 `docs/screenshots/web/16-theme-light.png`，流水详情见 `docs/screenshots/web/17-tx-detail.png`，改账本名字见 `docs/screenshots/web/18-name.png`，发薪日与实际到账日设置见 `docs/screenshots/web/19-payday.png` 与 `20-onboarding-payday.png`，分类图标选择器见 `docs/screenshots/web/22-category-icon.png`，强调色日历见 `docs/screenshots/web/23-accent-calendar.png`；浏览器截图在 `docs/screenshots/web/`（24 张，390×844@2x，含备份弹层、发薪日设置、带发薪日的引导页、分类图标选择器、强调色日历与新的开屏海报）。`docs/screenshots/android/` 里保留的是 1.0 纸色版真机图；1.1 版打包后没有可用的模拟器（Windows 提交内存不足），原生截图未重拍。
+浅色主题与强调色设置见 `docs/screenshots/web/16-theme-light.png`，流水详情见 `docs/screenshots/web/17-tx-detail.png`，改账本名字见 `docs/screenshots/web/18-name.png`，发薪日与实际到账日设置见 `docs/screenshots/web/19-payday.png` 与 `20-onboarding-payday.png`，分类图标选择器见 `docs/screenshots/web/22-category-icon.png`，强调色日历见 `docs/screenshots/web/23-accent-calendar.png`；浏览器截图在 `docs/screenshots/web/`（24 张，390×844@2x，含备份弹层、发薪日设置、带发薪日的引导页、分类图标选择器、强调色日历与新的开屏海报）。真机截图（小米 23127PN0CC / HyperOS / Android 16，1.4.21 版，900×2002）：
+
+| 启动海报 | 首页 | 明细 |
+| --- | --- | --- |
+| ![](docs/screenshots/android/01-poster.png) | ![](docs/screenshots/android/02-home.png) | ![](docs/screenshots/android/03-ledger.png) |
+
+| 统计 | 我的 | 截图记账卡片 |
+| --- | --- | --- |
+| ![](docs/screenshots/android/04-stats.png) | ![](docs/screenshots/android/05-me.png) | ![](docs/screenshots/android/06-capture-card.jpg) |
+
+桌面图标见 `docs/screenshots/android/00-launcher.jpg`；系统 splash 只剩一片纯奶油底 `docs/screenshots/android/00b-splash.png`——Android 12 起 splash 会把图标裁进方形框，所以这里不放图，冷启动的视觉全交给海报。1.0 纸色版的真机图归档在 `docs/screenshots/android-1.0/`。
 
 ## 设计说明
 
