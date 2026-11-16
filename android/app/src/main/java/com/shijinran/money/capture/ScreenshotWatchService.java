@@ -373,12 +373,15 @@ public class ScreenshotWatchService extends Service {
     /** 识别线程：解码 → 存缓存 → OCR（只做一次，文字随截图一起存起来）→ 入队 + 一条通知。 */
     private void handleShot(long id) {
         long begin = System.currentTimeMillis();
-        // 先把提醒弹出来再识别：先看到「正在认金额…」，认完原地变成金额，
-        // 不用等 OCR 跑完才第一次出现（大图/冷启动时能差一秒多）
-        notifyProgress();
+        // 有「显示在其他应用上层」权限就自己画一张从顶部滑下来的卡片（QQ 那种），
+        // 不靠系统横幅；没有权限才退回通知，能不能弹由厂商决定
+        boolean overlay = CaptureOverlay.permitted(this);
+        if (!overlay) notifyProgress();
         Uri uri = ContentUris.withAppendedId(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, id);
         File saved = null;
         Bitmap bitmap = null;
+        long key = (id << 20) ^ (System.currentTimeMillis() & 0xFFFFFL);
+        int notifyId = CaptureStore.nextNotifyId(this);
         try {
             bitmap = decode(uri, MAX_SIDE);
             if (bitmap == null) {
@@ -390,20 +393,27 @@ public class ScreenshotWatchService extends Service {
                 Log.w(TAG, "cache write failed " + id);
                 return;
             }
+            // 图一存好就把卡片滑下来，先看到「正在认金额…」，认完原地变成金额
+            if (overlay) CaptureOverlay.showProgress(this, key, notifyId, saved.getAbsolutePath(), thumb(bitmap));
             OcrShot shot = ocrShot(bitmap);
             String amount = shot == null ? null : shot.amount;
             if (amount == null) {
                 // 聊天、网页之类没有金额的截图，静默跳过
                 saved.delete();
+                if (overlay) CaptureOverlay.dismissIfKey(key);
                 Log.d(TAG, "skip id=" + id + " no amount in " + (System.currentTimeMillis() - begin) + "ms");
                 return;
             }
-            long key = (id << 20) ^ (System.currentTimeMillis() & 0xFFFFFL);
-            int notifyId = CaptureStore.nextNotifyId(this);
             JSONObject evicted = CaptureStore.addShot(this, key, notifyId, saved.getAbsolutePath(),
                     centsOf(amount), shot.text);
             if (evicted != null) dropShot(evicted);
-            notifyFound(notifyId, key, amount, saved.getAbsolutePath(), shot.text);
+            if (overlay) {
+                CaptureOverlay.showAmount(amount, centsOf(amount), shot.text);
+                // 卡片已经给人看过了，通知只留一条安静的备份在通知栏里
+                notifyFound(notifyId, key, amount, saved.getAbsolutePath(), shot.text, false);
+            } else {
+                notifyFound(notifyId, key, amount, saved.getAbsolutePath(), shot.text, true);
+            }
             CaptureStore.setLastNoticeAt(this, System.currentTimeMillis());
             Log.d(TAG, "handled id=" + id + " ¥" + amount + " in " + (System.currentTimeMillis() - begin) + "ms");
         } catch (Throwable t) {
@@ -454,9 +464,26 @@ public class ScreenshotWatchService extends Service {
                 NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
                 if (nm != null) nm.cancel(notifyId);
             }
+            CaptureOverlay.dismissIfKey(shot.optLong("key", 0));
             String path = shot.optString("path", "");
             if (!path.isEmpty()) new File(path).delete();
         } catch (Throwable ignored) {
+        }
+    }
+
+    /** 顶部卡片左侧的小方图：截中间一块再缩到卡片尺寸，别把整张大图塞进 View。 */
+    private Bitmap thumb(Bitmap source) {
+        try {
+            int w = source.getWidth();
+            int h = source.getHeight();
+            int side = Math.min(w, h);
+            if (side <= 0) return null;
+            Bitmap square = Bitmap.createBitmap(source, (w - side) / 2, (h - side) / 2, side, side);
+            Bitmap scaled = Bitmap.createScaledBitmap(square, 132, 132, true);
+            if (scaled != square) square.recycle();
+            return scaled;
+        } catch (Throwable t) {
+            return null;
         }
     }
 
@@ -609,7 +636,7 @@ public class ScreenshotWatchService extends Service {
     /**
      * 一张截图一条通知：两张同时待确认时各自有 id，都能单独点「直接记一笔」。
      */
-    private void notifyFound(int notifyId, long key, String amount, String path, String ocrText) {
+    private void notifyFound(int notifyId, long key, String amount, String path, String ocrText, boolean pop) {
         String text = "点「直接记一笔」马上入账，点「取消」忽略这张截图";
         // 连续截好几张时，只有第一条振动，避免口袋里的手机连震一串
         boolean vibrate = System.currentTimeMillis() - CaptureStore.lastNoticeAt(this) > QUIET_VIBRATE_MS;
@@ -621,15 +648,20 @@ public class ScreenshotWatchService extends Service {
                 .setCategory(NotificationCompat.CATEGORY_MESSAGE)
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
                 .setGroup(GROUP_FOUND)
-                // 不要用 setSilent：部分机型把静音通知直接挡在横幅之外；
-                // 这里只把振动压掉，横幅照旧弹
-                .setDefaults(0)
-                .setVibrate(vibrate ? new long[] { 0, 200, 120, 200 } : new long[] { 0 })
                 .setAutoCancel(true)
                 // 点通知本身进 App 看/改这个金额；点按钮则完全留在后台
                 .setContentIntent(openApp(path, 10000 + notifyId))
                 .addAction(0, "直接记一笔", recordIntent(key, notifyId, amount, ocrText))
                 .addAction(0, "取消", cancelIntent(key, notifyId));
+        if (pop) {
+            // 不要用 setSilent：部分机型把静音通知直接挡在横幅之外；
+            // 这里只把振动压掉，横幅照旧弹
+            builder.setDefaults(0)
+                    .setVibrate(vibrate ? new long[] { 0, 200, 120, 200 } : new long[] { 0 });
+        } else {
+            // 顶部卡片已经把金额摆到眼前了，通知只在通知栏里留个备份，不再弹第二次
+            builder.setSilent(true);
+        }
         try {
             NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
             if (nm != null) nm.notify(notifyId, builder.build());

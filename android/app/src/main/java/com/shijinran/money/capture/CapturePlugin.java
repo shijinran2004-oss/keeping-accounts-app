@@ -217,8 +217,29 @@ public class CapturePlugin extends Plugin {
         }
         ret.put("battery", battery);
         ret.put("lastCheckAt", CaptureStore.lastCheckAt(getContext()));
+        // 有「显示在其他应用上层」才能自己画顶部卡片；没有就只能靠系统通知，弹不弹看厂商
+        ret.put("overlay", CaptureOverlay.permitted(getContext()) ? "granted" : "denied");
 
         call.resolve(ret);
+    }
+
+    /** 弹系统的「显示在其他应用上层」设置页，允许后截屏就能从顶部滑出卡片 */
+    @PluginMethod
+    public void requestOverlay(PluginCall call) {
+        if (CaptureOverlay.permitted(getContext())) {
+            JSObject ret = new JSObject();
+            ret.put("overlay", "granted");
+            call.resolve(ret);
+            return;
+        }
+        try {
+            getContext().startActivity(CaptureOverlay.permissionIntent(getContext()));
+            JSObject ret = new JSObject();
+            ret.put("overlay", "prompt");
+            call.resolve(ret);
+        } catch (Throwable t) {
+            call.reject("打不开系统设置，请手动到设置里允许「显示在其他应用上层」", "capture_overlay_failed");
+        }
     }
 
     /** 弹系统的「不受电池优化限制」确认框；用户允许后后台就不容易被冻住 */

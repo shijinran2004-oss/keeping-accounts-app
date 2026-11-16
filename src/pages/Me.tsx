@@ -6,6 +6,7 @@ import {
   Camera,
   ChevronRight,
   Download,
+  Layers,
   MonitorSmartphone,
   Moon,
   Palette,
@@ -30,6 +31,7 @@ import {
   formatMoney,
   openNoticeSettings,
   requestIgnoreBattery,
+  requestOverlay,
   themeName,
   todayStr,
   watchStatus,
@@ -73,10 +75,18 @@ export function Me() {
     const sync = () => {
       void watchStatus().then(setWatch)
     }
+    // 从系统设置页回来要重新读一遍：横幅、悬浮窗权限都是在那里改的。
+    // WebView 里应用切回来不一定派发 focus，visibilitychange 一定会，所以两个都听。
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') sync()
+    }
     sync()
-    // 从系统设置页回来时重新读一遍，横幅开关改完能立刻反映
     window.addEventListener('focus', sync)
-    return () => window.removeEventListener('focus', sync)
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      window.removeEventListener('focus', sync)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
   }, [canWatch])
 
   const toggleWatch = async () => {
@@ -93,15 +103,20 @@ export function Me() {
         notice: fresh.notice ?? prev?.notice,
         battery: fresh.battery ?? prev?.battery,
         lastCheckAt: fresh.lastCheckAt ?? prev?.lastCheckAt,
+        overlay: fresh.overlay ?? prev?.overlay,
       }))
       if (next.enabled) {
-        const issue = noticeIssue(fresh.notice)
-        toast(
-          issue
-            ? `截图记账已开启，但${issue.label}没打开，截屏后不会从顶部弹出`
-            : '截图记账已开启，截屏后弹出通知，点「直接记一笔」就行',
-          issue ? 'error' : undefined,
-        )
+        if (fresh.overlay === 'granted') {
+          toast('截图记账已开启，截屏后从顶部弹出卡片，点「确认记录」直接记一笔')
+        } else {
+          const issue = noticeIssue(fresh.notice)
+          toast(
+            issue
+              ? `截图记账已开启，但${issue.label}没打开，截屏后不会从顶部弹出`
+              : '截图记账已开启，截屏后弹出通知，点「直接记一笔」就行',
+            issue ? 'error' : undefined,
+          )
+        }
       } else {
         toast('截图记账已关闭')
       }
@@ -121,6 +136,15 @@ export function Me() {
     }
   }
 
+  const openOverlay = async () => {
+    try {
+      await requestOverlay()
+      toast('在系统设置里允许「显示在其他应用上层」，回来截屏就会从顶部弹出卡片')
+    } catch (error) {
+      toast(error instanceof Error ? error.message : '没打开设置，可以手动到系统设置里允许', 'error')
+    }
+  }
+
   const openBattery = async () => {
     try {
       await requestIgnoreBattery()
@@ -132,6 +156,8 @@ export function Me() {
 
   const notice = watch?.enabled ? noticeIssue(watch.notice) : null
   const batteryLimited = watch?.enabled && watch.battery === false
+  // 没有悬浮窗权限时，截屏提醒就只能待在下拉通知栏，弹不弹全看厂商
+  const overlayMissing = watch?.enabled && watch.overlay !== 'granted'
   const days = new Set(state.txs.map((t) => t.date)).size
   const first = [...state.txs].sort((a, b) => a.date.localeCompare(b.date))[0]
   const theme = state.settings.theme ?? 'light'
@@ -305,11 +331,22 @@ export function Me() {
               label="截图记账"
               sub={
                 watch?.enabled
-                  ? '已开启：截屏后弹出通知，点「直接记一笔」马上入账'
+                  ? watch.overlay === 'granted'
+                    ? '已开启：截屏后从顶部弹出卡片，点「确认记录」直接入账'
+                    : '已开启：截屏后弹出通知，点「直接记一笔」马上入账'
                   : '默认关闭；开启后下拉栏会常驻一条通知'
               }
               value={watchBusy ? '…' : watch?.enabled ? '已开启' : '已关闭'}
               onClick={toggleWatch}
+            />
+          )}
+          {canWatch && overlayMissing && (
+            <Row
+              icon={Layers}
+              label="顶部弹窗"
+              sub="允许「显示在其他应用上层」，截屏后就像 QQ 一样从顶部滑出卡片"
+              value="去允许"
+              onClick={openOverlay}
             />
           )}
           {canWatch && notice && (
@@ -332,7 +369,7 @@ export function Me() {
           )}
         </div>
         {canWatch && (
-          <p className="field-note">截图只在这台手机上识别；通知里点「直接记一笔」就记好了，不用切回 App，点「取消」就直接丢掉。</p>
+          <p className="field-note">截图只在这台手机上识别；卡片或通知里点「确认记录」就记好了，不用切回 App，点「取消」就直接丢掉。</p>
         )}
       </section>
 

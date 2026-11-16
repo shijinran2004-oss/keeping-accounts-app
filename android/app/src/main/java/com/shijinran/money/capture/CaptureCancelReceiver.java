@@ -19,10 +19,9 @@ import java.io.File;
 import java.util.Locale;
 
 /**
- * 通知上两个按钮的落点：
- * 「直接记一笔」把这一张截图移出待确认队列、金额和识别文字存进待入账队列；
- * 「取消」把这一张丢掉。
- * 两者都只处理自己那条通知对应的截图，连拍多张时互不影响。
+ * 截图提醒的两个动作：记账和丢弃。
+ * 通知上的按钮走广播进到这里；顶部弹窗（{@link CaptureOverlay}）直接调下面两个静态方法，
+ * 两条路共用同一份逻辑，不会一边记一边不记。
  */
 public class CaptureCancelReceiver extends BroadcastReceiver {
 
@@ -37,9 +36,15 @@ public class CaptureCancelReceiver extends BroadcastReceiver {
     public void onReceive(Context context, Intent intent) {
         String action = intent == null ? null : intent.getAction();
         if (ACTION_RECORD.equals(action)) {
-            record(context, intent);
+            recordShot(context,
+                    intent.getLongExtra(ScreenshotWatchService.EXTRA_KEY, 0L),
+                    intent.getIntExtra(ScreenshotWatchService.EXTRA_NOTIFY_ID, 0),
+                    intent.getLongExtra(ScreenshotWatchService.EXTRA_AMOUNT, 0L),
+                    intent.getStringExtra(ScreenshotWatchService.EXTRA_TEXT));
         } else {
-            cancel(context, intent);
+            cancelShot(context,
+                    intent == null ? 0L : intent.getLongExtra(ScreenshotWatchService.EXTRA_KEY, 0L),
+                    intent == null ? 0 : intent.getIntExtra(ScreenshotWatchService.EXTRA_NOTIFY_ID, 0));
         }
     }
 
@@ -47,15 +52,10 @@ public class CaptureCancelReceiver extends BroadcastReceiver {
      * 只认通知当前指向的那一张，连点两下也只会记一笔。
      * 队列里找不到它时不能默默收掉通知：用户看到「有反应」却什么都没记，
      * 那是最糟的一种失败。所以按「记过没有」分两种情况处理：
-     * 已记过 → 收通知（防重复两笔）；没记过 → 用通知自带的金额补记。
+     * 已记过 → 收通知（防重复两笔）；没记过 → 用通知/弹窗自带的金额补记。
      */
-    private void record(Context context, Intent intent) {
+    static void recordShot(Context context, long key, int notifyId, long amount, String text) {
         try {
-            long key = intent.getLongExtra(ScreenshotWatchService.EXTRA_KEY, 0L);
-            int notifyId = intent.getIntExtra(ScreenshotWatchService.EXTRA_NOTIFY_ID, 0);
-            long amount = intent.getLongExtra(ScreenshotWatchService.EXTRA_AMOUNT, 0L);
-            String text = intent.getStringExtra(ScreenshotWatchService.EXTRA_TEXT);
-
             NotificationManager nm = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
             JSONObject shot = key != 0 ? CaptureStore.removeShot(context, key) : null;
             if (shot != null) {
@@ -64,13 +64,13 @@ public class CaptureCancelReceiver extends BroadcastReceiver {
                 deleteFile(shot);
             } else if (key != 0) {
                 // 队列里没有这张：多半是点通知正文进来时已经被 consume 取走，
-                // 或者进程被回收后队列刚好被挤掉。只要还没记过，就用通知里的金额补上。
+                // 或者进程被回收后队列刚好被挤掉。只要还没记过，就用带来的金额补上。
                 if (CaptureStore.isRecorded(context, key)) {
                     if (nm != null && notifyId > 0) nm.cancel(notifyId);
                     Log.d(TAG, "record ignored, already recorded key=" + key);
                     return;
                 }
-                Log.w(TAG, "shot gone, fallback to intent extras key=" + key);
+                Log.w(TAG, "shot gone, fallback to extra key=" + key);
             }
 
             if (amount <= 0) {
@@ -93,10 +93,8 @@ public class CaptureCancelReceiver extends BroadcastReceiver {
         }
     }
 
-    private void cancel(Context context, Intent intent) {
+    static void cancelShot(Context context, long key, int notifyId) {
         try {
-            long key = intent.getLongExtra(ScreenshotWatchService.EXTRA_KEY, 0L);
-            int notifyId = intent.getIntExtra(ScreenshotWatchService.EXTRA_NOTIFY_ID, 0);
             NotificationManager nm = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
             if (key != 0) {
                 JSONObject shot = CaptureStore.removeShot(context, key);
@@ -118,7 +116,7 @@ public class CaptureCancelReceiver extends BroadcastReceiver {
         }
     }
 
-    private void deleteFile(JSONObject shot) {
+    private static void deleteFile(JSONObject shot) {
         try {
             String path = shot.optString("path", "");
             if (!path.isEmpty()) new File(path).delete();
@@ -127,7 +125,7 @@ public class CaptureCancelReceiver extends BroadcastReceiver {
     }
 
     /** 实在记不上时给个明确交代，别让用户以为记好了。 */
-    private void notifyFailed(Context context) {
+    private static void notifyFailed(Context context) {
         try {
             NotificationManager nm = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
             if (nm == null) return;
@@ -150,7 +148,7 @@ public class CaptureCancelReceiver extends BroadcastReceiver {
     }
 
     /** 静静地回一条「已记账」，几秒后自己消失，不弹横幅也不再振动。 */
-    private void notifyDone(Context context, long amountCents) {
+    private static void notifyDone(Context context, long amountCents) {
         try {
             NotificationManager nm = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
             if (nm == null) return;

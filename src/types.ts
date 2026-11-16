@@ -539,6 +539,8 @@ export interface WatchStatus {
   battery?: boolean
   /** 上一次检查媒体库的时间（毫秒），用来判断服务是不是被冻住了 */
   lastCheckAt?: number
+  /** 有没有「显示在其他应用上层」：有就能截屏后自己弹顶部卡片，没有只能靠系统通知 */
+  overlay?: 'granted' | 'denied'
 }
 
 /** 通知横幅的可用状态，来自原生插件 */

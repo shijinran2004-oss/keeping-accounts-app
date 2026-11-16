@@ -12,5 +12,6 @@ export {
   onCapture,
   openNoticeSettings,
   requestIgnoreBattery,
+  requestOverlay,
   watchStatus,
 } from './plugin'

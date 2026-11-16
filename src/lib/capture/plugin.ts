@@ -13,6 +13,7 @@ interface CaptureApi {
   enableWatch(): Promise<WatchStatus>
   openNoticeSettings(): Promise<void>
   requestIgnoreBattery(): Promise<void>
+  requestOverlay(): Promise<{ overlay?: string }>
   disableWatch(): Promise<WatchStatus>
   addListener(
     event: 'capture',
@@ -84,6 +85,12 @@ export async function watchStatus(): Promise<WatchStatus> {
 export async function openNoticeSettings(): Promise<void> {
   if (!captureAvailable()) return
   await capture().openNoticeSettings()
+}
+
+/** 弹系统的「显示在其他应用上层」设置页，允许后截屏就能从顶部滑出卡片 */
+export async function requestOverlay(): Promise<void> {
+  if (!captureAvailable()) return
+  await capture().requestOverlay()
 }
 
 /** 弹系统的「不受电池优化限制」确认框，让厂商省电别再冻住后台监听 */
