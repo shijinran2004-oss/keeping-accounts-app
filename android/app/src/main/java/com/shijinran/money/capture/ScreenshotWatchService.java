@@ -81,8 +81,6 @@ public class ScreenshotWatchService extends Service {
 
     private static final String TAG = "SnoopyCapture";
     private static final int MAX_SIDE = 1280;
-    /** 「正在认金额…」的固定通知位：识别是串行的，同一时间只有一张在认 */
-    private static final int NOTIFY_PROGRESS_ID = 4102;
     /** 连拍多张时，8 秒内不再重复振动/响铃 */
     private static final long QUIET_VIBRATE_MS = 8_000L;
     /** 媒体库写入比广播慢，首次没扫到最多再补 2 次（原来要重试 10 次） */
@@ -135,7 +133,8 @@ public class ScreenshotWatchService extends Service {
         instance = null;
         // 不要在这里取消自检闹钟：系统回收或冻结后台服务时同样会走 onDestroy，
         // 一旦取消就再没人把服务叫回来。用户主动关闭时由 CapturePlugin.disableWatch() 取消。
-        cancelProgress();
+        // 占位通知也不用在这里收：它带 15 秒超时，服务没了会自己消失，
+        // 已经认出金额的那条要留着让用户确认。
         // 先掐掉还在排队的补扫：否则它会在线程池 shutdown 之后再 execute，主线程直接崩
         mainHandler.removeCallbacksAndMessages(null);
         if (observer != null) {
@@ -376,12 +375,16 @@ public class ScreenshotWatchService extends Service {
         // 有「显示在其他应用上层」权限就自己画一张从顶部滑下来的卡片（QQ 那种），
         // 不靠系统横幅；没有权限才退回通知，能不能弹由厂商决定
         boolean overlay = CaptureOverlay.permitted(this);
-        if (!overlay) notifyProgress();
+        long key = (id << 20) ^ (System.currentTimeMillis() & 0xFFFFFL);
+        int notifyId = CaptureStore.nextNotifyId(this);
+        // 没有悬浮窗权限时，占位和结果共用同一个通知位：先挂「正在认金额…」，
+        // 认出金额后原地更新成「识别到 ¥X」。状态栏图标只出现一次，不会
+        // 因为「新建一条 + 再删掉占位」连着跳三下，也不会留下冗余通知。
+        if (!overlay) notifyProgress(notifyId);
         Uri uri = ContentUris.withAppendedId(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, id);
         File saved = null;
         Bitmap bitmap = null;
-        long key = (id << 20) ^ (System.currentTimeMillis() & 0xFFFFFL);
-        int notifyId = CaptureStore.nextNotifyId(this);
+        boolean posted = false;
         try {
             bitmap = decode(uri, MAX_SIDE);
             if (bitmap == null) {
@@ -414,6 +417,7 @@ public class ScreenshotWatchService extends Service {
             } else {
                 notifyFound(notifyId, key, amount, saved.getAbsolutePath(), shot.text, true);
             }
+            posted = true;
             CaptureStore.setLastNoticeAt(this, System.currentTimeMillis());
             Log.d(TAG, "handled id=" + id + " ¥" + amount + " in " + (System.currentTimeMillis() - begin) + "ms");
         } catch (Throwable t) {
@@ -422,12 +426,14 @@ public class ScreenshotWatchService extends Service {
         } finally {
             // 位图用完立刻回收，连拍时不至于堆一堆大图把内存撑爆
             if (bitmap != null && !bitmap.isRecycled()) bitmap.recycle();
-            cancelProgress();
+            // 认不出金额、解码失败这种没结果的情况，把占位通知收掉；
+            // 已经更新成「识别到 ¥X」的那条要留着，别连正主一起删
+            if (!posted && !overlay) cancelProgress(notifyId);
         }
     }
 
-    /** 一检测到新截图就弹的占位提醒，纯提示进度，没有按钮 */
-    private void notifyProgress() {
+    /** 一检测到新截图就弹的占位提醒，纯提示进度，没有按钮；和结果共用同一个通知位 */
+    private void notifyProgress(int notifyId) {
         try {
             NotificationCompat.Builder builder = new NotificationCompat.Builder(this, CHANNEL_FOUND)
                     .setSmallIcon(R.mipmap.ic_launcher)
@@ -443,15 +449,15 @@ public class ScreenshotWatchService extends Service {
                     // 万一进程在识别中途被杀，这条占位通知自己消失，不会一直挂着
                     .setTimeoutAfter(15_000L);
             NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
-            if (nm != null) nm.notify(NOTIFY_PROGRESS_ID, builder.build());
+            if (nm != null) nm.notify(notifyId, builder.build());
         } catch (Throwable ignored) {
         }
     }
 
-    private void cancelProgress() {
+    private void cancelProgress(int notifyId) {
         try {
             NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
-            if (nm != null) nm.cancel(NOTIFY_PROGRESS_ID);
+            if (nm != null) nm.cancel(notifyId);
         } catch (Throwable ignored) {
         }
     }
