@@ -1,5 +1,10 @@
 # 更新记录
 
+## 1.4.17 — 2026-11-16
+
+- 「确认记录」按钮上的对勾去掉了，只留居中文字，看起来更干净（上一版加的图标被吐槽丑）。
+- 仍然没有网络权限。
+
 ## 1.4.16 — 2026-11-16
 
 - 依赖和构建工具都核过一遍并升到当前最新：OCR 引擎 RapidOcrAndroidOnnx 1.3.0（查了 GitHub Release，已是最新）、AndroidX 组件（activity 1.13.0 / appcompat 1.8.0 / core 1.18.0 / fragment 1.9.1 / webkit 1.15.0 等）、Kotlin 2.2.20、Android Gradle 插件 8.13.2 / Gradle 8.14.3，编译 SDK 升到 36（targetSdk 仍是 35，运行行为不变）。

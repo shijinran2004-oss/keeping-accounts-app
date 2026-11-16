@@ -288,9 +288,6 @@ public final class CaptureOverlay {
         confirmView.setTypeface(null, android.graphics.Typeface.BOLD);
         confirmView.setGravity(Gravity.CENTER);
         confirmView.setBackground(pill(ACCENT, 22, 0x40FFFFFF));
-        confirmView.setCompoundDrawablesRelativeWithIntrinsicBounds(R.drawable.ic_check, 0, 0, 0);
-        confirmView.setCompoundDrawablePadding(dp(6));
-        confirmView.setCompoundDrawableTintList(ColorStateList.valueOf(0xFFFFFFFF));
         confirmView.setEnabled(false);
         confirmView.setAlpha(0.45f);
         LinearLayout.LayoutParams confirmLp = new LinearLayout.LayoutParams(0, dp(44), 1f);
