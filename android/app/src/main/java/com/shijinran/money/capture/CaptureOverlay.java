@@ -25,6 +25,10 @@ import android.widget.TextView;
 import com.shijinran.money.MainActivity;
 import com.shijinran.money.R;
 
+import java.util.Locale;
+
+import cdflynn.android.library.checkview.CheckView;
+
 /**
  * 截屏后从屏幕顶部滑下来的卡片，像 QQ 收到消息那样，不用下拉通知栏。
  *
@@ -58,6 +62,14 @@ public final class CaptureOverlay {
     private TextView titleView;
     private TextView subtitleView;
     private TextView confirmView;
+    /** 上面那行「缩略图 + 识别到 ¥X」；记成功后整行藏起来换成对勾 */
+    private LinearLayout rowView;
+    /** 「取消 / 确认记录」两个按钮 */
+    private LinearLayout buttonsView;
+    /** 记好以后显示的对勾区块 */
+    private LinearLayout successRow;
+    private TextView successSubtitle;
+    private CheckView checkView;
     private long amountCents;
     private String ocrText = "";
 
@@ -252,6 +264,7 @@ public final class CaptureOverlay {
         texts.addView(subtitleView);
         row.addView(texts);
         root.addView(row);
+        rowView = row;
 
         LinearLayout buttons = new LinearLayout(context);
         buttons.setOrientation(LinearLayout.HORIZONTAL);
@@ -297,15 +310,61 @@ public final class CaptureOverlay {
             @Override
             public void onClick(View v) {
                 if (amountCents <= 0) return;
+                // 先给一下触感，再把卡片换成对勾；记账本身很快，不用等它回来
+                try {
+                    v.performHapticFeedback(Build.VERSION.SDK_INT >= Build.VERSION_CODES.R
+                            ? android.view.HapticFeedbackConstants.CONFIRM
+                            : android.view.HapticFeedbackConstants.VIRTUAL_KEY);
+                } catch (Throwable ignored) {
+                }
                 try {
                     CaptureCancelReceiver.recordShot(context, key, notifyId, amountCents, ocrText);
                 } catch (Throwable ignored) {
                 }
-                dismissSelf();
+                showRecorded();
             }
         });
         buttons.addView(confirmView);
         root.addView(buttons);
+        buttonsView = buttons;
+
+        // 记成功的那一下：整张卡片换成一个对勾。
+        // 动画用 cdflynn/checkview（开源小库，JitPack: com.github.cdflynn:checkview:v1.2），
+        // 它用 PathMeasure 先把圆圈画出来、再顺着笔画勾，末了轻轻弹一下，
+        // 比我们自己拿 ValueAnimator 拼路径省事，也更像系统级的确认反馈。
+        successRow = new LinearLayout(context);
+        successRow.setOrientation(LinearLayout.HORIZONTAL);
+        successRow.setGravity(Gravity.CENTER_VERTICAL);
+        successRow.setVisibility(View.GONE);
+
+        checkView = new CheckView(context);
+        LinearLayout.LayoutParams checkLp = new LinearLayout.LayoutParams(dp(48), dp(48));
+        checkLp.setMarginEnd(dp(14));
+        successRow.addView(checkView, checkLp);
+
+        LinearLayout doneTexts = new LinearLayout(context);
+        doneTexts.setOrientation(LinearLayout.VERTICAL);
+
+        TextView doneTitle = new TextView(context);
+        doneTitle.setText("已记一笔");
+        doneTitle.setTextColor(INK);
+        doneTitle.setTextSize(17f);
+        doneTitle.setTypeface(null, android.graphics.Typeface.BOLD);
+        doneTexts.addView(doneTitle);
+
+        successSubtitle = new TextView(context);
+        successSubtitle.setTextColor(MUTE);
+        successSubtitle.setTextSize(12f);
+        successSubtitle.setMaxLines(1);
+        successSubtitle.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        LinearLayout.LayoutParams doneSubLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        doneSubLp.topMargin = dp(4);
+        successSubtitle.setLayoutParams(doneSubLp);
+        doneTexts.addView(successSubtitle);
+
+        successRow.addView(doneTexts);
+        root.addView(successRow);
 
         // 点卡片本身：打开记一笔，把这张图带进去
         root.setOnClickListener(new View.OnClickListener() {
@@ -344,6 +403,30 @@ public final class CaptureOverlay {
                 .setInterpolator(new DecelerateInterpolator(1.6f))
                 .setDuration(260).start();
         restartTimer();
+    }
+
+    /**
+     * 点「确认记录」之后：两行按钮收起来，换成对勾动画，停一会儿再自己滑走。
+     * 之前是点完直接消失，用户根本不知道记没记上——尤其这张卡只停留 15 秒。
+     */
+    private void showRecorded() {
+        UI.removeCallbacks(hideTask);
+        if (successRow == null) {
+            dismissSelf();
+            return;
+        }
+        if (rowView != null) rowView.setVisibility(View.GONE);
+        if (buttonsView != null) buttonsView.setVisibility(View.GONE);
+        successSubtitle.setText(money(amountCents) + " 已写进账本，回 App 就能看到");
+        successRow.setVisibility(View.VISIBLE);
+        if (checkView != null) checkView.check();
+        // 勾 300ms 画完、280ms 后开始 250ms 的缩放，再留一点时间让人看清
+        UI.postDelayed(hideTask, 1_600L);
+    }
+
+    /** 分转成「¥12.34」：卡片上只显示金额，不带别的字，和标题里的写法保持一致 */
+    private String money(long cents) {
+        return String.format(Locale.CHINA, "¥%.2f", cents / 100.0);
     }
 
     private GradientDrawable cardBackground() {
