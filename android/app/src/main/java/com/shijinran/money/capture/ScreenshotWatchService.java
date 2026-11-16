@@ -23,6 +23,7 @@ import android.os.IBinder;
 import android.os.Looper;
 import android.os.SystemClock;
 import android.provider.MediaStore;
+import android.service.notification.StatusBarNotification;
 import android.util.Log;
 import android.widget.RemoteViews;
 
@@ -56,7 +57,8 @@ import java.util.regex.Pattern;
  *
  * 扫描和识别分成两个线程：扫描线程只管查「有没有新图」，查到就丢给识别线程排隊；
  * 识别线程串行跑 OCR（模型只允许一个实例），一张接一张接上，不会互相抢开关。
- * 每张认出金额的截图各自入队、各自一条通知，都能单独「直接记一笔」。
+ * 认出金额的截图入队：有悬浮窗权限时从顶部滑出一张卡片，同一时间只留最新一张；
+ * 没有权限时退回通知，每张一条，都能单独「直接记一笔」。
  */
 public class ScreenshotWatchService extends Service {
 
@@ -89,6 +91,8 @@ public class ScreenshotWatchService extends Service {
     private static final int MAX_SCAN_RETRIES = 2;
     private static final String GROUP_WATCH = "watch";
     private static final String GROUP_FOUND = "found";
+    /** 待确认的截图最多留 10 分钟：更早的肯定没人管了，服务重启时顺手清掉 */
+    private static final long PENDING_TTL_MS = 10 * 60_000L;
 
     /** 只查媒体库，永远不阻塞在 OCR 上 */
     private final ExecutorService scanner = Executors.newSingleThreadExecutor();
@@ -108,6 +112,7 @@ public class ScreenshotWatchService extends Service {
         startedAt = System.currentTimeMillis();
         createChannels();
         startForegroundCompat();
+        cleanupStale();
         primeCursor();
         registerObserver();
         submit(recognizer, () -> OcrEngineHolder.warmUp(this));
@@ -412,11 +417,22 @@ public class ScreenshotWatchService extends Service {
             JSONObject evicted = CaptureStore.addShot(this, key, notifyId, saved.getAbsolutePath(),
                     centsOf(amount), shot.text);
             if (evicted != null) dropShot(evicted);
-            if (overlay) {
+            // 悬浮窗被 ROM 拦掉时（appops 拒绝、后台弹窗限制等）卡片根本不会出现，
+            // 这时必须退回系统横幅，否则通知又是静音的，用户完全看不到反应
+            Log.d(TAG, "notice id=" + notifyId + " overlay=" + overlay
+                    + " cardShowing=" + CaptureOverlay.isShowing());
+            if (overlay && CaptureOverlay.isShowing()) {
                 CaptureOverlay.showAmount(amount, centsOf(amount), shot.text);
-                // 卡片已经给人看过了，通知只留一条安静的备份在通知栏里
+                // 顶部卡片同一时间只留最新一张：连拍时把上一张没确认的清掉，
+                // 否则卡片换成了新的，通知栏里还堆着一排没人点的旧提醒
+                dropOtherShots(key);
+                // 卡片已经给人看过了，通知只留一条安静的备份，点开就能补记
                 notifyFound(notifyId, key, amount, saved.getAbsolutePath(), shot.text, false);
             } else {
+                // 没有悬浮窗权限，或者 ROM 把后台弹窗拦掉了（小米/HyperOS 常见）：
+                // 退回系统横幅。按钮画在通知内容里，折叠着也能点，
+                // 不能再发静音通知，否则它会掉进「更多通知」文件夹里没人看见。
+                if (overlay) CaptureOverlay.dismissIfKey(key);
                 notifyFound(notifyId, key, amount, saved.getAbsolutePath(), shot.text, true);
             }
             posted = true;
@@ -461,6 +477,75 @@ public class ScreenshotWatchService extends Service {
             NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
             if (nm != null) nm.cancel(notifyId);
         } catch (Throwable ignored) {
+        }
+    }
+
+    /** 顶部卡片同一时间只留最新一张：把之前没确认的截图连同通知、缓存图一起清掉 */
+    private void dropOtherShots(long keepKey) {
+        try {
+            JSONArray all = CaptureStore.shots(this);
+            for (int i = 0; i < all.length(); i++) {
+                JSONObject item = all.optJSONObject(i);
+                if (item == null) continue;
+                long key = item.optLong("key", 0L);
+                if (key == keepKey) continue;
+                JSONObject removed = CaptureStore.removeShot(this, key);
+                if (removed != null) dropShot(removed);
+            }
+        } catch (Throwable t) {
+            Log.w(TAG, "drop other shots failed", t);
+        }
+    }
+
+    /**
+     * 服务起来时先清上一轮留下的东西：超过 TTL 还没人确认的截图、通知栏里已经没有
+     * 对应记录的旧提醒。进程被系统回收后这些都不会自己消失，不清就会越积越多。
+     */
+    private void cleanupStale() {
+        int dropped = 0;
+        int stale = 0;
+        try {
+            long now = System.currentTimeMillis();
+            JSONArray all = CaptureStore.shots(this);
+            for (int i = 0; i < all.length(); i++) {
+                JSONObject item = all.optJSONObject(i);
+                if (item == null) continue;
+                long createdAt = item.optLong("createdAt", 0L);
+                if (createdAt > 0 && now - createdAt <= PENDING_TTL_MS) continue;
+                JSONObject removed = CaptureStore.removeShot(this, item.optLong("key", 0L));
+                if (removed != null) {
+                    dropShot(removed);
+                    dropped++;
+                }
+            }
+        } catch (Throwable t) {
+            Log.w(TAG, "cleanup shots failed", t);
+        }
+        try {
+            NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+            if (nm != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                Set<Integer> live = new java.util.HashSet<>();
+                JSONArray all = CaptureStore.shots(this);
+                for (int i = 0; i < all.length(); i++) {
+                    JSONObject item = all.optJSONObject(i);
+                    if (item != null) live.add(item.optInt("notifyId", 0));
+                }
+                for (StatusBarNotification sbn : nm.getActiveNotifications()) {
+                    if (!getPackageName().equals(sbn.getPackageName())) continue;
+                    Notification n = sbn.getNotification();
+                    if (n == null) continue;
+                    String channel = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O ? n.getChannelId() : "";
+                    if (!CHANNEL_FOUND.equals(channel) && !CHANNEL_FOUND_LEGACY.equals(channel)) continue;
+                    if (live.contains(sbn.getId())) continue;
+                    nm.cancel(sbn.getId());
+                    stale++;
+                }
+            }
+        } catch (Throwable t) {
+            Log.w(TAG, "cleanup notices failed", t);
+        }
+        if (dropped > 0 || stale > 0) {
+            Log.d(TAG, "cleanup dropped=" + dropped + " staleNotices=" + stale);
         }
     }
 

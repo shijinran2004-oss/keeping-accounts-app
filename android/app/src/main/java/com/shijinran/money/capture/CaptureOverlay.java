@@ -8,6 +8,8 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.Process;
+import android.app.AppOpsManager;
 import android.provider.Settings;
 import android.util.Log;
 import android.view.Gravity;
@@ -73,7 +75,17 @@ public final class CaptureOverlay {
         if (context == null) return false;
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return true;
         try {
-            return Settings.canDrawOverlays(context);
+            if (!Settings.canDrawOverlays(context)) return false;
+            // canDrawOverlays() 只看清单里的权限项，真正的开关在 appops 里：
+            // 小米这类 ROM 上两者会不一致（系统设置里关掉后 canDrawOverlays 仍为 true），
+            // 结果是 addView 被系统拒绝、卡片一张都不出现，用户还以为功能坏了。
+            AppOpsManager ops = (AppOpsManager) context.getSystemService(Context.APP_OPS_SERVICE);
+            if (ops != null) {
+                int mode = ops.checkOpNoThrow(AppOpsManager.OPSTR_SYSTEM_ALERT_WINDOW,
+                        android.os.Process.myUid(), context.getPackageName());
+                return mode == AppOpsManager.MODE_ALLOWED;
+            }
+            return true;
         } catch (Throwable t) {
             return false;
         }
@@ -125,6 +137,18 @@ public final class CaptureOverlay {
                 overlay.restartTimer();
             }
         });
+    }
+
+    /**
+     * 卡片是不是真的显示在屏幕上了。
+     * 有些国产 ROM（小米/HyperOS 等）会拦掉后台应用的悬浮窗：addView 不报错、
+     * 视图对象也在，但用户屏幕上什么都没有。调用方据此决定要不要退回系统横幅，
+     * 否则就会出现「截了图，卡片被拦、通知又是静音的，用户以为没反应」。
+     */
+    static boolean isShowing() {
+        CaptureOverlay overlay = current;
+        return overlay != null && overlay.card != null
+                && overlay.card.getWindowToken() != null && overlay.card.isShown();
     }
 
     /** 这张截图被挤掉 / 取消时，顺手把它的卡片也收起来 */
