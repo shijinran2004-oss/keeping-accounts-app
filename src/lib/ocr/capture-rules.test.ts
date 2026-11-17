@@ -21,6 +21,7 @@ const GLOBAL_ARRAYS = [
   'penaltyKeys',
   'balanceKeys',
   'incomeWords',
+  'notIncomeWords',
   'notExpenseWords',
 ] as const
 
@@ -50,6 +51,13 @@ describe('capture-rules 规则表', () => {
     const alipay = rules.templates.find((t) => t.id === 'alipay')
     expect(alipay?.headerAmount).toBe(true)
     expect(alipay?.detailKeys.length).toBeGreaterThan(0)
+  })
+
+  it('支付宝模板还有确认词，不能只靠「账单详情」就判成支付宝', () => {
+    const alipay = rules.templates.find((t) => t.id === 'alipay')
+    expect(alipay?.confirmKeywords?.length ?? 0).toBeGreaterThan(0)
+    // 美团账单详情页也有「订单金额」，支付宝模板不能再拿它当实付
+    expect(alipay?.anchors).not.toContain('订单金额')
   })
 
   it('版面权重在合理区间（大字放大、页脚扣分）', () => {

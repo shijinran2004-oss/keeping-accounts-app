@@ -184,7 +184,7 @@ App / main
 
 ## 版本与构建
 
-- `versionCode 70` / `versionName 1.4.30`（`android/app/build.gradle`）
+- `versionCode 71` / `versionName 1.4.31`（`android/app/build.gradle`）
 - 数据版本 `LedgerState.version = 1`，`normalize()` 读取时补全新增分类与设置
 - 存储：IndexedDB（库 `shijinran`，`txs` / `meta` / `snapshots` 三个 store），首次启动从 `localStorage` 一次性迁移；`localStorage['shijinran.storage.engine']='ls'` 可强制回退旧引擎
 - 备份：v2 容器带 `schema` / `checksum`，默认 gzip；导入先预览，支持覆盖 / 合并 / 仅设置与分类；导入、清空、恢复前自动快照（保留 5 份）

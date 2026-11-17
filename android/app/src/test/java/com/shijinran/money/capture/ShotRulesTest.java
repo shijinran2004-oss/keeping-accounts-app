@@ -245,6 +245,22 @@ public class ShotRulesTest {
         assertNull(ShotRules.acceptedAmount(page));
     }
 
+    // 美团月付「主动还款」也是还款，不能当消费（页面写的是「支付成功」不是「还款成功」）
+    @Test public void meituanRepaymentIsNotAnExpense() {
+        String page = "账单详情\n【美团月付】主动还款2026年10月账单\n33.80\n支付成功\n支付方式\n微信支付>"
+                + "\n下单时间\n2026-10-07 22:13:05\n消费场景\n还款\n交易单号\n26100711100301670010393812994"
+                + "\n347 复制\n还款详情\n【美团月付】主动还款2026年10月账单";
+        assertEquals("33.80", ShotRules.amount(page));
+        assertNull(ShotRules.acceptedAmount(page));
+    }
+
+    // 分期页上的「还款日」是普通消费页，不能被还款规则误杀
+    @Test public void paymentPlanMentionDoesNotBlockExpense() {
+        String page = "账单详情\n-12.34\n支付成功\n计入2026年11月账单，还款日12月3日\n交易单号\n1234567890";
+        assertEquals("12.34", ShotRules.amount(page));
+        assertEquals("12.34", ShotRules.acceptedAmount(page));
+    }
+
     // ---- 1.4.29：行级版面（字号 / 靠上 / 居中）----
 
     private static final String BIG_PAGE = "订单信息\n白色运动鞋\n199.00\n支付成功\n商户：某某\n2026-11-16\n商品说明\n查看物流";
@@ -310,5 +326,56 @@ public class ShotRulesTest {
     @Test public void misalignedLinesFallBackToTextOnly() {
         List<OcrLine> wrong = page(line("订单信息", 40, 80, 300, 120));
         assertNull(ShotRules.judge(BIG_PAGE, wrong).amount);
+    }
+
+    // ---- 1.4.31：美团账单详情页（也有「账单详情」四个字，但不是支付宝）----
+
+    private static final String MEITUAN_BILL = "账单详情\n全部账单\n临榆炸鸡腿（水榭花都店）\n-19.89\n支付成功"
+            + "\n1笔返利待领取>\n订单金额\n19.90\n支付优惠\n-0.01>\n支付方式\n月付\n美团月付>"
+            + "\n计入2026年11月账单，还款日12月3日\n下单时间\n2026-11-04 19:19:36\n下单平台\n美团"
+            + "\n美团App\n消费场景\n外卖\n优惠推荐\n本单可报销3.18元>\n交易单号"
+            + "\n261104111003016700009521046036\n347 复制\n更多√\n订单详情\n查看原订单>";
+
+    // 「账单详情」是美团也有的通用词，没有支付宝专有字段时不能套支付宝模板；
+    // 金额要取顶部大字 -19.89（实付），不能取「订单金额 19.90」（原价）
+    @Test public void meituanBillDetailUsesPaidNotOrderAmount() {
+        assertEquals("", ShotRules.platform(MEITUAN_BILL));
+        String raw = "账单详情\n临榆炸鸡腿（水榭花都店）\n-19.89\n支付成功\n订单金额\n19.90\n交易单号\n261104111003016700009521046036";
+        List<OcrLine> layout = page(
+                line("账单详情", 300, 80, 600, 120),
+                line("临榆炸鸡腿（水榭花都店）", 200, 150, 900, 190),
+                line("-19.89", 350, 220, 800, 330),
+                line("支付成功", 400, 360, 700, 400),
+                line("订单金额", 100, 450, 300, 490),
+                line("19.90", 400, 450, 560, 490),
+                line("交易单号", 100, 530, 300, 570),
+                line("261104111003016700009521046036", 100, 590, 1000, 630));
+        ShotRules.Judgement judged = ShotRules.judge(raw, layout);
+        assertEquals("19.89", judged.amount);
+        assertNull(judged.reason);
+    }
+
+    private static final String MEITUAN_VOUCHER = "已使用\n【18-24点可核销】轻因不扰>\n￥29.9"
+            + "\n轻因不扰眠系列\n第2杯半价\n周一至周日·到店吃\nx1\n随时退·过期自动退·免预约"
+            + "\n实付￥28.77>\n已使用 (1)\n查看详情>\n黄金会员★★★★★\n查看>"
+            + "\n消费得免单，每周五0点重置\n本单29成长值已到账\n差133元解锁>\n差343元解锁>"
+            + "\n评价有礼写评价赢红包或抵现积分\n评分\n很糟\n较差\n一般\n还行\n很棒"
+            + "\n霸王茶姬 (高新万象汇店)\n全天营业\n导航\n联系商家";
+
+    // 「本单29成长值已到账」不是收入：成长值/积分到账不能把整页判成收入
+    @Test public void growthValueArrivalIsNotIncome() {
+        assertEquals("28.77", ShotRules.amount(MEITUAN_VOUCHER));
+        assertEquals("28.77", ShotRules.acceptedAmount(MEITUAN_VOUCHER));
+    }
+
+    // 支付宝页面仍然认得出（收单机构/计入收支这类专有字段在）
+    @Test public void alipayStillMatchedWithConfirmKeywords() {
+        assertEquals("alipay", ShotRules.platform("账单详情\n-20.00\n交易成功\n收单机构\n上海汇付支付有限公司"));
+        assertEquals("", ShotRules.platform("账单详情\n-19.89\n支付成功\n订单金额\n19.90\n交易单号"));
+    }
+
+    // 真收入词仍然拦得住
+    @Test public void realIncomeWordStillBlocks() {
+        assertNull(ShotRules.acceptedAmount("账单详情\n-19.89\n支付成功\n退款成功\n交易单号 1"));
     }
 }

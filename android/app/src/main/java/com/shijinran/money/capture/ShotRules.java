@@ -52,6 +52,7 @@ final class ShotRules {
     private static String[] penaltyKeys = new String[0];
     private static String[] balanceKeys = new String[0];
     private static String[] incomeWords = new String[0];
+    private static String[] notIncomeWords = new String[0];
     private static String[] notExpenseWords = new String[0];
     private static volatile List<Template> templates = new ArrayList<>();
 
@@ -76,13 +77,18 @@ final class ShotRules {
     private static final class Template {
         final String id;
         final String[] anyKeywords;
+        /** 光有 anyKeywords 还不够时的「确认词」：美团账单页也有「账单详情」这四个字，
+         * 但不会有「收单机构/计入收支」这类支付宝专有字段。 */
+        final String[] confirmKeywords;
         final String[] anchors;
         final String[] detailKeys;
         final boolean headerAmount;
 
-        Template(String id, String[] anyKeywords, String[] anchors, String[] detailKeys, boolean headerAmount) {
+        Template(String id, String[] anyKeywords, String[] confirmKeywords, String[] anchors,
+                 String[] detailKeys, boolean headerAmount) {
             this.id = id;
             this.anyKeywords = anyKeywords;
+            this.confirmKeywords = confirmKeywords;
             this.anchors = anchors;
             this.detailKeys = detailKeys;
             this.headerAmount = headerAmount;
@@ -190,6 +196,7 @@ final class ShotRules {
         penaltyKeys = strings(g, "penaltyKeys");
         balanceKeys = strings(g, "balanceKeys");
         incomeWords = strings(g, "incomeWords");
+        notIncomeWords = strings(g, "notIncomeWords");
         notExpenseWords = strings(g, "notExpenseWords");
 
         List<Template> list = new ArrayList<>();
@@ -200,8 +207,8 @@ final class ShotRules {
                 if (o == null) continue;
                 String id = o.optString("id", "");
                 if (id.isEmpty()) continue;
-                list.add(new Template(id, strings(o, "anyKeywords"), strings(o, "anchors"),
-                        strings(o, "detailKeys"), bool(o, "headerAmount", false)));
+                list.add(new Template(id, strings(o, "anyKeywords"), strings(o, "confirmKeywords"),
+                        strings(o, "anchors"), strings(o, "detailKeys"), bool(o, "headerAmount", false)));
             }
         }
         if (list.isEmpty()) throw new IllegalArgumentException("rules missing templates");
@@ -572,7 +579,9 @@ final class ShotRules {
     private static Template templateFor(String text) {
         if (text == null || text.isEmpty()) return null;
         for (Template t : templates) {
-            if (containsAny(text, t.anyKeywords)) return t;
+            if (!containsAny(text, t.anyKeywords)) continue;
+            if (t.confirmKeywords.length > 0 && !containsAny(text, t.confirmKeywords)) continue;
+            return t;
         }
         return null;
     }
@@ -610,10 +619,18 @@ final class ShotRules {
         return top;
     }
 
-    /** 这笔钱是支出还是收入（退款/到账/转入不该弹「记一笔」）。 */
+    /**
+     * 这笔钱是支出还是收入（退款/到账/转入不该弹「记一笔」）。
+     * 按行看，跳过「成长值已到账 / 积分到账」这类不是钱的到账：美团团购券页就有
+     * 「本单29成长值已到账」，整页不能因此被当成收入，否则那张 ¥28.77 的已使用券就不弹卡了。
+     */
     static String direction(String text) {
         if (text == null) return "";
-        return containsAny(text, incomeWords) ? "income" : "expense";
+        for (String line : text.split("\n")) {
+            if (containsAny(line, notIncomeWords)) continue;
+            if (containsAny(line, incomeWords)) return "income";
+        }
+        return "expense";
     }
 
     static boolean hasPayContext(String[] lines, int index) {
