@@ -391,10 +391,19 @@ public class ScreenshotWatchService extends Service {
             }
             OcrShot shot = ocrShot(bitmap);
             String amount = shot == null ? null : shot.amount;
+            if (looksLikeMoneyButNotBill(shot)) {
+                // 认出了金额，但没有支付语境（聊天里的价格、网页商品价、股票数字…）
+                saved.delete();
+                if (overlay) CaptureOverlay.dismissIfKey(key);
+                Log.d(TAG, "skip id=" + id + " amount but no payment signal ¥" + amount + " in "
+                        + (System.currentTimeMillis() - begin) + "ms");
+                return;
+            }
             if (amount == null) {
                 // 聊天、网页之类没有金额的截图，静默跳过
                 saved.delete();
                 if (overlay) CaptureOverlay.dismissIfKey(key);
+                // 不把 OCR 原文写进 logcat：截图里可能有用户的钱包、聊天内容
                 Log.d(TAG, "skip id=" + id + " no amount in " + (System.currentTimeMillis() - begin) + "ms");
                 return;
             }
@@ -641,13 +650,18 @@ public class ScreenshotWatchService extends Service {
         }
     }
 
-    /** 一次识别拿两样东西：够不够格提醒（金额），以及交给前端正式解析的原文。 */
+    /**
+     * 一次识别拿三样东西：认出的金额、金额是否过硬（付款语境门槛）、交给前端正式解析的原文。
+     * 金额认出来了但门槛没过时，用来区分「根本没有金额」和「有金额但不像账单」两种跳过。
+     */
     private static final class OcrShot {
         final String amount;
+        final boolean accepted;
         final String text;
 
-        OcrShot(String amount, String text) {
+        OcrShot(String amount, boolean accepted, String text) {
             this.amount = amount;
+            this.accepted = accepted;
             this.text = text == null ? "" : text;
         }
     }
@@ -673,7 +687,8 @@ public class ScreenshotWatchService extends Service {
                 return null;
             }
             String text = cleanOcrText(raw);
-            return new OcrShot(guessAmount(text), text);
+            String amount = ShotRules.amount(text);
+            return new OcrShot(amount, amount != null && ShotRules.hasPaymentSignal(text), text);
         } catch (Throwable t) {
             return null;
         } finally {
@@ -681,10 +696,9 @@ public class ScreenshotWatchService extends Service {
         }
     }
 
-    /** 只用来判断「值不值得提醒」，正式解析仍在 src/lib/ocr 里做。 */
-    private String guessAmount(String text) {
-        // 金额 + 付款语境门槛都在 ShotRules 里（纯函数，有 JVM 单测）
-        return ShotRules.acceptedAmount(text);
+    /** 认出了金额、但不像账单（没有支付信号）的截图：不弹卡，单独记一条日志。 */
+    private static boolean looksLikeMoneyButNotBill(OcrShot shot) {
+        return shot != null && shot.amount != null && !shot.accepted;
     }
 
     /**
