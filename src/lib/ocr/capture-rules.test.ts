@@ -19,6 +19,8 @@ const PAIRS: Array<[keyof typeof rules, string]> = [
   ['penaltyKeys', 'PENALTY_KEYS'],
   ['balanceKeys', 'BALANCE_KEYS'],
   ['incomeWords', 'INCOME_WORDS'],
+  ['alipayDetailKeys', 'ALIPAY_DETAIL_KEYS'],
+  ['notExpenseWords', 'NOT_EXPENSE_WORDS'],
 ]
 
 function javaArray(source: string, name: string): string[] {

@@ -167,4 +167,43 @@ public class ShotRulesTest {
         String page = "账单\n转账-退款\n+400.00\n11月3日 14:56\n支出¥672.52 收入¥822.00\n账单服务";
         assertNull(ShotRules.acceptedAmount(page));
     }
+
+    // ---- 1.4.28：支付宝「账单详情」页（没有 ¥、没有「实付」，标题下面就一行大金额）----
+
+    // 支出页：-20.00 + 交易成功 + 收单机构/清算机构/账单分类
+    @Test public void alipayBillDetailExpenseIsAccepted() {
+        String page = "14:10\n账单详情\n智能自助设备\n-20.00\n交易成功\n支付时间\n2026-11-13 12:36:02"
+                + "\n付款方式\n余额宝>\n商品说明\n自助服务-充值-充电桩/G919042\n支付奖励\n立即领取2积分"
+                + "\n收单机构\n上海汇付支付有限公司\n清算机构\n中国银联股份有限公司"
+                + "\n收款方全称\n武汉大源科技有限公司\n账单分类\n商业服务>\n计入收支";
+        assertEquals("alipay", ShotRules.platform(page));
+        assertEquals("20.00", ShotRules.amount(page));
+        assertEquals("20.00", ShotRules.acceptedAmount(page));
+    }
+
+    // 拼多多那页没有收单机构，只有账单分类/计入收支，也要认 -5.90
+    @Test public void alipayBillDetailWithoutIssuerIsAccepted() {
+        String page = "账单详情\n拼多多平台商户\n-5.90\n交易成功\n支付时间\n2026-11-15 23:56:40"
+                + "\n付款方式\n花呗>\n商品说明\n商户单号XP2426111523101488604494\n001258"
+                + "\n账单分类\n日用百货>\n计入收支\n备注";
+        assertEquals("5.90", ShotRules.acceptedAmount(page));
+    }
+
+    // 花呗还款页：83.85 是还款，不是消费
+    @Test public void alipayRepaymentIsNotAnExpense() {
+        String page = "账单详情\n花呗\n83.85\n还款成功\n创建时间\n2026-11-12 09:15:12"
+                + "\n付款方式\n网商银行数字人民币(9283)>\n还款到\n花呗\n服务详情\n花呗主动还款-2026年11月账单"
+                + "\n账单分类\n信用借还>\n计入收支";
+        assertEquals("83.85", ShotRules.amount(page));
+        assertNull(ShotRules.acceptedAmount(page));
+    }
+
+    // 余额宝收益页：0.01 是收益发放，不是消费
+    @Test public void alipayYieldIsNotAnExpense() {
+        String page = "账单详情\n长盛基金管理有限公司>\n0.01\n交易成功\n创建时间\n2026-11-11 05:52:13"
+                + "\n商品说明\n余额宝-2026.11.10-收益发放\n对方账户\n长盛基金管理有限公司"
+                + "\n账单分类\n投资理财>\n计入收支";
+        assertEquals("0.01", ShotRules.amount(page));
+        assertNull(ShotRules.acceptedAmount(page));
+    }
 }

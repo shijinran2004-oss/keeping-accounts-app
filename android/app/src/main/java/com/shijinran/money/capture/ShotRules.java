@@ -52,6 +52,11 @@ final class ShotRules {
     static final String[] BALANCE_KEYS = {"余额", "剩余", "额度", "卡余", "原额", "零钱", "可用"};
     /** 收入/退款方向：这些页面不该弹「记一笔」支出卡 */
     static final String[] INCOME_WORDS = {"退款成功", "已到账", "转入", "收款成功", "收入", "入账", "退还"};
+    /** 支付宝「账单详情」页才有的版面词：收单机构、账单分类这些字段名，拿它认这张页 */
+    static final String[] ALIPAY_DETAIL_KEYS = {"收单机构", "清算机构", "收款方全称", "账单分类", "计入收支", "支付奖励", "对方账户"};
+    /** 这些页面不是一笔消费（还款、收益、退款、失败/关闭），认出来也不弹支出卡 */
+    static final String[] NOT_EXPENSE_WORDS = {"还款成功", "已还款", "自动还款", "收益发放", "收益到账",
+            "退款成功", "已退款", "已全额退款", "交易关闭", "支付失败", "交易失败"};
 
     /** 平台特征词：判断这张截图是微信、支付宝还是银行，决定先试哪套模板 */
     private static final String[] WECHAT_KEYS = {"微信支付", "转账金额", "收款方", "微信红包", "微信转账", "转账单号", "对方已收钱"};
@@ -83,7 +88,7 @@ final class ShotRules {
     /** 判定结果：amount 是认出来的数字（可能因为方向/信号被拦），reason 为 null 才该弹卡。 */
     static final class Judgement {
         final String amount;
-        /** null = 可以弹；own_card / no_amount / uncertain / income / no_signal */
+        /** null = 可以弹；own_card / no_amount / uncertain / income / not_expense / no_signal */
         final String reason;
 
         Judgement(String amount, String reason) {
@@ -163,15 +168,22 @@ final class ShotRules {
         if (looksLikeOurCard(raw)) return new Judgement(null, "own_card");
         String text = normalizeText(raw);
         String[] lines = text.split("\n");
+        String platform = platform(text);
         List<Candidate> found = new ArrayList<>();
         collectKeyed(lines, found);
         collectYen(lines, found);
         collectBare(text, lines, found);
-        Candidate tpl = templateAmount(text, lines);
+        Candidate tpl = templateAmount(platform, lines);
         if (tpl != null) found.add(tpl);
+        // 支付宝「账单详情」没有「实付」这类字段名，只能认标题下面那行大金额
+        if ("alipay".equals(platform) && containsAny(text, ALIPAY_DETAIL_KEYS)) {
+            Candidate header = alipayDetailHeader(lines);
+            if (header != null) found.add(header);
+        }
         Candidate best = pick(found);
         if (best == null) return new Judgement(null, found.isEmpty() ? "no_amount" : "uncertain");
         if (best.plus || "income".equals(direction(text))) return new Judgement(best.value, "income");
+        if (containsAny(text, NOT_EXPENSE_WORDS)) return new Judgement(best.value, "not_expense");
         if (!hasPaymentSignal(raw)) return new Judgement(best.value, "no_signal");
         return new Judgement(best.value, null);
     }
@@ -266,9 +278,8 @@ final class ShotRules {
     }
 
     /** 平台模板：微信/支付宝/银行的金额字段名很固定，命中就直接取，不再走通用打分。 */
-    private static Candidate templateAmount(String text, String[] lines) {
+    private static Candidate templateAmount(String platform, String[] lines) {
         String[] anchors;
-        String platform = platform(text);
         if ("alipay".equals(platform)) anchors = ALIPAY_ANCHORS;
         else if ("wechat".equals(platform)) anchors = WECHAT_ANCHORS;
         else if ("bank".equals(platform)) anchors = BANK_ANCHORS;
@@ -279,6 +290,25 @@ final class ShotRules {
                 Candidate c = keyedCandidate(lines, i, anchor, 3, 60);
                 if (c != null) return c;
             }
+        }
+        return null;
+    }
+
+    /**
+     * 支付宝「账单详情」页：标题下面一行只有金额（-20.00 / 83.85），
+     * 没有 ¥ 也没有「实付」字段名。取第一个独占一行的数字，
+     * 跳过余额/优惠/积分那类行；带 + 的是收入。
+     */
+    private static Candidate alipayDetailHeader(String[] lines) {
+        for (String rawLine : lines) {
+            String line = rawLine.trim();
+            if (line.isEmpty()) continue;
+            if (containsAny(line, BALANCE_KEYS) || containsAny(line, PENALTY_KEYS)) continue;
+            Matcher m = BARE_LINE.matcher(line);
+            if (!m.matches()) continue;
+            Candidate c = new Candidate(m.group(1), 60, 3);
+            c.plus = line.startsWith("+");
+            return c;
         }
         return null;
     }
