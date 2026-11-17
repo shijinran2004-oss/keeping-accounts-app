@@ -2,38 +2,62 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import rules from './capture-rules.json'
 
-// 共享关键词与 Android 端 ShotRules.java 的数组必须一致
-const JAVA = new URL(
-  '../../../android/app/src/main/java/com/shijinran/money/capture/ShotRules.java',
+// 规则表的唯一来源是 src/lib/ocr/capture-rules.json，
+// Android 打包用的 assets 副本必须逐字节一致，否则线上行为和测试校验的规则会悄悄分叉。
+const SOURCE = new URL('./capture-rules.json', import.meta.url)
+const ASSET = new URL(
+  '../../../android/app/src/main/assets/rules/capture-rules.json',
   import.meta.url,
 )
 
-const PAIRS: Array<[keyof typeof rules, string]> = [
-  ['amountKeys', 'AMOUNT_KEYS'],
-  ['totalKeys', 'TOTAL_KEYS'],
-  ['payContext', 'PAY_CONTEXT'],
-  ['paymentSignals', 'PAY_SIGNALS'],
-  ['merchantKeys', 'MERCHANT_KEYS'],
-  ['strongSignals', 'STRONG_SIGNALS'],
-  ['ownCard', 'OWN_CARD'],
-  ['penaltyKeys', 'PENALTY_KEYS'],
-  ['balanceKeys', 'BALANCE_KEYS'],
-  ['incomeWords', 'INCOME_WORDS'],
-  ['alipayDetailKeys', 'ALIPAY_DETAIL_KEYS'],
-  ['notExpenseWords', 'NOT_EXPENSE_WORDS'],
-]
+const GLOBAL_ARRAYS = [
+  'amountKeys',
+  'totalKeys',
+  'payContext',
+  'paymentSignals',
+  'merchantKeys',
+  'strongSignals',
+  'ownCard',
+  'penaltyKeys',
+  'balanceKeys',
+  'incomeWords',
+  'notExpenseWords',
+] as const
 
-function javaArray(source: string, name: string): string[] {
-  const m = source.match(new RegExp('static final String\\[\\] ' + name + ' = \\{([^}]*)\\}'))
-  if (!m) throw new Error('ShotRules.java 里找不到数组 ' + name)
-  return [...m[1].matchAll(/"([^"]*)"/g)].map((x) => x[1])
-}
+describe('capture-rules 规则表', () => {
+  it('打包副本与源文件字节一致', () => {
+    expect(readFileSync(ASSET, 'utf8')).toBe(readFileSync(SOURCE, 'utf8'))
+  })
 
-describe('capture-rules 一致性', () => {
-  const source = readFileSync(JAVA, 'utf8')
-  for (const [jsonKey, javaName] of PAIRS) {
-    it(jsonKey + ' 与 ' + javaName + ' 相同', () => {
-      expect(javaArray(source, javaName)).toEqual(rules[jsonKey])
-    })
-  }
+  it('每个全局词表都非空且没有重复', () => {
+    for (const key of GLOBAL_ARRAYS) {
+      const list = rules.global[key]
+      expect(list.length, key).toBeGreaterThan(0)
+      expect(new Set(list).size, key).toBe(list.length)
+    }
+  })
+
+  it('三个平台模板齐全，各自都有识别词和金额锚点', () => {
+    expect(rules.templates.map((t) => t.id)).toEqual(['alipay', 'wechat', 'bank'])
+    for (const template of rules.templates) {
+      expect(template.anyKeywords.length).toBeGreaterThan(0)
+      expect(template.anchors.length).toBeGreaterThan(0)
+      expect(new Set(template.anyKeywords).size).toBe(template.anyKeywords.length)
+    }
+  })
+
+  it('支付宝模板带「账单详情」版面词，并允许认标题大金额', () => {
+    const alipay = rules.templates.find((t) => t.id === 'alipay')
+    expect(alipay?.headerAmount).toBe(true)
+    expect(alipay?.detailKeys.length).toBeGreaterThan(0)
+  })
+
+  it('版面权重在合理区间（大字放大、页脚扣分）', () => {
+    const geo = rules.geometry
+    expect(geo.bigRatio).toBeGreaterThan(1)
+    expect(geo.topRatio).toBeGreaterThan(0)
+    expect(geo.topRatio).toBeLessThan(1)
+    expect(geo.footerPenalty).toBeLessThan(0)
+    expect(geo.layoutBase).toBeGreaterThan(0)
+  })
 })

@@ -33,6 +33,7 @@ import com.benjaminwan.ocrlibrary.OcrResult;
 import com.shijinran.money.MainActivity;
 import com.shijinran.money.R;
 import com.shijinran.money.ocr.OcrEngineHolder;
+import com.shijinran.money.ocr.OcrLine;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -111,6 +112,8 @@ public class ScreenshotWatchService extends Service {
         instance = this;
         startedAt = System.currentTimeMillis();
         createChannels();
+        // 认金额的规则表放在 assets 里，先装载再开始监听；装载失败时 ShotRules 一律不弹卡
+        RulesLoader.ensure(this);
         startForegroundCompat();
         cleanupStale();
         primeCursor();
@@ -396,7 +399,7 @@ public class ScreenshotWatchService extends Service {
                 saved.delete();
                 if (overlay) CaptureOverlay.dismissIfKey(key);
                 Log.d(TAG, "skip id=" + id + " amount but not a bill ¥" + amount
-                        + " reason=" + shot.reason + " in "
+                        + " reason=" + shot.reason + " layout=" + shot.layout + " in "
                         + (System.currentTimeMillis() - begin) + "ms");
                 return;
             }
@@ -444,7 +447,8 @@ public class ScreenshotWatchService extends Service {
             }
             posted = true;
             CaptureStore.setLastNoticeAt(this, System.currentTimeMillis());
-            Log.d(TAG, "handled id=" + id + " ¥" + amount + " in " + (System.currentTimeMillis() - begin) + "ms");
+            Log.d(TAG, "handled id=" + id + " ¥" + amount + " layout=" + shot.layout
+                    + " in " + (System.currentTimeMillis() - begin) + "ms");
         } catch (Throwable t) {
             Log.w(TAG, "handleShot failed: " + id, t);
             if (saved != null) saved.delete();
@@ -661,12 +665,15 @@ public class ScreenshotWatchService extends Service {
         /** 拦截原因：no_amount / uncertain / no_signal / income / own_card，null 表示可以弹卡 */
         final String reason;
         final String text;
+        /** 判定时有没有拿到行坐标（false = 退回纯文本规则） */
+        final boolean layout;
 
-        OcrShot(String amount, boolean accepted, String reason, String text) {
+        OcrShot(String amount, boolean accepted, String reason, String text, boolean layout) {
             this.amount = amount;
             this.accepted = accepted;
             this.reason = reason;
             this.text = text == null ? "" : text;
+            this.layout = layout;
         }
     }
 
@@ -690,10 +697,21 @@ public class ScreenshotWatchService extends Service {
                 Log.d(TAG, "skip own card screenshot");
                 return null;
             }
-            String text = cleanOcrText(raw);
+            // 行级版面：把 OCR 行和坐标一起交给规则引擎（字号、靠上、居中都参与打分）。
+            // 我们自己的 UI 行先剔掉，文本和坐标用同一份过滤结果，行号才能和文本行对齐。
+            List<OcrLine> lines = new ArrayList<>();
+            StringBuilder kept = new StringBuilder();
+            for (OcrLine line : OcrEngineHolder.lines(result)) {
+                String value = line.text.trim();
+                if (value.isEmpty() || isOwnUi(value)) continue;
+                if (kept.length() > 0) kept.append('\n');
+                kept.append(value);
+                lines.add(line);
+            }
+            String text = kept.toString();
             // 判定交给 ShotRules：金额要有付款语境、候选要有明显领先，收入/退款方向不算支出
-            ShotRules.Judgement judged = ShotRules.judge(text);
-            return new OcrShot(judged.amount, judged.reason == null, judged.reason, text);
+            ShotRules.Judgement judged = ShotRules.judge(text, lines);
+            return new OcrShot(judged.amount, judged.reason == null, judged.reason, text, judged.layout);
         } catch (Throwable t) {
             return null;
         } finally {
@@ -718,22 +736,6 @@ public class ScreenshotWatchService extends Service {
     /** 整张截图是不是我们自己的界面：四个 tab 名同时出现基本就能确定。 */
     private static boolean looksLikeOurApp(String raw) {
         return raw.contains("首页") && raw.contains("明细") && raw.contains("统计") && raw.contains("我的");
-    }
-
-    /**
-     * 去掉属于本 App 自己的那几行（通知横幅标题、按钮、常驻通知、我的页说明）。
-     * 我们自己的通知盖在支付页上时，只去掉横幅那几行，剩下的金额照常认。
-     */
-    private static String cleanOcrText(String raw) {
-        if (raw == null || raw.isEmpty()) return "";
-        StringBuilder kept = new StringBuilder();
-        for (String line : raw.split("\n")) {
-            String t = line.trim();
-            if (t.isEmpty() || isOwnUi(t)) continue;
-            if (kept.length() > 0) kept.append('\n');
-            kept.append(t);
-        }
-        return kept.toString();
     }
 
     private static boolean isOwnUi(String line) {

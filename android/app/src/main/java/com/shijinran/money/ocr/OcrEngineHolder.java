@@ -78,6 +78,48 @@ public final class OcrEngineHolder {
         return text.toString();
     }
 
+/**
+     * 按版面顺序排好的行，带坐标与置信度。
+     *
+     * 规则引擎靠 bbox 判断「这行是不是标题下面的大金额」：字号 = 行高、
+     * 位置靠上、水平居中。纯文本的 toText 仍然保留给前端解析用。
+     */
+    public static List<OcrLine> lines(OcrResult result) {
+        List<OcrLine> out = new ArrayList<>();
+        for (TextBlock block : orderedBlocks(result)) {
+            String line = block.getText() == null ? "" : block.getText().trim();
+            if (line.isEmpty()) continue;
+            List<Point> points = block.getBoxPoint();
+            if (points == null || points.isEmpty()) {
+                out.add(new OcrLine(line, 0, 0, 0, 0, scoreOf(block)));
+                continue;
+            }
+            int left = Integer.MAX_VALUE;
+            int top = Integer.MAX_VALUE;
+            int right = Integer.MIN_VALUE;
+            int bottom = Integer.MIN_VALUE;
+            for (Point point : points) {
+                left = Math.min(left, point.getX());
+                top = Math.min(top, point.getY());
+                right = Math.max(right, point.getX());
+                bottom = Math.max(bottom, point.getY());
+            }
+            out.add(new OcrLine(line, left, top, right, bottom, scoreOf(block)));
+        }
+        return out;
+    }
+
+    /** 这一行的识别置信度：字符置信度的平均值（TextBlock 只有 boxScore 和 charScores，没有整行分数）。 */
+    private static float scoreOf(TextBlock block) {
+        float[] chars = block.getCharScores();
+        if (chars != null && chars.length > 0) {
+            float sum = 0;
+            for (float c : chars) sum += c;
+            return sum / chars.length;
+        }
+        return block.getBoxScore();
+    }
+
     private static int centerY(TextBlock block) {
         return average(block, 1);
     }
