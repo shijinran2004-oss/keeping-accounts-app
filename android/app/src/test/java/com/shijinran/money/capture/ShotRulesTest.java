@@ -49,6 +49,23 @@ public class ShotRulesTest {
         assertEquals("9.90", ShotRules.amount("付款\n¥9.90"));
     }
 
+    // 账单页：没有 ¥、没有「实付」，标题下面就是一个 -3.49；支付成功 + 交易单号 + 商户全称给了足够信号
+    @Test public void billWithoutYenIsAccepted() {
+        String page = "12:44\n先购后付\n-3.49\n当前状态 支付成功\n支付时间 2026年11月15日 13:23:40"
+                + "\n商品 先购后付\n商户全称 芜湖市丰宜科技有限公司\n收单机构 财付通支付科技有限公司"
+                + "\n支付方式 零钱\n交易单号 420000315620261157640752267";
+        assertEquals("3.49", ShotRules.acceptedAmount(page));
+    }
+
+    // 只有一行裸金额、信号不满两条：还是不能当账单
+    @Test public void chatWithBarePriceStillRejected() {
+        assertNull(ShotRules.acceptedAmount("小明\n商户：这个是价格\n199.00\n好的"));
+    }
+
+    @Test public void oneStrongSignalIsNotEnough() {
+        assertNull(ShotRules.acceptedAmount("贵州茅台\n1680.00\n支付成功"));
+    }
+
     @Test public void ownCardIsRecognised() {
         assertTrue(ShotRules.looksLikeOurCard("¥23.45 已写进账本，回 App 就能看到"));
         assertTrue(ShotRules.looksLikeOurCard("识别到 ¥45.67\n点「确认记录」直接记一笔"));

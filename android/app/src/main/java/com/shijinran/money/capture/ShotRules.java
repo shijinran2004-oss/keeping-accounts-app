@@ -23,6 +23,11 @@ final class ShotRules {
     static final String[] PAY_SIGNALS = {"微信支付", "支付宝", "云闪付", "付款成功", "支付成功", "收款方", "交易单号", "账单详情"};
     /** 商户之类的字样也算一个信号 */
     static final String[] MERCHANT_KEYS = {"商户", "商家"};
+    /**
+     * 强支付信号：一页里出现两条以上，就允许「单独一行只有 -3.49 这种裸金额」也算金额。
+     * 支付宝/微信账单页的金额常常既没有 ¥ 也没有「实付」，就是标题下面一个大数字。
+     */
+    static final String[] STRONG_SIGNALS = {"支付成功", "付款成功", "交易单号", "商户全称", "收单机构", "账单详情", "账单服务"};
     /** 我们自己的卡片会写的词，这些截图不能再认成账单 */
     static final String[] OWN_CARD = {"已写进账本", "已记一笔", "正在认金额"};
 
@@ -31,6 +36,8 @@ final class ShotRules {
     private static final Pattern TOTAL_KEYED = Pattern.compile("(?:" + alt(TOTAL_KEYS) + ")[^0-9]{0,8}[¥￥]?\\s*" + NUM);
     private static final Pattern YEN = Pattern.compile("[¥￥]\\s*" + NUM);
     private static final Pattern DATE = Pattern.compile("20[0-9]{2}[-/.年][0-9]{1,2}[-/.月][0-9]{1,2}");
+    /** 单独一行、只有一个金额（可带负号 / ¥ / 元）：账单页标题下面那个大数字 */
+    private static final Pattern BARE_LINE = Pattern.compile("^[\\-−—–]?\\s*[¥￥]?\\s*([0-9]{1,7}\\.[0-9]{2})\\s*元?$");
 
     private static String alt(String[] keys) {
         return String.join("|", keys);
@@ -54,6 +61,18 @@ final class ShotRules {
         for (int i = 0; i < lines.length; i++) {
             Matcher y = YEN.matcher(lines[i]);
             if (y.find() && hasPayContext(lines, i)) return y.group(1);
+        }
+        // 账单页常见写法：标题下面单独一行「-3.49」，没有 ¥ 也没有「实付」。
+        // 这种只在强信号满两条时才收，避免把聊天里孤零零的一行价格当成账单。
+        int strong = 0;
+        for (String key : STRONG_SIGNALS) {
+            if (text.contains(key)) strong++;
+        }
+        if (strong >= 2) {
+            for (String line : lines) {
+                Matcher b = BARE_LINE.matcher(line.trim());
+                if (b.matches()) return b.group(1);
+            }
         }
         return null;
     }

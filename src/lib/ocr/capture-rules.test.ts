@@ -14,6 +14,7 @@ const PAIRS: Array<[keyof typeof rules, string]> = [
   ['payContext', 'PAY_CONTEXT'],
   ['paymentSignals', 'PAY_SIGNALS'],
   ['merchantKeys', 'MERCHANT_KEYS'],
+  ['strongSignals', 'STRONG_SIGNALS'],
   ['ownCard', 'OWN_CARD'],
 ]
 
