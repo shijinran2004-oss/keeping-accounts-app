@@ -81,6 +81,7 @@ describe('openLedger 失败时的清库保护', () => {
     expect(opened.engine).toBe('ls')
     // 第 1 次是迁移本身写入旧账本，第 2 次是失败后清库
     expect(replaceAll).toHaveBeenCalledTimes(2)
-    expect(replaceAll.mock.calls[1][0].txs).toHaveLength(0)
+    const second = (replaceAll.mock.calls[1] as unknown[])[0] as { txs: unknown[] }
+    expect(second.txs).toHaveLength(0)
   })
 })
