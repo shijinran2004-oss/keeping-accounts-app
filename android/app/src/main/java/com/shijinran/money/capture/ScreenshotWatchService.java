@@ -677,8 +677,6 @@ public class ScreenshotWatchService extends Service {
         // 先找真正的「付了多少」，再退到合计/总额；收据里合计常常大于实付
         patterns.add(Pattern.compile("(?:实付|实收|支付金额|付款金额|消费金额|交易金额|实付款)[^0-9]{0,8}[¥￥]?\\s*([0-9]{1,7}(?:\\.[0-9]{1,2})?)"));
         patterns.add(Pattern.compile("(?:合计|总计|总金额|应收|本次消费)[^0-9]{0,8}[¥￥]?\\s*([0-9]{1,7}(?:\\.[0-9]{1,2})?)"));
-        patterns.add(Pattern.compile("[¥￥]\\s*([0-9]{1,7}(?:\\.[0-9]{1,2})?)"));
-        patterns.add(Pattern.compile("(?<![0-9])([0-9]{1,7}\\.[0-9]{2})(?![0-9])"));
         for (Pattern pattern : patterns) {
             Matcher matcher = pattern.matcher(text);
             if (matcher.find()) {
@@ -686,7 +684,26 @@ public class ScreenshotWatchService extends Service {
                 if (value != null) return value;
             }
         }
+        // ¥ 只有同一行或相邻行出现支付语境词时才算数；裸 xx.xx 不再当金额
+        String[] lines = text.split("\n");
+        Pattern yen = Pattern.compile("[¥￥]\\s*([0-9]{1,7}(?:\\.[0-9]{1,2})?)");
+        for (int i = 0; i < lines.length; i++) {
+            Matcher matcher = yen.matcher(lines[i]);
+            if (matcher.find() && hasPayContext(lines, i)) return matcher.group(1);
+        }
         return null;
+    }
+
+    /** 支付语境词：同一行或相邻行出现这些词，¥ 后面的数字才当成付款金额。 */
+    private static boolean hasPayContext(String[] lines, int index) {
+        for (int i = Math.max(0, index - 1); i <= Math.min(lines.length - 1, index + 1); i++) {
+            String line = lines[i];
+            if (line.contains("实付") || line.contains("合计") || line.contains("支付")
+                    || line.contains("付款") || line.contains("交易金额") || line.contains("收款")) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
