@@ -2,6 +2,7 @@ package com.shijinran.money.capture;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
@@ -78,5 +79,65 @@ public class ShotRulesTest {
         String c = ShotRules.dedupeKey("12.00", "支付成功¥23.45商户：美团外卖");
         assertEquals(a, b);
         assertNotEquals(a, c);
+    }
+
+    // ---- 1.4.26：归一化、候选打分、平台模板、方向 ----
+
+    // 全角数字/全角点/全角减号/￥：归一化之后照样认出 12.00
+    @Test public void fullwidthTextIsNormalised() {
+        assertTrue(ShotRules.normalizeText("－￥１２．００\n16:12").contains("-¥12.00"));
+        assertEquals("12.00", ShotRules.acceptedAmount("支付成功\n－￥１２．００\n商户：测试"));
+    }
+
+    // 千分位逗号不能把 1,234.56 拆成 1 块钱；余额行整行跳过
+    @Test public void balanceLineIsNotTheAmount() {
+        assertEquals("23.45",
+                ShotRules.acceptedAmount("支付成功\n余额 ¥1,234.56\n¥23.45\n商户：美团外卖"));
+    }
+
+    // 优惠行的金额要扣分，实付才是这笔钱
+    @Test public void discountLineDoesNotWin() {
+        assertEquals("25.00",
+                ShotRules.acceptedAmount("支付成功\n合计 ¥30.00\n优惠 -¥5.00\n实付 ¥25.00\n商户：美团"));
+    }
+
+    // 退款页：金额认出来了，但方向是收入，不弹支出卡
+    @Test public void refundIsNotAnExpense() {
+        String page = "退款成功\n退款金额 ¥23.45\n原支付金额 ¥25.00\n交易单号 420000";
+        assertEquals("25.00", ShotRules.amount(page));
+        assertNull(ShotRules.acceptedAmount(page));
+    }
+
+    // 微信转账页：模板锚点「转账金额」命中，金额在下一行
+    @Test public void wechatTemplateReadsTransferAmount() {
+        String page = "微信支付\n转账金额\n￥100.00\n收款方 张三\n转账成功";
+        assertEquals("wechat", ShotRules.platform(page));
+        assertEquals("100.00", ShotRules.acceptedAmount(page));
+    }
+
+    // 两个候选一样高分：拿不准，不弹
+    @Test public void ambiguousAmountsAreRejected() {
+        assertNull(ShotRules.acceptedAmount("支付成功\n¥30.00\n¥50.00\n付款"));
+    }
+
+    // 平台判断
+    @Test public void platformIsDetected() {
+        assertEquals("alipay", ShotRules.platform("支付宝\n先购后付\n交易单号 420"));
+        assertEquals("bank", ShotRules.platform("交易成功\n账户余额 1.00"));
+        assertEquals("", ShotRules.platform("支付成功\n¥23.45\n商户：美团外卖"));
+    }
+
+    // 「入账」这种收入词：不弹支出卡
+    @Test public void incomingTransferIsNotAnExpense() {
+        assertNull(ShotRules.acceptedAmount("账户入账\n转账金额 ¥500.00\n交易成功\n尾号 1234"));
+    }
+
+    // 金额转分不经过浮点
+    @Test public void centsAreParsedExactly() {
+        assertEquals(1234L, ShotRules.centsOf("12.34"));
+        assertEquals(1200L, ShotRules.centsOf("12"));
+        assertEquals(1200L, ShotRules.centsOf("12.0"));
+        assertEquals(1200L, ShotRules.centsOf("12.00"));
+        assertEquals(9999900L, ShotRules.centsOf("99999.00"));
     }
 }

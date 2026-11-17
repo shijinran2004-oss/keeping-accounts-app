@@ -395,7 +395,8 @@ public class ScreenshotWatchService extends Service {
                 // 认出了金额，但没有支付语境（聊天里的价格、网页商品价、股票数字…）
                 saved.delete();
                 if (overlay) CaptureOverlay.dismissIfKey(key);
-                Log.d(TAG, "skip id=" + id + " amount but no payment signal ¥" + amount + " in "
+                Log.d(TAG, "skip id=" + id + " amount but not a bill ¥" + amount
+                        + " reason=" + shot.reason + " in "
                         + (System.currentTimeMillis() - begin) + "ms");
                 return;
             }
@@ -657,11 +658,14 @@ public class ScreenshotWatchService extends Service {
     private static final class OcrShot {
         final String amount;
         final boolean accepted;
+        /** 拦截原因：no_amount / uncertain / no_signal / income / own_card，null 表示可以弹卡 */
+        final String reason;
         final String text;
 
-        OcrShot(String amount, boolean accepted, String text) {
+        OcrShot(String amount, boolean accepted, String reason, String text) {
             this.amount = amount;
             this.accepted = accepted;
+            this.reason = reason;
             this.text = text == null ? "" : text;
         }
     }
@@ -687,8 +691,9 @@ public class ScreenshotWatchService extends Service {
                 return null;
             }
             String text = cleanOcrText(raw);
-            String amount = ShotRules.amount(text);
-            return new OcrShot(amount, amount != null && ShotRules.hasPaymentSignal(text), text);
+            // 判定交给 ShotRules：金额要有付款语境、候选要有明显领先，收入/退款方向不算支出
+            ShotRules.Judgement judged = ShotRules.judge(text);
+            return new OcrShot(judged.amount, judged.reason == null, judged.reason, text);
         } catch (Throwable t) {
             return null;
         } finally {
