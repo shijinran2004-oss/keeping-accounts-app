@@ -131,6 +131,53 @@ final class CaptureStore {
         prefs(context).edit().putString(KEY_SEEN_IDS, sb.toString()).apply();
     }
 
+    static final int RECENT_KEEP = 20;
+    private static final String KEY_RECENT = "recentShots";
+
+    /** 最近处理过的账单去重 hash：同一张账单在 ttl 内只弹一次。 */
+    static synchronized boolean seenRecently(Context context, String hash, long now, long ttlMs) {
+        JSONArray arr = recentShots(context);
+        for (int i = 0; i < arr.length(); i++) {
+            JSONObject item = arr.optJSONObject(i);
+            if (item != null && hash.equals(item.optString("h")) && now - item.optLong("t", 0L) <= ttlMs) return true;
+        }
+        return false;
+    }
+
+    static synchronized void markRecent(Context context, String hash, long now) {
+        try {
+            JSONArray arr = recentShots(context);
+            JSONObject item = new JSONObject();
+            item.put("h", hash);
+            item.put("t", now);
+            arr.put(item);
+            JSONArray kept = new JSONArray();
+            for (int i = Math.max(0, arr.length() - RECENT_KEEP); i < arr.length(); i++) kept.put(arr.opt(i));
+            prefs(context).edit().putString(KEY_RECENT, kept.toString()).apply();
+        } catch (Throwable ignored) {
+        }
+    }
+
+    private static JSONArray recentShots(Context context) {
+        String raw = prefs(context).getString(KEY_RECENT, "");
+        if (raw == null || raw.isEmpty()) return new JSONArray();
+        try {
+            return new JSONArray(raw);
+        } catch (Throwable t) {
+            return new JSONArray();
+        }
+    }
+
+    /** 本地计数（shown / confirmed / cancelled 等），用来算「弹卡 → 确认 / 取消」的比例。 */
+    static synchronized void bumpStat(Context context, String name) {
+        String key = "stat_" + name;
+        prefs(context).edit().putInt(key, prefs(context).getInt(key, 0) + 1).apply();
+    }
+
+    static int stat(Context context, String name) {
+        return prefs(context).getInt("stat_" + name, 0);
+    }
+
     /** 这条截图是不是已经记过账了（同一个 key 再点也不会记第二笔）。 */
     static boolean isRecorded(Context context, long key) {
         if (key == 0) return false;

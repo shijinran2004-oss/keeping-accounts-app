@@ -398,6 +398,15 @@ public class ScreenshotWatchService extends Service {
                 Log.d(TAG, "skip id=" + id + " no amount in " + (System.currentTimeMillis() - begin) + "ms");
                 return;
             }
+            // 10 分钟内同一张账单又截了一次：合并到已有的那张，不再重复弹
+            String dedupe = ShotRules.dedupeKey(amount, shot.text);
+            if (CaptureStore.seenRecently(this, dedupe, System.currentTimeMillis(), PENDING_TTL_MS)) {
+                saved.delete();
+                if (overlay) CaptureOverlay.dismissIfKey(key);
+                Log.d(TAG, "skip id=" + id + " duplicate of a recent shot");
+                return;
+            }
+            CaptureStore.markRecent(this, dedupe, System.currentTimeMillis());
             JSONObject evicted = CaptureStore.addShot(this, key, notifyId, saved.getAbsolutePath(),
                     centsOf(amount), shot.text);
             if (evicted != null) dropShot(evicted);
@@ -413,6 +422,7 @@ public class ScreenshotWatchService extends Service {
                 // 顶部卡片同一时间只留最新一张：连拍时把上一张没确认的清掉，
                 // 否则卡片换成了新的，通知栏里还堆着一排没人点的旧提醒
                 dropOtherShots(key);
+                CaptureStore.bumpStat(this, "shown");
                 // 卡片已经给人看过了，通知只留一条安静的备份，点开就能补记
                 notifyFound(notifyId, key, amount, saved.getAbsolutePath(), shot.text, false);
             } else {
@@ -673,37 +683,8 @@ public class ScreenshotWatchService extends Service {
 
     /** 只用来判断「值不值得提醒」，正式解析仍在 src/lib/ocr 里做。 */
     private String guessAmount(String text) {
-        List<Pattern> patterns = new ArrayList<>();
-        // 先找真正的「付了多少」，再退到合计/总额；收据里合计常常大于实付
-        patterns.add(Pattern.compile("(?:实付|实收|支付金额|付款金额|消费金额|交易金额|实付款)[^0-9]{0,8}[¥￥]?\\s*([0-9]{1,7}(?:\\.[0-9]{1,2})?)"));
-        patterns.add(Pattern.compile("(?:合计|总计|总金额|应收|本次消费)[^0-9]{0,8}[¥￥]?\\s*([0-9]{1,7}(?:\\.[0-9]{1,2})?)"));
-        for (Pattern pattern : patterns) {
-            Matcher matcher = pattern.matcher(text);
-            if (matcher.find()) {
-                String value = matcher.group(1);
-                if (value != null) return value;
-            }
-        }
-        // ¥ 只有同一行或相邻行出现支付语境词时才算数；裸 xx.xx 不再当金额
-        String[] lines = text.split("\n");
-        Pattern yen = Pattern.compile("[¥￥]\\s*([0-9]{1,7}(?:\\.[0-9]{1,2})?)");
-        for (int i = 0; i < lines.length; i++) {
-            Matcher matcher = yen.matcher(lines[i]);
-            if (matcher.find() && hasPayContext(lines, i)) return matcher.group(1);
-        }
-        return null;
-    }
-
-    /** 支付语境词：同一行或相邻行出现这些词，¥ 后面的数字才当成付款金额。 */
-    private static boolean hasPayContext(String[] lines, int index) {
-        for (int i = Math.max(0, index - 1); i <= Math.min(lines.length - 1, index + 1); i++) {
-            String line = lines[i];
-            if (line.contains("实付") || line.contains("合计") || line.contains("支付")
-                    || line.contains("付款") || line.contains("交易金额") || line.contains("收款")) {
-                return true;
-            }
-        }
-        return false;
+        // 金额 + 付款语境门槛都在 ShotRules 里（纯函数，有 JVM 单测）
+        return ShotRules.acceptedAmount(text);
     }
 
     /**
@@ -712,10 +693,7 @@ public class ScreenshotWatchService extends Service {
      * 卡片的金额是 OCR 自己认出来的，再认回去就会无限重复记账。
      */
     private static boolean looksLikeOurCard(String raw) {
-        if (raw == null) return false;
-        // 这几个词只有我们自己的卡片会写，账单页面上不会出现
-        if (raw.contains("已写进账本") || raw.contains("已记一笔") || raw.contains("正在认金额")) return true;
-        return raw.contains("识别到") && raw.contains("确认记录");
+        return ShotRules.looksLikeOurCard(raw);
     }
 
     /** 整张截图是不是我们自己的界面：四个 tab 名同时出现基本就能确定。 */

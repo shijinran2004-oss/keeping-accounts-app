@@ -55,6 +55,7 @@ public class CaptureCancelReceiver extends BroadcastReceiver {
      * 已记过 → 收通知（防重复两笔）；没记过 → 用通知/弹窗自带的金额补记。
      */
     static void recordShot(Context context, long key, int notifyId, long amount, String text) {
+        CaptureStore.bumpStat(context, "confirmed");
         try {
             NotificationManager nm = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
             JSONObject shot = key != 0 ? CaptureStore.removeShot(context, key) : null;
@@ -94,6 +95,7 @@ public class CaptureCancelReceiver extends BroadcastReceiver {
     }
 
     static void cancelShot(Context context, long key, int notifyId) {
+        CaptureStore.bumpStat(context, "cancelled");
         try {
             NotificationManager nm = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
             if (key != 0) {
