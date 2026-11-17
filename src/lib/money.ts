@@ -1,6 +1,7 @@
 export function formatMoney(cents: number): string {
-  const neg = cents < 0
-  const abs = Math.abs(Math.round(cents))
+  const rounded = Math.round(cents) // 先取整再判断符号，避免 -0.4 变成 "-0.00"
+  const neg = rounded < 0
+  const abs = Math.abs(rounded)
   const yuan = Math.floor(abs / 100)
   const fen = abs % 100
   const body = yuan.toLocaleString('zh-CN')

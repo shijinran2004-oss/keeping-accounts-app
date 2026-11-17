@@ -137,8 +137,8 @@ export function previousRange(kind: 'day' | 'week' | 'month', date: string): { s
   const d = parseDate(date)
   if (kind === 'day') {
     d.setDate(d.getDate() - 1)
-    const s = d.toISOString()
-    void s
+
+
     const ds = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
     return { start: ds, end: ds }
   }

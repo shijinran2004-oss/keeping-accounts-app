@@ -20,7 +20,7 @@ final class CaptureStore {
 
     private static final String PREFS = "shijinran.capture";
     private static final String KEY_ENABLED = "enabled";
-    private static final String KEY_LAST_ID = "lastImageId";
+
     private static final String KEY_PENDING = "pendingPath";
     private static final String KEY_SOURCE = "pendingSource";
     private static final String KEY_LAST_NOTICE = "lastNoticeAt";
@@ -54,14 +54,6 @@ final class CaptureStore {
 
     static void setEnabled(Context context, boolean enabled) {
         prefs(context).edit().putBoolean(KEY_ENABLED, enabled).apply();
-    }
-
-    static long lastId(Context context) {
-        return prefs(context).getLong(KEY_LAST_ID, 0L);
-    }
-
-    static void setLastId(Context context, long id) {
-        prefs(context).edit().putLong(KEY_LAST_ID, id).apply();
     }
 
     /** 分享进来的图（截图走 pendingShots 队列）。 */
@@ -112,25 +104,22 @@ final class CaptureStore {
         prefs(context).edit().putLong(KEY_LAST_SEEN, seconds).apply();
     }
 
-    /** 同一秒内的行会被重复查出来，用这组 id 去重。 */
-    static Set<Long> seenIds(Context context) {
-        Set<Long> ids = new HashSet<>();
+    /** 同一秒内的行会被重复查出来，用这组 key（_ID:DATE_ADDED）去重。 */
+    static Set<String> seenIds(Context context) {
+        Set<String> ids = new HashSet<>();
         String raw = prefs(context).getString(KEY_SEEN_IDS, "");
         if (raw == null || raw.isEmpty()) return ids;
         for (String part : raw.split(",")) {
             if (part.isEmpty()) continue;
-            try {
-                ids.add(Long.parseLong(part));
-            } catch (NumberFormatException ignored) {
-            }
+            ids.add(part);
         }
         return ids;
     }
 
-    static void addSeenId(Context context, long id) {
+    static void addSeenId(Context context, String key) {
         String raw = prefs(context).getString(KEY_SEEN_IDS, "");
         if (raw == null) raw = "";
-        raw = raw.isEmpty() ? String.valueOf(id) : raw + "," + id;
+        raw = raw.isEmpty() ? key : raw + "," + key;
         String[] parts = raw.split(",");
         StringBuilder sb = new StringBuilder();
         int start = Math.max(0, parts.length - SEEN_IDS_KEEP);

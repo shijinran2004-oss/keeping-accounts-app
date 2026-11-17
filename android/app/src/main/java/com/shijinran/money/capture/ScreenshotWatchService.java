@@ -217,7 +217,7 @@ public class ScreenshotWatchService extends Service {
             lastSeen = nowSec;
             CaptureStore.setLastSeenAt(this, lastSeen);
         }
-        Set<Long> seen = CaptureStore.seenIds(this);
+        Set<String> seen = CaptureStore.seenIds(this);
         int found = 0;
         ContentResolver resolver = getContentResolver();
         String[] projection = new String[] {
@@ -241,9 +241,11 @@ public class ScreenshotWatchService extends Service {
                 long id = cursor.getLong(idCol);
                 long addedSec = cursor.getLong(dateCol);
                 String name = cursor.getString(nameCol);
-                if (seen.contains(id)) continue;
+                // 去重 key 用 _ID + DATE_ADDED：_ID 会被回收重用，单用 _ID 会把复用了旧号的新截图静默跳过
+                String seenKey = id + ":" + addedSec;
+                if (seen.contains(seenKey)) continue;
                 // 同一秒内可能有第二张截图，先记下来再判断，下次不会再重复处理
-                CaptureStore.addSeenId(this, id);
+                CaptureStore.addSeenId(this, seenKey);
                 if (addedSec > lastSeen) {
                     lastSeen = addedSec;
                     CaptureStore.setLastSeenAt(this, lastSeen);
@@ -346,27 +348,11 @@ public class ScreenshotWatchService extends Service {
         }
     }
 
-    /** 第一次开启时先记下当前时间与最大的 _ID，避免把以前的截图全部过一遍。 */
+    /** 第一次开启时先记下当前时间，避免把以前的截图全部过一遍。 */
     private void primeCursor() {
         if (CaptureStore.lastSeenAt(this) <= 0) {
             CaptureStore.setLastSeenAt(this, System.currentTimeMillis() / 1000L);
         }
-        if (CaptureStore.lastId(this) > 0) return;
-        submit(scanner, () -> {
-            Cursor cursor = null;
-            try {
-                cursor = getContentResolver().query(MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
-                        new String[] { MediaStore.Images.Media._ID }, null, null,
-                        MediaStore.Images.Media._ID + " DESC");
-                if (cursor != null && cursor.moveToFirst()) {
-                    CaptureStore.setLastId(this, cursor.getLong(0));
-                }
-            } catch (Throwable t) {
-                Log.w(TAG, "primeCursor failed: " + t);
-            } finally {
-                if (cursor != null) cursor.close();
-            }
-        });
     }
 
     private boolean looksLikeScreenshot(String name) {

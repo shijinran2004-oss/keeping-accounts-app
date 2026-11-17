@@ -76,12 +76,14 @@ async function openLedgerOnce(): Promise<OpenedLedger> {
 
   if (enginePreference() === 'idb' && idbAvailable()) {
     let repo: IdbRepository | null = null
-    let migrationTried = false
+    // 只有本次运行把旧账本写进了原本为空的 IDB，失败时才允许清掉这次写入；库里已有数据绝不清
+    let wipeOnFail = false
     try {
       repo = await IdbRepository.open()
       let migrated = false
       if (legacy) {
-        migrationTried = true
+        const before = await repo.load()
+        wipeOnFail = !(before && before.txs.length > 0)
         migrated = await migrateLegacyToIdb(repo, legacy)
       }
       let state = await repo.load()
@@ -95,8 +97,8 @@ async function openLedgerOnce(): Promise<OpenedLedger> {
       return { repo, state, engine: 'idb', migrated }
     } catch (error) {
       console.warn('[storage] IndexedDB 初始化失败，回退到 localStorage', error)
-      // 迁移中途失败：清掉 IDB，避免下次启动读到不完整的数据
-      if (repo && migrationTried) {
+      // 迁移中途失败：只清掉本次运行写进去的迁移数据；库里原本就有数据时 wipeOnFail 为 false，绝不清库
+      if (repo && wipeOnFail) {
         try {
           await repo.replaceAll(freshState())
         } catch {
