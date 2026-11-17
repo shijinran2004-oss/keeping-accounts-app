@@ -16,6 +16,7 @@ import {
   Sun,
   Tags,
   Wallet,
+  Zap,
   type LucideIcon,
 } from 'lucide-react'
 import { APP_VERSION, DEFAULT_LEDGER_NAME, useLedger } from '../data'
@@ -30,6 +31,7 @@ import {
   formatDay,
   formatMoney,
   openNoticeSettings,
+  requestAllFiles,
   requestIgnoreBattery,
   requestOverlay,
   themeName,
@@ -104,6 +106,7 @@ export function Me() {
         battery: fresh.battery ?? prev?.battery,
         lastCheckAt: fresh.lastCheckAt ?? prev?.lastCheckAt,
         overlay: fresh.overlay ?? prev?.overlay,
+        allFiles: fresh.allFiles ?? prev?.allFiles,
       }))
       if (next.enabled) {
         if (fresh.overlay === 'granted') {
@@ -145,6 +148,15 @@ export function Me() {
     }
   }
 
+  const openAllFiles = async () => {
+    try {
+      await requestAllFiles()
+      toast('在系统设置里允许「所有文件访问」，回来截屏就会秒弹卡；不想给也没关系')
+    } catch (error) {
+      toast(error instanceof Error ? error.message : '没打开设置，可以手动到系统设置里允许', 'error')
+    }
+  }
+
   const openBattery = async () => {
     try {
       await requestIgnoreBattery()
@@ -158,6 +170,8 @@ export function Me() {
   const batteryLimited = watch?.enabled && watch.battery === false
   // 没有悬浮窗权限时，截屏提醒就只能待在下拉通知栏，弹不弹全看厂商
   const overlayMissing = watch?.enabled && watch.overlay !== 'granted'
+  // 「所有文件访问」是可选的加速项：不给也能用，只是要等系统媒体库索引 3-4 秒
+  const allFilesMissing = watch?.enabled && watch.allFiles !== 'granted'
   const days = new Set(state.txs.map((t) => t.date)).size
   const first = [...state.txs].sort((a, b) => a.date.localeCompare(b.date))[0]
   const theme = state.settings.theme ?? 'light'
@@ -347,6 +361,15 @@ export function Me() {
               sub="允许「显示在其他应用上层」，截屏后就像 QQ 一样从顶部滑出卡片"
               value="去允许"
               onClick={openOverlay}
+            />
+          )}
+          {canWatch && allFilesMissing && (
+            <Row
+              icon={Zap}
+              label="秒弹（可选）"
+              sub="允许「所有文件访问」后，截完图约 1 秒就弹卡；不给也能用，只是要等系统媒体库 3-4 秒"
+              value="去开启"
+              onClick={openAllFiles}
             />
           )}
           {canWatch && notice && (

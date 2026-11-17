@@ -18,6 +18,8 @@ import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.net.Uri;
 import android.os.Build;
+import android.os.Environment;
+import android.os.FileObserver;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
@@ -43,7 +45,9 @@ import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
@@ -88,8 +92,14 @@ public class ScreenshotWatchService extends Service {
     private static final int MAX_SIDE = 1280;
     /** 连拍多张时，8 秒内不再重复振动/响铃 */
     private static final long QUIET_VIBRATE_MS = 8_000L;
-    /** 媒体库写入比广播慢，首次没扫到最多再补 2 次（原来要重试 10 次） */
-    private static final int MAX_SCAN_RETRIES = 2;
+    /**
+     * 媒体库写入比广播慢：实测小米 HyperOS 拍完截图到媒体库有这一行要 3–4 秒，
+     * 这期间 ContentObserver 只会先叫我们一次。首次没扫到就按下面的节奏补扫，
+     * 盖住这段空白（每条都是一次很便宜的查询），最后一档 6 秒左右收手。
+     */
+    private static final long[] SCAN_RETRY_DELAYS =
+            { 250L, 500L, 800L, 1_000L, 1_200L, 1_200L, 1_200L };
+    private static final int MAX_SCAN_RETRIES = SCAN_RETRY_DELAYS.length;
     private static final String GROUP_WATCH = "watch";
     private static final String GROUP_FOUND = "found";
     /** 待确认的截图最多留 10 分钟：更早的肯定没人管了，服务重启时顺手清掉 */
@@ -114,6 +124,8 @@ public class ScreenshotWatchService extends Service {
         createChannels();
         // 认金额的规则表放在 assets 里，先装载再开始监听；装载失败时 ShotRules 一律不弹卡
         RulesLoader.ensure(this);
+        // 用户给了「所有文件访问」时，直接盯着截图目录，截完图 1 秒内就能弹卡，不用等系统媒体库
+        syncFastWatcher();
         startForegroundCompat();
         cleanupStale();
         primeCursor();
@@ -147,6 +159,7 @@ public class ScreenshotWatchService extends Service {
         // 已经认出金额的那条要留着让用户确认。
         // 先掐掉还在排队的补扫：否则它会在线程池 shutdown 之后再 execute，主线程直接崩
         mainHandler.removeCallbacksAndMessages(null);
+        stopFastWatcher();
         if (observer != null) {
             try {
                 getContentResolver().unregisterContentObserver(observer);
@@ -200,6 +213,7 @@ public class ScreenshotWatchService extends Service {
         observer = new ContentObserver(new Handler(Looper.getMainLooper())) {
             @Override
             public void onChange(boolean selfChange, Uri uri) {
+                Log.d(TAG, "media changed " + uri);
                 requestScan();
             }
         };
@@ -226,6 +240,7 @@ public class ScreenshotWatchService extends Service {
         String[] projection = new String[] {
                 MediaStore.Images.Media._ID,
                 MediaStore.Images.Media.DATE_ADDED,
+                MediaStore.Images.Media.DATE_TAKEN,
                 MediaStore.Images.Media.DISPLAY_NAME,
         };
         String selection = MediaStore.Images.Media.DATE_ADDED + " >= ?";
@@ -239,6 +254,7 @@ public class ScreenshotWatchService extends Service {
             if (cursor == null) return false;
             int idCol = cursor.getColumnIndexOrThrow(MediaStore.Images.Media._ID);
             int dateCol = cursor.getColumnIndexOrThrow(MediaStore.Images.Media.DATE_ADDED);
+            int takenCol = cursor.getColumnIndexOrThrow(MediaStore.Images.Media.DATE_TAKEN);
             int nameCol = cursor.getColumnIndexOrThrow(MediaStore.Images.Media.DISPLAY_NAME);
             while (cursor.moveToNext() && !scanner.isShutdown()) {
                 long id = cursor.getLong(idCol);
@@ -247,6 +263,8 @@ public class ScreenshotWatchService extends Service {
                 // 去重 key 用 _ID + DATE_ADDED：_ID 会被回收重用，单用 _ID 会把复用了旧号的新截图静默跳过
                 String seenKey = id + ":" + addedSec;
                 if (seen.contains(seenKey)) continue;
+                // 快速通道已经处理过这张图（同一文件名），别再弹一次
+                if (name != null && seen.contains("file:" + name)) continue;
                 // 同一秒内可能有第二张截图，先记下来再判断，下次不会再重复处理
                 CaptureStore.addSeenId(this, seenKey);
                 if (addedSec > lastSeen) {
@@ -256,7 +274,12 @@ public class ScreenshotWatchService extends Service {
                 if (!looksLikeScreenshot(name)) continue;
                 // 扫描只负责发现，识别丢给另一个线程排队
                 final long shotId = id;
-                if (submit(recognizer, () -> handleShot(shotId))) found++;
+                // DATE_TAKEN 是毫秒（截图拍摄那一刻），比 DATE_ADDED（整秒）准得多，
+                // 用它算「截屏→卡片」的端到端延迟
+                long taken = cursor.getLong(takenCol);
+                long age = System.currentTimeMillis() - (taken > 0 ? taken : addedSec * 1000L);
+                Log.d(TAG, "found " + name + " added=" + addedSec + " taken=" + taken + " age=" + age);
+                if (submit(recognizer, () -> handleShot(shotId, age))) found++;
             }
         } catch (Throwable t) {
             Log.w(TAG, "scan failed", t);
@@ -264,7 +287,11 @@ public class ScreenshotWatchService extends Service {
             if (cursor != null) cursor.close();
         }
         CaptureStore.setLastCheckAt(this, System.currentTimeMillis());
-        if (found > 0) Log.d(TAG, "queued " + found + " new shot(s) for OCR");
+        if (found > 0) {
+            Log.d(TAG, "queued " + found + " new shot(s) for OCR");
+        } else {
+            Log.d(TAG, "scan found 0 (lastSeen=" + lastSeen + ")");
+        }
         return found > 0;
     }
 
@@ -295,7 +322,7 @@ public class ScreenshotWatchService extends Service {
                 scanQueued.set(false);
                 return;
             }
-            long delay = attempt == 0 ? 200L : 400L;
+            long delay = SCAN_RETRY_DELAYS[Math.min(attempt, SCAN_RETRY_DELAYS.length - 1)];
             mainHandler.postDelayed(() -> scheduleScan(attempt + 1), delay);
         });
     }
@@ -365,8 +392,147 @@ public class ScreenshotWatchService extends Service {
                 || lower.contains("截图");
     }
 
+    /**
+     * 快速通道：用户给了「所有文件访问」时，直接盯着截图目录。
+     *
+     * 正常情况下只能靠系统媒体库发现新截图，而 HyperOS 要过 3-4 秒才把这张图写进索引，
+     * 卡片就跟着迟到。有了目录读取权限就能直接看见文件，截完图 1 秒内弹卡。
+     * 没给权限时什么都不做，仍然走媒体库那条慢一些但零新权限的路。
+     */
+    private final List<FileObserver> fastWatchers = new ArrayList<>();
+    /** .pending-… 还在写内容的文件，避免同一张图起多条重试链 */
+    private final Set<String> fastPending = Collections.synchronizedSet(new HashSet<>());
+    private static final int FAST_RETRIES = 12;
+
+    /** 权限开/关或服务重新起来时对齐一次：有权限才盯目录 */
+    void syncFastWatcher() {
+        boolean allowed;
+        try {
+            allowed = Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && Environment.isExternalStorageManager();
+        } catch (Throwable t) {
+            allowed = false;
+        }
+        if (allowed && fastWatchers.isEmpty()) startFastWatcher();
+        else if (!allowed && !fastWatchers.isEmpty()) stopFastWatcher();
+    }
+
+    private void startFastWatcher() {
+        try {
+            watchShotDir(new File(Environment.getExternalStoragePublicDirectory(
+                    Environment.DIRECTORY_DCIM), "Screenshots"));
+            watchShotDir(new File(Environment.getExternalStoragePublicDirectory(
+                    Environment.DIRECTORY_PICTURES), "Screenshots"));
+        } catch (Throwable t) {
+            Log.w(TAG, "fast watcher failed", t);
+        }
+        if (!fastWatchers.isEmpty()) Log.d(TAG, "fast watcher dirs=" + fastWatchers.size());
+    }
+
+    private void stopFastWatcher() {
+        for (FileObserver watcher : fastWatchers) {
+            try {
+                watcher.stopWatching();
+            } catch (Throwable ignored) {
+            }
+        }
+        fastWatchers.clear();
+    }
+
+    private void watchShotDir(final File dir) {
+        if (dir == null || !dir.isDirectory()) return;
+        FileObserver watcher = new FileObserver(dir.getAbsolutePath(),
+                FileObserver.CREATE | FileObserver.CLOSE_WRITE | FileObserver.MOVED_TO) {
+            @Override
+            public void onEvent(int event, final String name) {
+                if (name == null) return;
+                if ((event & (FileObserver.CLOSE_WRITE | FileObserver.MOVED_TO)) == 0) return;
+                // MIUI 先写 .pending-<序号>-Screenshot_….jpg，写完才改成正式文件名，两种都接
+                String clean = name;
+                int at = clean.indexOf("-Screenshot");
+                if (clean.startsWith(".pending-") && at > 0) clean = clean.substring(at + 1);
+                if (!looksLikeScreenshot(clean)) return;
+                // 真正能读的是磁盘上的这个文件：MIUI 先写 .pending-…（这时内容已经完整），
+                // 3-4 秒后才改名成 final 名。等改名就白等，所以直接读 pending 文件，
+                // 只用 clean（正式名）做去重和日志。
+                final String shotName = clean;
+                final File shotFile = new File(dir, name);
+                Log.d(TAG, "fast event " + Integer.toHexString(event) + " " + shotName);
+                submit(recognizer, () -> handleFastFile(shotFile, shotName));
+            }
+        };
+        watcher.startWatching();
+        fastWatchers.add(watcher);
+    }
+
+    /** 快速通道刚逮到的文件：只认最近两分钟内的，服务重启后翻到的旧图不动 */
+    private void handleFastFile(File file, String name) {
+        handleFastFile(file, name, 0);
+    }
+
+    private void handleFastFile(File file, String name, int attempt) {
+        long now = System.currentTimeMillis();
+        long mtime = file.lastModified();
+        if (mtime <= 0) return;
+        if (now - mtime > 120_000L) return;
+        String seenKey = "file:" + name;
+        if (CaptureStore.seenIds(this).contains(seenKey)) {
+            fastPending.remove(name);
+            return;
+        }
+        // MIUI 先建 .pending-… 空壳再往里写，CLOSE_WRITE 时可能还是 0 字节或半张图。
+        // 隔 200ms 再看一眼，最多等 2.4 秒；再不行就交给改名后的 MOVED_TO 事件。
+        if (!fastFileReady(file)) {
+            if (attempt == 0 && !fastPending.add(name)) return;
+            if (attempt >= FAST_RETRIES) {
+                fastPending.remove(name);
+                Log.d(TAG, "fast gave up " + name);
+                return;
+            }
+            mainHandler.postDelayed(() -> submit(recognizer,
+                    () -> handleFastFile(file, name, attempt + 1)), 200L);
+            return;
+        }
+        fastPending.remove(name);
+        if (attempt > 0) Log.d(TAG, "fast ready attempt=" + attempt + " " + name);
+        // 先记上：CREATE / CLOSE_WRITE / MOVED_TO 可能连着来三次
+        CaptureStore.addSeenId(this, seenKey);
+        handleShotFile(file, now - mtime);
+    }
+
+    /** .pending-… 先建空壳再写内容：等长度稳住、图头也能解开，才算写完 */
+    private boolean fastFileReady(File file) {
+        long length = file.length();
+        if (length <= 0 || !readable(file)) return false;
+        try {
+            Thread.sleep(80L);
+        } catch (InterruptedException ignored) {
+        }
+        return file.length() == length && readable(file);
+    }
+
+    /** 文件现在能不能当图片解开（只看图头，不占内存） */
+    private boolean readable(File file) {
+        BitmapFactory.Options options = new BitmapFactory.Options();
+        options.inJustDecodeBounds = true;
+        try {
+            BitmapFactory.decodeFile(file.getAbsolutePath(), options);
+        } catch (Throwable ignored) {
+        }
+        return options.outWidth > 0 && options.outHeight > 0;
+    }
+
     /** 识别线程：解码 → 存缓存 → OCR（只做一次，文字随截图一起存起来）→ 入队 + 一条通知。 */
-    private void handleShot(long id) {
+    private void handleShot(long id, long ageMs) {
+        Uri uri = ContentUris.withAppendedId(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, id);
+        handleShotSource(id, uri, null, ageMs);
+    }
+
+    /** 快速通道：已经有文件了（FileObserver 逮到的），不用再绕媒体库 */
+    private void handleShotFile(File file, long ageMs) {
+        handleShotSource(file.getName().hashCode() & 0x7FFFFFFFL, null, file, ageMs);
+    }
+
+    private void handleShotSource(long id, Uri uri, File file, long ageMs) {
         long begin = System.currentTimeMillis();
         // 有「显示在其他应用上层」权限就自己画一张从顶部滑下来的卡片（QQ 那种），
         // 不靠系统横幅；没有权限才退回通知，能不能弹由厂商决定
@@ -377,22 +543,24 @@ public class ScreenshotWatchService extends Service {
         // 认出金额后原地更新成「识别到 ¥X」。状态栏图标只出现一次，不会
         // 因为「新建一条 + 再删掉占位」连着跳三下，也不会留下冗余通知。
         if (!overlay) notifyProgress(notifyId);
-        Uri uri = ContentUris.withAppendedId(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, id);
         File saved = null;
         Bitmap bitmap = null;
         boolean posted = false;
         try {
-            bitmap = decode(uri, MAX_SIDE);
+            bitmap = file != null ? decodeFile(file, MAX_SIDE) : decode(uri, MAX_SIDE);
+            long tDecode = System.currentTimeMillis();
             if (bitmap == null) {
-                Log.w(TAG, "decode failed " + uri);
+                Log.w(TAG, "decode failed " + (file != null ? file : uri));
                 return;
             }
             saved = saveCache(bitmap, id);
+            long tCache = System.currentTimeMillis();
             if (saved == null) {
                 Log.w(TAG, "cache write failed " + id);
                 return;
             }
             OcrShot shot = ocrShot(bitmap);
+            long tOcr = System.currentTimeMillis();
             String amount = shot == null ? null : shot.amount;
             if (looksLikeMoneyButNotBill(shot)) {
                 // 认出了金额，但没有支付语境（聊天里的价格、网页商品价、股票数字…）
@@ -427,8 +595,13 @@ public class ScreenshotWatchService extends Service {
             // （以前先弹「正在认金额…」再收走，屏幕顶上会闪一下），卡片一出现就是金额版。
             // 悬浮窗被 ROM 拦掉时（appops 拒绝、后台弹窗限制等）卡片根本不会出现，
             // 下面用 isShowing() 判断，拦掉了就退回系统横幅。
+            long tBeforeShow = System.currentTimeMillis();
             if (overlay) CaptureOverlay.showFound(this, key, notifyId, saved.getAbsolutePath(),
                     thumb(bitmap), amount, centsOf(amount), shot.text);
+            long tShown = System.currentTimeMillis();
+            Log.d(TAG, "timing age=" + ageMs + " decode=" + (tDecode - begin)
+                    + " cache=" + (tCache - tDecode) + " ocr=" + (tOcr - tCache)
+                    + " thumbShow=" + (tShown - tBeforeShow));
             Log.d(TAG, "notice id=" + notifyId + " overlay=" + overlay
                     + " cardShowing=" + CaptureOverlay.isShowing());
             if (overlay && CaptureOverlay.isShowing()) {
@@ -447,7 +620,7 @@ public class ScreenshotWatchService extends Service {
             }
             posted = true;
             CaptureStore.setLastNoticeAt(this, System.currentTimeMillis());
-            Log.d(TAG, "handled id=" + id + " ¥" + amount + " layout=" + shot.layout
+            Log.d(TAG, "handled id=" + id + " src=" + (file != null ? "file" : "media") + " ¥" + amount + " layout=" + shot.layout
                     + " in " + (System.currentTimeMillis() - begin) + "ms");
         } catch (Throwable t) {
             Log.w(TAG, "handleShot failed: " + id, t);
@@ -617,6 +790,34 @@ public class ScreenshotWatchService extends Service {
                 if (scaled != raw) raw.recycle();
                 return scaled;
             }
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
+    /** 快速通道用：直接读文件（有「所有文件访问」时走这条，不必绕 ContentResolver） */
+    private Bitmap decodeFile(File file, int maxSide) {
+        try {
+            BitmapFactory.Options bounds = new BitmapFactory.Options();
+            bounds.inJustDecodeBounds = true;
+            BitmapFactory.decodeFile(file.getAbsolutePath(), bounds);
+            int longest = Math.max(bounds.outWidth, bounds.outHeight);
+            if (longest <= 0) return null;
+            int sample = 1;
+            while (longest / sample > maxSide * 2) sample *= 2;
+            BitmapFactory.Options opts = new BitmapFactory.Options();
+            opts.inSampleSize = sample;
+            opts.inPreferredConfig = Bitmap.Config.ARGB_8888;
+            Bitmap raw = BitmapFactory.decodeFile(file.getAbsolutePath(), opts);
+            if (raw == null) return null;
+            int side = Math.max(raw.getWidth(), raw.getHeight());
+            if (side <= maxSide) return raw;
+            float ratio = maxSide / (float) side;
+            Bitmap scaled = Bitmap.createScaledBitmap(raw,
+                    Math.max(1, Math.round(raw.getWidth() * ratio)),
+                    Math.max(1, Math.round(raw.getHeight() * ratio)), true);
+            if (scaled != raw) raw.recycle();
+            return scaled;
         } catch (Throwable t) {
             return null;
         }

@@ -146,8 +146,10 @@ public final class OcrEngineHolder {
                 created.setBoxScoreThresh(0.5f);
                 created.setBoxThresh(0.3f);
                 created.setUnClipRatio(1.6f);
-                created.setDoAngle(true);
-                created.setMostAngle(true);
+                // 不做方向分类：截图里的文字永远是正的，方向分类要给每个文本框多跑一遍
+                // 小模型，实测在一张账单上多花 ~100ms；关掉之后识别结果不变。
+                created.setDoAngle(false);
+                created.setMostAngle(false);
                 engine = created;
             }
             return engine;

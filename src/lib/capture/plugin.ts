@@ -16,6 +16,8 @@ interface CaptureApi {
   openNoticeSettings(): Promise<void>
   requestIgnoreBattery(): Promise<void>
   requestOverlay(): Promise<{ overlay?: string }>
+  /** 可选加速：给「所有文件访问」后不再等系统媒体库索引 */
+  requestAllFiles(): Promise<{ allFiles?: string }>
   disableWatch(): Promise<WatchStatus>
   addListener(
     event: 'capture',
@@ -106,6 +108,19 @@ export async function openNoticeSettings(): Promise<void> {
 export async function requestOverlay(): Promise<void> {
   if (!captureAvailable()) return
   await capture().requestOverlay()
+}
+
+/**
+ * 引导用户开「所有文件访问」（可选）。
+ * 开了直接盯截图目录，截完图约 1 秒就弹卡；不开也能用，只是要等系统媒体库 3-4 秒。
+ */
+export async function requestAllFiles(): Promise<void> {
+  if (!captureAvailable()) return
+  try {
+    await capture().requestAllFiles()
+  } catch {
+    // 跳不过去就算了：系统设置里手动开也一样，不影响老路径
+  }
 }
 
 /** 弹系统的「不受电池优化限制」确认框，让厂商省电别再冻住后台监听 */

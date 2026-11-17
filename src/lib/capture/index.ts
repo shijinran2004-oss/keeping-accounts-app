@@ -13,6 +13,7 @@ export {
   onCapture,
   openNoticeSettings,
   requestIgnoreBattery,
+  requestAllFiles,
   requestOverlay,
   watchStatus,
 } from './plugin'

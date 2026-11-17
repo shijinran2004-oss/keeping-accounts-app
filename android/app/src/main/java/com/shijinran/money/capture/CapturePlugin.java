@@ -11,6 +11,7 @@ import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.net.Uri;
 import android.os.Build;
+import android.os.Environment;
 import android.os.PowerManager;
 import android.provider.Settings;
 import android.util.Base64;
@@ -230,8 +231,56 @@ public class CapturePlugin extends Plugin {
         ret.put("lastCheckAt", CaptureStore.lastCheckAt(getContext()));
         // 有「显示在其他应用上层」才能自己画顶部卡片；没有就只能靠系统通知，弹不弹看厂商
         ret.put("overlay", CaptureOverlay.permitted(getContext()) ? "granted" : "denied");
+        // 有「所有文件访问」就能直接盯截图目录，截完图 1 秒内弹卡，不用等系统媒体库索引
+        ret.put("allFiles", allFilesGranted() ? "granted" : "denied");
+        // 用户在系统设置里刚开关过权限：服务在跑就立刻跟上，不用等它重启
+        ScreenshotWatchService service = ScreenshotWatchService.instance;
+        if (service != null && ScreenshotWatchService.running) service.syncFastWatcher();
 
         call.resolve(ret);
+    }
+
+    /** 有没有「所有文件访问」：有就能直接读截图目录（可选加速，不给也能用） */
+    private boolean allFilesGranted() {
+        try {
+            return Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && Environment.isExternalStorageManager();
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
+    /**
+     * 引导用户开「所有文件访问」（可选）。
+     * 开了之后不再依赖系统媒体库索引，截完图约 1 秒就弹卡；不开也能用，只是要等 3-4 秒。
+     */
+    @PluginMethod
+    public void requestAllFiles(PluginCall call) {
+        if (allFilesGranted()) {
+            JSObject ret = new JSObject();
+            ret.put("allFiles", "granted");
+            call.resolve(ret);
+            return;
+        }
+        try {
+            Intent intent = new Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION);
+            intent.setData(Uri.parse("package:" + getContext().getPackageName()));
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            getContext().startActivity(intent);
+            JSObject ret = new JSObject();
+            ret.put("allFiles", "prompt");
+            call.resolve(ret);
+        } catch (Throwable t) {
+            try {
+                Intent fallback = new Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION);
+                fallback.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                getContext().startActivity(fallback);
+                JSObject ret = new JSObject();
+                ret.put("allFiles", "prompt");
+                call.resolve(ret);
+            } catch (Throwable second) {
+                call.reject("打不开「所有文件访问」设置，请到系统设置里手动开启", "capture_allfiles_failed");
+            }
+        }
     }
 
     /** 弹系统的「显示在其他应用上层」设置页，允许后截屏就能从顶部滑出卡片 */

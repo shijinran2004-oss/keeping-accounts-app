@@ -48,6 +48,7 @@ export {
   onCapture,
   openNoticeSettings,
   requestIgnoreBattery,
+  requestAllFiles,
   requestOverlay,
   watchStatus,
 } from './capture'

@@ -543,6 +543,11 @@ export interface WatchStatus {
   lastCheckAt?: number
   /** 有没有「显示在其他应用上层」：有就能截屏后自己弹顶部卡片，没有只能靠系统通知 */
   overlay?: 'granted' | 'denied'
+  /**
+   * 有没有「所有文件访问」（可选加速）。
+   * 有就直接盯截图目录，截完图约 1 秒弹卡；没有只能等系统媒体库索引，慢 3-4 秒。
+   */
+  allFiles?: 'granted' | 'denied'
 }
 
 /** 通知横幅的可用状态，来自原生插件 */

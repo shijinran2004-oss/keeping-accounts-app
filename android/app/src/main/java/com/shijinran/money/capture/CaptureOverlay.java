@@ -15,6 +15,7 @@ import android.provider.Settings;
 import android.util.Log;
 import android.view.Gravity;
 import android.view.View;
+import android.view.ViewTreeObserver;
 import android.view.WindowManager;
 import android.view.animation.DecelerateInterpolator;
 import android.widget.FrameLayout;
@@ -153,12 +154,41 @@ public final class CaptureOverlay {
                     if (card == null) {
                         done.countDown();
                     } else {
-                        card.postDelayed(new Runnable() {
-                            @Override
-                            public void run() {
-                                done.countDown();
-                            }
-                        }, 150);
+                        // 等这一帧真的画出来再放行，而不是死等 150ms：
+                        // 用 OnPreDraw 监听第一次绘制，画完立即 countDown（固定等 150ms 白白多花一百多毫秒）
+                        final ViewTreeObserver observer = card.getViewTreeObserver();
+                        final boolean[] counted = new boolean[1];
+                        if (!observer.isAlive()) {
+                            done.countDown();
+                        } else {
+                            observer.addOnPreDrawListener(new ViewTreeObserver.OnPreDrawListener() {
+                                @Override
+                                public boolean onPreDraw() {
+                                    if (counted[0]) return true;
+                                    counted[0] = true;
+                                    ViewTreeObserver live = card.getViewTreeObserver();
+                                    if (live.isAlive()) live.removeOnPreDrawListener(this);
+                                    // 绘制帧结束之后再判断 isShown()，此时 windowToken 已经挂上
+                                    card.post(new Runnable() {
+                                        @Override
+                                        public void run() {
+                                            done.countDown();
+                                        }
+                                    });
+                                    return true;
+                                }
+                            });
+                            // 兜底：万一这一帧没来（被 ROM 拦了、窗口没挂上），也别把识别线程卡死
+                            card.postDelayed(new Runnable() {
+                                @Override
+                                public void run() {
+                                    if (!counted[0]) {
+                                        counted[0] = true;
+                                        done.countDown();
+                                    }
+                                }
+                            }, 300);
+                        }
                     }
                 } catch (Throwable t) {
                     Log.w("SnoopyCapture", "overlay attach failed", t);
