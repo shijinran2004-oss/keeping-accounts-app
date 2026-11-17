@@ -42,7 +42,8 @@ final class ShotRules {
      * 强支付信号：一页里出现两条以上，就允许「单独一行只有 -3.49 这种裸金额」也算金额。
      * 支付宝/微信账单页的金额常常既没有 ¥ 也没有「实付」，就是标题下面一个大数字。
      */
-    static final String[] STRONG_SIGNALS = {"支付成功", "付款成功", "交易单号", "商户全称", "收单机构", "账单详情", "账单服务"};
+    static final String[] STRONG_SIGNALS = {"支付成功", "付款成功", "交易单号", "商户全称", "收单机构", "账单详情", "账单服务",
+            "转账单号", "转账说明", "转账时间", "收款时间", "对方已收钱", "已存入零钱"};
     /** 我们自己的卡片会写的词，这些截图不能再认成账单 */
     static final String[] OWN_CARD = {"已写进账本", "已记一笔", "正在认金额"};
     /** 优惠/原价之类的行：里头的数字不是实付，分数直接压到门槛以下 */
@@ -53,7 +54,7 @@ final class ShotRules {
     static final String[] INCOME_WORDS = {"退款成功", "已到账", "转入", "收款成功", "收入", "入账", "退还"};
 
     /** 平台特征词：判断这张截图是微信、支付宝还是银行，决定先试哪套模板 */
-    private static final String[] WECHAT_KEYS = {"微信支付", "转账金额", "收款方", "微信红包"};
+    private static final String[] WECHAT_KEYS = {"微信支付", "转账金额", "收款方", "微信红包", "微信转账", "转账单号", "对方已收钱"};
     private static final String[] ALIPAY_KEYS = {"支付宝", "账单详情", "商家订单号", "花呗", "余额宝", "先享后付", "先购后付", "收钱码"};
     private static final String[] BANK_KEYS = {"交易成功", "账户余额", "尾号", "转账汇款", "短信通知"};
     /** 各平台的金额锚点：命中就取，不再看通用规则 */
@@ -64,8 +65,9 @@ final class ShotRules {
     private static final String NUM = "([0-9]{1,7}(?:\\.[0-9]{1,2})?)";
     private static final Pattern YEN = Pattern.compile("[¥￥]\\s*" + NUM);
     private static final Pattern MONEY_AFTER = Pattern.compile("[¥￥]?\\s*" + NUM);
-    /** 单独一行、只有一个金额（可带负号 / ¥ / 元）：账单页标题下面那个大数字 */
-    private static final Pattern BARE_LINE = Pattern.compile("^[-¥￥\\s]*([0-9]{1,7}\\.[0-9]{2})\\s*元?$");
+    /** 单独一行、只有一个金额（可带正负号 / ¥ / 元）：账单页标题下面那个大数字；
+     * 微信转账页的支出写 -84.00、收入写 +100.00，符号要留着判方向。 */
+    private static final Pattern BARE_LINE = Pattern.compile("^[+\\-¥￥\\s]*([0-9]{1,7}\\.[0-9]{2})\\s*元?$");
     private static final Pattern DATE = Pattern.compile("20[0-9]{2}[-/.年][0-9]{1,2}[-/.月][0-9]{1,2}");
     private static final Pattern DATE_TIME = Pattern.compile(
             "20[0-9]{2}[-/.年][0-9]{1,2}[-/.月][0-9]{1,2}(?:[ T][0-9]{1,2}:[0-9]{2}(?::[0-9]{2})?)?"
@@ -96,6 +98,8 @@ final class ShotRules {
         final long cents;
         final int score;
         final int priority;
+        /** 金额前面带 + 号（微信转账收入页），这种一定是收入，不能弹记账卡 */
+        boolean plus;
 
         Candidate(String value, int score, int priority) {
             this.value = value;
@@ -130,6 +134,7 @@ final class ShotRules {
             else if (c == '．') c = '.';
             else if (c == '￥') c = '¥';
             else if (c == '－' || c == '—' || c == '–' || c == '−' || c == '‐') c = '-';
+            else if (c == '＋') c = '+';
             else if (c == '，' || c == '、') c = ',';
             else if (c == '：') c = ':';
             else if (c == '\u00A0' || c == '\u200B' || c == '\u200C' || c == '\u200D' || c == '\uFEFF') c = ' ';
@@ -166,7 +171,7 @@ final class ShotRules {
         if (tpl != null) found.add(tpl);
         Candidate best = pick(found);
         if (best == null) return new Judgement(null, found.isEmpty() ? "no_amount" : "uncertain");
-        if ("income".equals(direction(text))) return new Judgement(best.value, "income");
+        if (best.plus || "income".equals(direction(text))) return new Judgement(best.value, "income");
         if (!hasPaymentSignal(raw)) return new Judgement(best.value, "no_signal");
         return new Judgement(best.value, null);
     }
@@ -250,8 +255,13 @@ final class ShotRules {
         int base = 20 + Math.min(strong - 2, 2) * 5;
         for (int i = 0; i < lines.length; i++) {
             if (containsAny(lines[i], BALANCE_KEYS)) continue;
-            Matcher m = BARE_LINE.matcher(lines[i].trim());
-            if (m.matches()) out.add(new Candidate(m.group(1), base + lineBias(lines[i]), 0));
+            String line = lines[i].trim();
+            Matcher m = BARE_LINE.matcher(line);
+            if (m.matches()) {
+                Candidate c = new Candidate(m.group(1), base + lineBias(lines[i]), 0);
+                c.plus = line.startsWith("+");
+                out.add(c);
+            }
         }
     }
 

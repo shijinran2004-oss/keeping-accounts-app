@@ -140,4 +140,31 @@ public class ShotRulesTest {
         assertEquals(1200L, ShotRules.centsOf("12.00"));
         assertEquals(9999900L, ShotRules.centsOf("99999.00"));
     }
+
+    // ---- 1.4.27：微信转账详情页（没有 ¥、没有「实付」，金额带正负号）----
+
+    // 转账支出页：只有「转账说明/转账时间/转账单号」，-84.00 就是这笔支出
+    @Test public void wechatTransferOutIsAccepted() {
+        String page = "转账-转给王泽涛\n-84.00\n当前状态 对方已收钱\n转账说明 微信转账"
+                + "\n转账时间 2026年11月7日 23:15:32\n收款时间 2026年11月7日 23:15:53"
+                + "\n支付方式 零钱\n转账单号 1000050001202611070534857338511\n账单服务";
+        assertEquals("84.00", ShotRules.amount(page));
+        assertEquals("84.00", ShotRules.acceptedAmount(page));
+        assertEquals("wechat", ShotRules.platform(page));
+    }
+
+    // 转账收入页：+100.00 是收进来的钱，不能记成支出
+    @Test public void wechatTransferInIsNotAnExpense() {
+        String page = "转账-来自妈妈\n+100.00\n当前状态 已存入零钱\n转账说明 微信转账"
+                + "\n转账时间 2026年11月9日 19:29:39\n收款时间 2026年11月9日 19:38:22"
+                + "\n支付方式 零钱\n转账单号 1000050001202611090442941488104\n账单服务";
+        assertEquals("100.00", ShotRules.amount(page));
+        assertNull(ShotRules.acceptedAmount(page));
+    }
+
+    // 账单列表页的退款行（转账-退款 +400.00）：同样是收入，不弹支出卡
+    @Test public void listedRefundIsNotAnExpense() {
+        String page = "账单\n转账-退款\n+400.00\n11月3日 14:56\n支出¥672.52 收入¥822.00\n账单服务";
+        assertNull(ShotRules.acceptedAmount(page));
+    }
 }

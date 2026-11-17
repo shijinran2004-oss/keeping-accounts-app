@@ -6,7 +6,7 @@
 
 - 纯本地存储，不联网、不上传、无广告、无账号
 - 深色 / 浅色 / 跟随系统 + 8 个强调色的可换主题，新装默认浅色；炭灰卡片、16px 间距、鸿蒙 Sans 中文 + Nunito 圆体数字；版式与主题系统参考 openGym，代码全部重写
-- 安装包：[GitHub Releases](https://github.com/Shijinran2004-OSS/keeping-accounts-app/releases/latest)（最新 1.4.26，约 47 MB——内置离线 OCR 模型与 onnxruntime，minSdk 23 / targetSdk 35；1.1.26 以来的每个版本都留了对应的 APK）
+- 安装包：[GitHub Releases](https://github.com/Shijinran2004-OSS/keeping-accounts-app/releases/latest)（最新 1.4.27，约 47 MB——内置离线 OCR 模型与 onnxruntime，minSdk 23 / targetSdk 35；1.1.26 以来的每个版本都留了对应的 APK）
 
 ## 功能
 
