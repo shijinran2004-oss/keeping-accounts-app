@@ -123,6 +123,33 @@ public class NotifyRulesTest {
     }
 
     @Test
+    public void incomeNotificationWithPlatformTitleIsIncome() {
+        // 标题「微信支付」里的「支付」以前会把收款通知判成支出
+        NotifyRules.Parsed parsed = NotifyRules.parse(
+                WECHAT, "微信支付", "收款成功 ￥80.00", null, null);
+        assertNotNull(parsed);
+        assertEquals(8000L, parsed.cents);
+        assertEquals(NotifyRules.TYPE_INCOME, parsed.type);
+    }
+
+    @Test
+    public void arrivalWithPlatformTitleIsIncome() {
+        NotifyRules.Parsed parsed = NotifyRules.parse(
+                ALIPAY, "支付宝", "已到账 ￥90.00", null, null);
+        assertNotNull(parsed);
+        assertEquals(9000L, parsed.cents);
+        assertEquals(NotifyRules.TYPE_INCOME, parsed.type);
+    }
+
+    @Test
+    public void expenseNotificationWithPlatformTitleStaysExpense() {
+        NotifyRules.Parsed parsed = NotifyRules.parse(
+                WECHAT, "微信支付", "付款成功 ￥5.00", null, null);
+        assertNotNull(parsed);
+        assertEquals(NotifyRules.TYPE_EXPENSE, parsed.type);
+    }
+
+    @Test
     public void sameNotificationHasSameKey() {
         NotifyRules.Parsed a = NotifyRules.parse(WECHAT, "微信支付", "向 麦当劳 付款 12.30 元", null, null);
         NotifyRules.Parsed b = NotifyRules.parse(WECHAT, "微信支付", "向 麦当劳 付款 12.30 元", null, null);

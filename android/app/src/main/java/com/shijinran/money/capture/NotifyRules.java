@@ -128,12 +128,15 @@ final class NotifyRules {
         Long cents = singleAmount(all);
         if (cents == null || cents <= 0 || cents > 9_999_900L) return null;
         String type;
+        // 收入先看正文（标题「微信支付」「支付宝」里的「支付」会把收款也判成支出），
+        // 支出可以连标题一起看：有的通知标题就是「微信支付」、正文只有金额。
+        String body = directionText(all);
         if (containsAny(all, refundKeywords)) {
+            type = TYPE_INCOME;
+        } else if (containsAny(body, incomeKeywords)) {
             type = TYPE_INCOME;
         } else if (containsAny(all, expenseKeywords)) {
             type = TYPE_EXPENSE;
-        } else if (containsAny(all, incomeKeywords)) {
-            type = TYPE_INCOME;
         } else {
             return null;
         }
@@ -141,6 +144,15 @@ final class NotifyRules {
         String amount = String.format(Locale.US, "%d.%02d", cents / 100, cents % 100);
         String name = platformNames.containsKey(platform) ? platformNames.get(platform) : platform;
         return new Parsed(amount, cents, type, merchant, name, all, hash(pkg + "|" + all));
+    }
+
+    /** 方向判定用的文本：去掉「微信支付 / 支付宝 / 银行卡」等平台名，免得标题里的「支付」压过正文的「收款」。 */
+    private static String directionText(String all) {
+        String s = all;
+        for (String name : platformNames.values()) {
+            if (name != null && !name.isEmpty()) s = s.replace(name, " ");
+        }
+        return s.replace("微信", " ").replace("支付宝", " ").replace("财付通", " ");
     }
 
     /** 所有金额候选；同一笔钱重复出现（比如正文和大字都有）只算一个，两个不同数值就放弃。 */

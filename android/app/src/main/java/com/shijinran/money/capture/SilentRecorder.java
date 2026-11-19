@@ -35,7 +35,8 @@ final class SilentRecorder {
         if (cents <= 0) return -1;
         long now = System.currentTimeMillis();
         if (CaptureStore.seenAutoAmount(context, cents, type, now, AUTO_DEDUPE_MS)) {
-            Log.d(TAG, "silent duplicate ¥" + cents / 100.0 + " " + type + " from=" + source);
+            Log.d(TAG, "silent duplicate ¥" + String.format(Locale.US, "%d.%02d", cents / 100, cents % 100)
+                    + " " + type + " from=" + source);
             return -1;
         }
         CaptureStore.markAutoAmount(context, cents, type, now);
