@@ -33,7 +33,9 @@ import {
   openNoticeSettings,
   requestAllFiles,
   requestIgnoreBattery,
+  requestNotificationAccess,
   requestOverlay,
+  setCaptureMode,
   themeName,
   todayStr,
   watchStatus,
@@ -107,6 +109,8 @@ export function Me() {
         lastCheckAt: fresh.lastCheckAt ?? prev?.lastCheckAt,
         overlay: fresh.overlay ?? prev?.overlay,
         allFiles: fresh.allFiles ?? prev?.allFiles,
+        mode: fresh.mode ?? prev?.mode,
+        notifyAccess: fresh.notifyAccess ?? prev?.notifyAccess,
       }))
       if (next.enabled) {
         if (fresh.overlay === 'granted') {
@@ -157,6 +161,48 @@ export function Me() {
     }
   }
 
+  /** 弹卡确认 ↔ 静默记账：静默时认出金额就直接记，通知栏留一条可撤销的提醒 */
+  const toggleMode = async () => {
+    if (watchBusy) return
+    setWatchBusy(true)
+    try {
+      const next = watch?.mode === 'silent' ? 'confirm' : 'silent'
+      await setCaptureMode(next)
+      const fresh = await watchStatus()
+      setWatch((prev) => ({
+        supported: prev?.supported ?? true,
+        enabled: prev?.enabled ?? fresh.enabled,
+        running: prev?.running ?? fresh.running,
+        permission: prev?.permission ?? fresh.permission ?? 'prompt',
+        notice: fresh.notice ?? prev?.notice,
+        battery: fresh.battery ?? prev?.battery,
+        lastCheckAt: fresh.lastCheckAt ?? prev?.lastCheckAt,
+        overlay: fresh.overlay ?? prev?.overlay,
+        allFiles: fresh.allFiles ?? prev?.allFiles,
+        mode: fresh.mode ?? next,
+        notifyAccess: fresh.notifyAccess ?? prev?.notifyAccess,
+      }))
+      toast(
+        next === 'silent'
+          ? '已切到静默记账：认出金额就自己记下，通知栏 10 分钟内可以撤销'
+          : '已切回弹卡确认：截屏后点「确认记录」才记账',
+      )
+    } catch (error) {
+      toast(error instanceof Error ? error.message : '没切换成功，稍后再试', 'error')
+    } finally {
+      setWatchBusy(false)
+    }
+  }
+
+  const openNotifyAccess = async () => {
+    try {
+      await requestNotificationAccess()
+      toast('在系统设置里允许「通知使用权」，微信、支付宝、银行的付款通知就会自动记账')
+    } catch (error) {
+      toast(error instanceof Error ? error.message : '没打开设置，可以手动到系统设置里允许', 'error')
+    }
+  }
+
   const openBattery = async () => {
     try {
       await requestIgnoreBattery()
@@ -172,6 +218,9 @@ export function Me() {
   const overlayMissing = watch?.enabled && watch.overlay !== 'granted'
   // 「所有文件访问」是可选的加速项：不给也能用，只是要等系统媒体库索引 3-4 秒
   const allFilesMissing = watch?.enabled && watch.allFiles !== 'granted'
+  // 静默记账：认出金额就直接记，不弹卡；靠「通知使用权」读微信/支付宝/银行的付款通知
+  const silentMode = watch?.enabled && watch.mode === 'silent'
+  const notifyMissing = silentMode && watch?.notifyAccess !== 'granted'
   const days = new Set(state.txs.map((t) => t.date)).size
   const first = [...state.txs].sort((a, b) => a.date.localeCompare(b.date))[0]
   const theme = state.settings.theme ?? 'light'
@@ -352,6 +401,28 @@ export function Me() {
               }
               value={watchBusy ? '…' : watch?.enabled ? '已开启' : '已关闭'}
               onClick={toggleWatch}
+            />
+          )}
+          {canWatch && watch?.enabled && (
+            <Row
+              icon={silentMode ? Zap : BellRing}
+              label="记账方式"
+              sub={
+                silentMode
+                  ? '静默：截屏或付款通知认出金额就直接记下，不弹卡；通知栏 10 分钟内能撤销'
+                  : '弹卡确认：截屏后弹出卡片，点「确认记录」才记（默认）'
+              }
+              value={watchBusy ? '…' : silentMode ? '静默记账' : '弹卡确认'}
+              onClick={toggleMode}
+            />
+          )}
+          {canWatch && notifyMissing && (
+            <Row
+              icon={BellRing}
+              label="通知自动记账"
+              sub="允许「通知使用权」后，微信、支付宝、银行付完款不用截图也能自动记下来"
+              value="去允许"
+              onClick={openNotifyAccess}
             />
           )}
           {canWatch && overlayMissing && (

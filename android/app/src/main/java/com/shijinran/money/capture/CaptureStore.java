@@ -20,6 +20,10 @@ final class CaptureStore {
 
     private static final String PREFS = "shijinran.capture";
     private static final String KEY_ENABLED = "enabled";
+    /** 记账方式：confirm = 弹卡确认（默认）；silent = 读出金额就自己记一笔 */
+    private static final String KEY_MODE = "captureMode";
+    static final String MODE_CONFIRM = "confirm";
+    static final String MODE_SILENT = "silent";
 
     private static final String KEY_PENDING = "pendingPath";
     private static final String KEY_SOURCE = "pendingSource";
@@ -30,6 +34,13 @@ final class CaptureStore {
     /** 已经交给前端、还没确认写进账本的那一批：进程中途死了也不会丢 */
     private static final String KEY_AUTO_BACKUP = "autoRecordsInflight";
     private static final String KEY_AUTO_SEQ = "autoRecordSeq";
+    /** 静默记账的跨通道去重：同金额同方向 90 秒内只记一次（通知 + 截图会同时看到同一笔） */
+    private static final String KEY_AUTO_SEEN = "autoSeen";
+    /** 用户点了「撤销」的 seq：前端看到就把已经写进账本的那条删掉 */
+    private static final String KEY_UNDO = "undoneSeqs";
+    private static final String KEY_UNDO_BACKUP = "undoneSeqsInflight";
+    private static final int AUTO_SEEN_KEEP = 20;
+    private static final int UNDO_KEEP = 50;
     private static final String KEY_SHOTS = "pendingShots";
     private static final String KEY_NOTIFY_SEQ = "notifySeq";
     private static final String KEY_LAST_CHECK = "lastCheckAt";
@@ -54,6 +65,16 @@ final class CaptureStore {
 
     static void setEnabled(Context context, boolean enabled) {
         prefs(context).edit().putBoolean(KEY_ENABLED, enabled).apply();
+    }
+
+    /** 记账方式；老用户没有这个键，默认还是弹卡确认 */
+    static String mode(Context context) {
+        String mode = prefs(context).getString(KEY_MODE, MODE_CONFIRM);
+        return MODE_SILENT.equals(mode) ? MODE_SILENT : MODE_CONFIRM;
+    }
+
+    static void setMode(Context context, String mode) {
+        prefs(context).edit().putString(KEY_MODE, MODE_SILENT.equals(mode) ? MODE_SILENT : MODE_CONFIRM).apply();
     }
 
     /** 分享进来的图（截图走 pendingShots 队列）。 */
@@ -327,18 +348,164 @@ final class CaptureStore {
      * 等前端写进账本。App 没在跑也能先记下来。
      */
     static synchronized void pushAutoRecord(Context context, long amountCents, String text) {
+        pushAutoRecord(context, amountCents, text, "expense", null, null, "confirm");
+    }
+
+    /**
+     * 记一笔待入账（手动确认或静默），返回 seq：前端拿它当幂等 id，撤销时也用它。
+     * type 是 expense / income；merchant、platform、source 只用于展示和排查问题。
+     */
+    static synchronized long pushAutoRecord(Context context, long amountCents, String text, String type,
+                                            String merchant, String platform, String source) {
+        long seq = 0;
         try {
             JSONArray arr = autoRecords(context);
             JSONObject item = new JSONObject();
             // seq 是给前端的幂等 id：同一笔重复写进账本也只会有一条
-            item.put("seq", nextAutoSeq(context));
+            seq = nextAutoSeq(context);
+            item.put("seq", seq);
             item.put("amountCents", amountCents);
             item.put("text", text == null ? "" : text);
+            item.put("type", type == null ? "expense" : type);
+            if (merchant != null && !merchant.isEmpty()) item.put("merchant", merchant);
+            if (platform != null && !platform.isEmpty()) item.put("platform", platform);
+            if (source != null && !source.isEmpty()) item.put("source", source);
             item.put("createdAt", System.currentTimeMillis());
             arr.put(item);
             while (arr.length() > AUTO_KEEP) arr.remove(0);
             prefs(context).edit().putString(KEY_AUTO, arr.toString()).apply();
         } catch (Throwable ignored) {
+        }
+        return seq;
+    }
+
+    /** 同一笔钱刚记过没有（金额 + 方向）：通知和截图都会看到同一笔，靠它只记一次。 */
+    static synchronized boolean seenAutoAmount(Context context, long cents, String type, long now, long ttlMs) {
+        JSONArray arr = autoSeen(context);
+        for (int i = 0; i < arr.length(); i++) {
+            JSONObject item = arr.optJSONObject(i);
+            if (item == null) continue;
+            if (item.optLong("c", 0L) == cents && type.equals(item.optString("d", ""))
+                    && now - item.optLong("t", 0L) <= ttlMs) return true;
+        }
+        return false;
+    }
+
+    static synchronized void markAutoAmount(Context context, long cents, String type, long now) {
+        try {
+            JSONArray arr = autoSeen(context);
+            JSONObject item = new JSONObject();
+            item.put("c", cents);
+            item.put("d", type);
+            item.put("t", now);
+            arr.put(item);
+            JSONArray kept = new JSONArray();
+            for (int i = Math.max(0, arr.length() - AUTO_SEEN_KEEP); i < arr.length(); i++) kept.put(arr.opt(i));
+            prefs(context).edit().putString(KEY_AUTO_SEEN, kept.toString()).apply();
+        } catch (Throwable ignored) {
+        }
+    }
+
+    private static JSONArray autoSeen(Context context) {
+        String raw = prefs(context).getString(KEY_AUTO_SEEN, "");
+        if (raw == null || raw.isEmpty()) return new JSONArray();
+        try {
+            return new JSONArray(raw);
+        } catch (Throwable t) {
+            return new JSONArray();
+        }
+    }
+
+    /**
+     * 用户点了「撤销」：把这一笔从待入账 / 在途存档里拿掉，并留下撤销记号；
+     * 前端拿到记号后把已经写进账本的那条也删掉（通知可能早就被 JS 消费过了）。
+     */
+    static synchronized boolean undoAutoRecord(Context context, long seq) {
+        if (seq <= 0) return false;
+        boolean found = false;
+        try {
+            JSONArray auto = autoRecords(context);
+            JSONArray keptAuto = new JSONArray();
+            boolean hitAuto = false;
+            for (int i = 0; i < auto.length(); i++) {
+                JSONObject item = auto.optJSONObject(i);
+                if (item == null) continue;
+                if (item.optLong("seq", -1) == seq) {
+                    found = true;
+                    hitAuto = true;
+                    continue;
+                }
+                keptAuto.put(item);
+            }
+            if (hitAuto) prefs(context).edit().putString(KEY_AUTO, keptAuto.toString()).apply();
+
+            String backupRaw = prefs(context).getString(KEY_AUTO_BACKUP, "");
+            if (backupRaw != null && !backupRaw.isEmpty()) {
+                JSONArray backup = new JSONArray(backupRaw);
+                JSONArray keptBackup = new JSONArray();
+                boolean hitBackup = false;
+                for (int i = 0; i < backup.length(); i++) {
+                    JSONObject item = backup.optJSONObject(i);
+                    if (item == null) continue;
+                    if (item.optLong("seq", -1) == seq) {
+                        found = true;
+                        hitBackup = true;
+                        continue;
+                    }
+                    keptBackup.put(item);
+                }
+                if (hitBackup) prefs(context).edit().putString(KEY_AUTO_BACKUP, keptBackup.toString()).apply();
+            }
+
+            // 不管在不在待入账队列里都要留记号：App 在前台时 JS 早就把这条写进账本并从队列拿走了，
+            // 这时 found=false，但账本里那笔仍然要能删掉。
+            {
+                JSONArray undone = undoneSeqs(context);
+                JSONObject marker = new JSONObject();
+                marker.put("seq", seq);
+                marker.put("at", System.currentTimeMillis());
+                undone.put(marker);
+                JSONArray kept = new JSONArray();
+                for (int i = Math.max(0, undone.length() - UNDO_KEEP); i < undone.length(); i++) kept.put(undone.opt(i));
+                prefs(context).edit().putString(KEY_UNDO, kept.toString()).apply();
+            }
+            return found;
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
+    /**
+     * 取走撤销记号。和自动记账一样先放「在途」：前端删完账本再 ack，
+     * 中途进程被杀也不会漏删。
+     */
+    static synchronized String takeUndos(Context context) {
+        JSONArray merged = new JSONArray();
+        try {
+            mergeRecords(merged, prefs(context).getString(KEY_UNDO_BACKUP, ""));
+            mergeRecords(merged, prefs(context).getString(KEY_UNDO, ""));
+        } catch (Throwable ignored) {
+        }
+        if (merged.length() == 0) {
+            prefs(context).edit().remove(KEY_UNDO_BACKUP).remove(KEY_UNDO).apply();
+            return "";
+        }
+        String raw = merged.toString();
+        prefs(context).edit().putString(KEY_UNDO_BACKUP, raw).remove(KEY_UNDO).apply();
+        return raw;
+    }
+
+    static synchronized void ackUndos(Context context) {
+        prefs(context).edit().remove(KEY_UNDO_BACKUP).apply();
+    }
+
+    private static JSONArray undoneSeqs(Context context) {
+        String raw = prefs(context).getString(KEY_UNDO, "");
+        if (raw == null || raw.isEmpty()) return new JSONArray();
+        try {
+            return new JSONArray(raw);
+        } catch (Throwable t) {
+            return new JSONArray();
         }
     }
 

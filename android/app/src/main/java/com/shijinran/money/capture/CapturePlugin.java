@@ -17,6 +17,7 @@ import android.provider.Settings;
 import android.util.Base64;
 import android.util.Log;
 
+import androidx.core.app.NotificationManagerCompat;
 import androidx.core.content.ContextCompat;
 
 import com.getcapacitor.JSArray;
@@ -67,6 +68,16 @@ public class CapturePlugin extends Plugin {
         if (plugin == null) return;
         plugin.getBridge().getActivity().runOnUiThread(() ->
                 plugin.notifyListeners("captureRecord", new JSObject(), true));
+    }
+
+    /** 静默记账被撤销时喊一声，App 在前台就立刻把那条账目删掉。 */
+    static void pingUndo(long seq) {
+        CapturePlugin plugin = instance;
+        if (plugin == null) return;
+        JSObject data = new JSObject();
+        data.put("seq", seq);
+        plugin.getBridge().getActivity().runOnUiThread(() ->
+                plugin.notifyListeners("captureUndo", data, true));
     }
 
     @Override
@@ -172,6 +183,11 @@ public class CapturePlugin extends Plugin {
                     one.put("seq", item.optInt("seq", 0));
                     one.put("amountCents", item.optLong("amountCents", 0L));
                     one.put("text", item.optString("text", ""));
+                    // 静默记账带上方向和商户；手动确认的老记录没有这几个字段
+                    one.put("type", item.optString("type", "expense"));
+                    one.put("merchant", item.optString("merchant", ""));
+                    one.put("platform", item.optString("platform", ""));
+                    one.put("source", item.optString("source", "confirm"));
                     one.put("createdAt", item.optLong("createdAt", 0L));
                     records.put(one);
                 }
@@ -194,6 +210,74 @@ public class CapturePlugin extends Plugin {
         call.resolve();
     }
 
+    /** 有没有「通知使用权」：静默记账靠它读微信/支付宝/银行的付款通知 */
+    private boolean notifyAccessGranted() {
+        try {
+            return NotificationManagerCompat.getEnabledListenerPackages(getContext())
+                    .contains(getContext().getPackageName());
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
+    private JSObject notifyAccessRet() {
+        JSObject ret = new JSObject();
+        ret.put("notifyAccess", notifyAccessGranted() ? "granted" : "denied");
+        return ret;
+    }
+
+    /** 切换记账方式；切到静默时会话里立刻生效，不用重启服务。 */
+    @PluginMethod
+    public void setMode(PluginCall call) {
+        String mode = call.getString("mode", CaptureStore.MODE_CONFIRM);
+        CaptureStore.setMode(getContext(), mode);
+        call.resolve(notifyAccessRet());
+    }
+
+    /** 引导用户开「通知使用权」（系统设置里叫「通知使用权 / 通知读取权限」）。 */
+    @PluginMethod
+    public void requestNotificationAccess(PluginCall call) {
+        if (notifyAccessGranted()) {
+            call.resolve(notifyAccessRet());
+            return;
+        }
+        try {
+            Intent intent = new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS);
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            getContext().startActivity(intent);
+            call.resolve(notifyAccessRet());
+        } catch (Throwable t) {
+            call.reject("打不开「通知使用权」设置，请到系统设置里手动允许", "capture_notify_failed");
+        }
+    }
+
+    /** 取走撤销记号：前端删完账本再 ack。 */
+    @PluginMethod
+    public void drainUndos(PluginCall call) {
+        JSArray seqs = new JSArray();
+        String raw = CaptureStore.takeUndos(getContext());
+        if (!raw.isEmpty()) {
+            try {
+                JSONArray arr = new JSONArray(raw);
+                for (int i = 0; i < arr.length(); i++) {
+                    JSONObject item = arr.optJSONObject(i);
+                    if (item != null) seqs.put(item.optLong("seq", 0L));
+                }
+            } catch (Throwable t) {
+                Log.w("SnoopyCapture", "drain undos failed", t);
+            }
+        }
+        JSObject ret = new JSObject();
+        ret.put("seqs", seqs);
+        call.resolve(ret);
+    }
+
+    @PluginMethod
+    public void ackUndos(PluginCall call) {
+        CaptureStore.ackUndos(getContext());
+        call.resolve();
+    }
+
     @PluginMethod
     public void watchStatus(PluginCall call) {
         JSObject ret = new JSObject();
@@ -201,6 +285,10 @@ public class CapturePlugin extends Plugin {
         ret.put("enabled", CaptureStore.isEnabled(getContext()));
         ret.put("running", ScreenshotWatchService.running);
         ret.put("permission", imagePermission());
+        // 记账方式：confirm 弹卡确认 / silent 认出就记
+        ret.put("mode", CaptureStore.mode(getContext()));
+        // 静默记账靠「通知使用权」读微信/支付宝/银行的通知
+        ret.put("notifyAccess", notifyAccessGranted() ? "granted" : "denied");
 
         // 通知是否真的能弹横幅：权限在、渠道重要性是「高」、没开勿扰，三者缺一系统就不会从顶部弹出
         JSObject notice = new JSObject();

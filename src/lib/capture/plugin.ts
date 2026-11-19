@@ -18,6 +18,17 @@ interface CaptureApi {
   requestOverlay(): Promise<{ overlay?: string }>
   /** 可选加速：给「所有文件访问」后不再等系统媒体库索引 */
   requestAllFiles(): Promise<{ allFiles?: string }>
+  /** 切换记账方式：confirm 弹卡确认 / silent 认出就记 */
+  setMode(options: { mode: string }): Promise<{ notifyAccess?: string }>
+  /** 引导用户开「通知使用权」，静默记账靠它读付款通知 */
+  requestNotificationAccess(): Promise<{ notifyAccess?: string }>
+  /** 取走撤销记号（静默记账通知上的「撤销」） */
+  drainUndos(): Promise<{ seqs?: number[] }>
+  ackUndos(): Promise<void>
+  addListener(
+    event: 'captureUndo',
+    listener: (data: { seq?: number }) => void,
+  ): Promise<PluginListenerHandle>
   disableWatch(): Promise<WatchStatus>
   addListener(
     event: 'capture',
@@ -120,6 +131,48 @@ export async function requestAllFiles(): Promise<void> {
     await capture().requestAllFiles()
   } catch {
     // 跳不过去就算了：系统设置里手动开也一样，不影响老路径
+  }
+}
+
+/** 切换记账方式；静默模式下认出金额就直接记，不再弹卡确认 */
+export async function setCaptureMode(mode: 'confirm' | 'silent'): Promise<void> {
+  if (!captureAvailable()) return
+  await capture().setMode({ mode })
+}
+
+/** 引导用户开「通知使用权」（系统设置里叫「通知使用权 / 通知读取权限」） */
+export async function requestNotificationAccess(): Promise<void> {
+  if (!captureAvailable()) return
+  await capture().requestNotificationAccess()
+}
+
+/** 取走撤销记号：静默记账的通知上点了「撤销」才有 */
+export async function drainUndos(): Promise<number[]> {
+  if (!captureAvailable()) return []
+  try {
+    const result = await capture().drainUndos()
+    return (result?.seqs ?? []).filter((seq) => typeof seq === 'number' && seq > 0)
+  } catch {
+    return []
+  }
+}
+
+/** 告诉原生这批撤销已经处理完；没 ack 的话下一轮还会再删一次 */
+export async function ackUndos(): Promise<void> {
+  if (!captureAvailable()) return
+  try {
+    await capture().ackUndos()
+  } catch {
+    // 和自动记账一样：没清掉也没关系，下一轮拿到的还是这批，按 id 删是幂等的
+  }
+}
+
+/** 静默记账被撤销时叫一声（App 在前台就立刻把那条账删掉） */
+export async function onCaptureUndo(handler: () => void): Promise<() => void> {
+  if (!captureAvailable()) return () => {}
+  const handle = await capture().addListener('captureUndo', () => handler())
+  return () => {
+    void handle.remove()
   }
 }
 

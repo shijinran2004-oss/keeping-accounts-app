@@ -521,6 +521,14 @@ export interface AutoRecord {
   amountCents: number
   /** OCR 出的整段文字，前端再用 parseReceipt 补商户、分类和日期 */
   text: string
+  /** 支出还是收入；静默记账的退款/到账会标 income */
+  type?: 'expense' | 'income'
+  /** 通知里认出来的商户，没认出来就没有 */
+  merchant?: string
+  /** 从哪儿看出来的：微信支付 / 支付宝 / 银行卡 */
+  platform?: string
+  /** 来源：confirm 手动确认 / notify 通知监听 / screenshot 截图识别 */
+  source?: 'confirm' | 'notify' | 'screenshot' | string
   /** 入队时间戳（毫秒） */
   createdAt: number
 }
@@ -548,6 +556,10 @@ export interface WatchStatus {
    * 有就直接盯截图目录，截完图约 1 秒弹卡；没有只能等系统媒体库索引，慢 3-4 秒。
    */
   allFiles?: 'granted' | 'denied'
+  /** 记账方式：confirm 弹卡确认（默认）/ silent 认出金额就直接记 */
+  mode?: 'confirm' | 'silent'
+  /** 有没有「通知使用权」：静默记账靠它读微信/支付宝/银行的付款通知 */
+  notifyAccess?: 'granted' | 'denied'
 }
 
 /** 通知横幅的可用状态，来自原生插件 */

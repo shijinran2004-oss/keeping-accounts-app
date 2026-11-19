@@ -214,5 +214,102 @@
     "topAligned": 5,
     "footerPenalty": -20,
     "layoutBase": 15
+  },
+  "notification": {
+    "comment": "通知栏账单：微信/支付宝/银行 App 的付款通知模板。pkg 白名单决定只认这些 App 的通知，金额必须有 ¥ 或「元」，拿不准就不记。",
+    "packages": {
+      "com.tencent.mm": "wechat",
+      "com.eg.android.AlipayGphone": "alipay",
+      "com.unionpay": "bank",
+      "com.icbc": "bank",
+      "com.chinamworld.main": "bank",
+      "com.cmbchina.ccd.pluto.cmbActivity": "bank",
+      "com.android.bankabc": "bank",
+      "com.bankcomm.Bankcomm": "bank",
+      "com.chinamworld.bocmbci": "bank"
+    },
+    "platformNames": {
+      "wechat": "微信支付",
+      "alipay": "支付宝",
+      "bank": "银行卡"
+    },
+    "ignoreKeywords": [
+      "验证码",
+      "验证",
+      "待支付",
+      "未支付",
+      "支付失败",
+      "付款失败",
+      "交易失败",
+      "扣款失败",
+      "已取消",
+      "交易关闭",
+      "已关闭",
+      "退款申请",
+      "退款处理中",
+      "退款中",
+      "还款提醒",
+      "账单提醒",
+      "即将到期",
+      "到期还款",
+      "优惠券",
+      "红包封面",
+      "积分兑换",
+      "活动",
+      "邀请",
+      "登录",
+      "密码"
+    ],
+    "expenseKeywords": [
+      "付款成功",
+      "支付成功",
+      "已支付",
+      "付款",
+      "支付",
+      "消费",
+      "扣款",
+      "扣费",
+      "转出",
+      "支出",
+      "买单"
+    ],
+    "incomeKeywords": [
+      "退款成功",
+      "已退款",
+      "退款到账",
+      "到账",
+      "入账",
+      "收入",
+      "收款成功",
+      "已收款",
+      "转入",
+      "收钱",
+      "返还"
+    ],
+    "refundKeywords": [
+      "退款成功",
+      "已退款",
+      "退款到账",
+      "退款",
+      "退回",
+      "退还"
+    ],
+    "penaltyKeywords": [
+      "优惠",
+      "立减",
+      "抵扣",
+      "余额",
+      "红包",
+      "积分",
+      "手续费",
+      "服务费",
+      "原价"
+    ],
+    "merchantPatterns": [
+      "向\\s*([^\\s，,。;；]{1,20})\\s*(?:付款|转账|支付)",
+      "在\\s*([^\\s，,。;；]{1,20})\\s*(?:消费|支付|付款)",
+      "付款给\\s*([^\\s，,。;；]{1,20})",
+      "(?:商户|商家|收款方|收款商户)[:：]\\s*([^\\s，,。;；]{1,20})"
+    ]
   }
 }

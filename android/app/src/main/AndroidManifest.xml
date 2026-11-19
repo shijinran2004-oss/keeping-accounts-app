@@ -49,6 +49,17 @@
                 android:value="screenshot_watch" />
         </service>
 
+        <!-- 静默记账：读微信/支付宝/银行的通知，授权「通知使用权」后系统才会绑定 -->
+        <service
+            android:name=".capture.NotifyWatchService"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
+
         <receiver
             android:name=".capture.CaptureCancelReceiver"
             android:exported="false" />

@@ -164,6 +164,8 @@ App / main
 
 截图认金额的判定都在 `ShotRules`（纯函数，JVM 单测覆盖），规则全部从 assets 里的 `capture-rules.json` 装载：先 `normalizeText`（全角数字、千分位逗号、零宽字符、日期时间），按行收集候选——平台模板锚点（微信「转账金额」、支付宝「支付金额」、银行「交易金额」）+60、实付类关键词 +50、合计类 +40、`¥` 金额按同行/隔壁行的付款语境 +30/+20/+15，优惠/原价/积分行 −50，余额/额度行整行跳过；1.4.29 起每行还带 OCR 的四角坐标（`OcrEngineHolder.lines()` → `OcrLine`），字号明显大于正文（≥正文中位行高 1.6 倍）、位置靠上（页面上部 45%）、水平居中或靠右的金额再加 +25/+18/+15，页脚（底部 12%）上的大数字 −20，所以「标题下面那个大数字」不用等强信号也能被认出来；最后取最高分候选，最高分不到 15 或和次高分差不到 10 就不提醒。支付宝「账单详情」页没有 `¥` 也没有「实付」，模板命中 detailKeys（收单机构 / 清算机构 / 收款方全称 / 账单分类 / 计入收支 / 支付奖励 / 对方账户）时取第一行独占的金额；「还款成功 / 收益发放 / 退款成功 / 交易关闭」这类页面命中 notExpenseWords，认出金额也只记日志不弹支出卡。行数对不上（例如某些行被当成自己的 UI 过滤掉）时退回纯文本规则，不会拿错位的坐标硬打分。
 
+静默记账（1.4.32）把同一条判定结果直接落库：设置里的「记账方式」存成原生 `SharedPreferences('shijinran.capture')` 的 `captureMode`（`confirm` / `silent`），静默时 `ScreenshotWatchService` 认出金额后不再弹卡，改由 `SilentRecorder.record()` 入队（复用 `autoRecords` 队列和 `auto-<seq>` 这套确定性 id 与 ack 协议），再发一条低优先级通知「已记一笔 ¥X」；HyperOS 的通知栏不给展开动作按钮，所以通知正文直接写「点开 App 可以撤销」，首页「刚自动记的」列出 24 小时内最近 3 条 `auto-*` 流水，点「撤销」走 `deleteTx`。通知上的「撤销」动作在能显示按钮的 ROM 上由 `CaptureCancelReceiver` 处理：它只写撤销记号（`undoneSeqs`，无条件写——App 在前台时记录早已被 JS 取走写进账本，早年「只在队列里找到才写记号」会导致撤销永远删不掉），前端 `drainUndos()` 取走 → 删账本 → `ackUndos()`，中途进程被杀也不会漏删。静默模式下的通知自动记账由 `NotifyWatchService`（`NotificationListenerService`）负责：只在静默模式且用户已授权「通知使用权」时工作，跳过常驻通知和本 App 自己的通知，按 `notification.packages` 白名单只认微信 / 支付宝 / 银行 App；`NotifyRules.parse()` 从 title / text / bigText / subText 里取金额（必须带 `¥` 或「元」）、方向（退款词优先按收入）、商户（`merchantPatterns`），一屏出现两个不同金额就放弃，同一段文案 10 分钟内只算一次，同金额同方向 90 秒内去重；规则同样来自 `capture-rules.json` 的 `notification` 段，`NotifyRules` 是纯函数、带 JVM 单测，装载失败时一律不记。
+
 读的时候反过来：`useLedger().state` → `lib/stats.ts` 按区间汇总 → 页面渲染。
 
 统计口径集中在 `moneyFlow()`：`可支配 = 本期工资 + 其他收入 − 固定支出`，`剩余 = 可支配 − 日常支出`。
@@ -184,7 +186,7 @@ App / main
 
 ## 版本与构建
 
-- `versionCode 71` / `versionName 1.4.31`（`android/app/build.gradle`）
+- `versionCode 72` / `versionName 1.4.32`（`android/app/build.gradle`）
 - 数据版本 `LedgerState.version = 1`，`normalize()` 读取时补全新增分类与设置
 - 存储：IndexedDB（库 `shijinran`，`txs` / `meta` / `snapshots` 三个 store），首次启动从 `localStorage` 一次性迁移；`localStorage['shijinran.storage.engine']='ls'` 可强制回退旧引擎
 - 备份：v2 容器带 `schema` / `checksum`，默认 gzip；导入先预览，支持覆盖 / 合并 / 仅设置与分类；导入、清空、恢复前自动快照（保留 5 份）

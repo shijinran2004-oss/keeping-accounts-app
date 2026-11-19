@@ -28,18 +28,27 @@ export function autoRecordToTx(
   let amount = record.amountCents
   if (parsed > 0 && (amount <= 0 || amount === parsed * 100)) amount = parsed
   if (!amount) return null
+  // 静默记账的通知可能是退款/到账，那种按收入记；截图识别出来的都是支出
+  const income = record.type === 'income'
+  const type = income ? 'income' : 'expense'
   const categoryId =
-    draft.categoryId && categories.some((category) => category.id === draft.categoryId)
+    draft.categoryId &&
+    categories.some(
+      (category) => category.id === draft.categoryId && (!category.type || category.type === type),
+    )
       ? draft.categoryId
-      : 'other'
+      : income
+        ? 'other-income'
+        : 'other'
   return {
     // 有 seq 就用它做确定性 id：同一笔重复落库只会覆盖自己，不会多记一笔
     id: record.seq ? `auto-${record.seq}` : uid(),
-    type: 'expense',
+    type,
     amount,
     categoryId,
     date: draft.date ?? today,
-    note: cleanMerchant(draft.merchant),
+    // 通知里已经认出商户就用它；截图那条只有 OCR 文字，还是走 parseReceipt
+    note: cleanMerchant(record.merchant || draft.merchant || record.platform || ''),
     createdAt: record.createdAt || Date.now(),
   }
 }

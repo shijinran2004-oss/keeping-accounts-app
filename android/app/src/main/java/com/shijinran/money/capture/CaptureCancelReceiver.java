@@ -27,6 +27,9 @@ public class CaptureCancelReceiver extends BroadcastReceiver {
 
     static final String ACTION_CANCEL = "com.shijinran.money.capture.CANCEL";
     static final String ACTION_RECORD = "com.shijinran.money.capture.RECORD";
+    /** 静默记账通知上的「撤销」 */
+    static final String ACTION_UNDO = "com.shijinran.money.capture.UNDO";
+    static final String EXTRA_SEQ = "capture_seq";
 
     private static final String TAG = "SnoopyCapture";
     private static final String CHANNEL_DONE = "screenshot_done";
@@ -41,6 +44,8 @@ public class CaptureCancelReceiver extends BroadcastReceiver {
                     intent.getIntExtra(ScreenshotWatchService.EXTRA_NOTIFY_ID, 0),
                     intent.getLongExtra(ScreenshotWatchService.EXTRA_AMOUNT, 0L),
                     intent.getStringExtra(ScreenshotWatchService.EXTRA_TEXT));
+        } else if (ACTION_UNDO.equals(action)) {
+            undoRecord(context, intent == null ? 0L : intent.getLongExtra(EXTRA_SEQ, 0L));
         } else {
             cancelShot(context,
                     intent == null ? 0L : intent.getLongExtra(ScreenshotWatchService.EXTRA_KEY, 0L),
@@ -115,6 +120,21 @@ public class CaptureCancelReceiver extends BroadcastReceiver {
             }
         } catch (Throwable t) {
             Log.w(TAG, "cancel pending failed", t);
+        }
+    }
+
+    /** 静默记账的「撤销」：撤掉队列里的这一笔，并让前端删掉已经落库的那条。 */
+    static void undoRecord(Context context, long seq) {
+        try {
+            NotificationManager nm = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
+            boolean found = CaptureStore.undoAutoRecord(context, seq);
+            if (nm != null && seq > 0) nm.cancel(SilentRecorder.notifyId(seq));
+            CapturePlugin.pingUndo(seq);
+            android.widget.Toast.makeText(context, seq > 0 ? "已撤销这笔记账" : "没找到这笔记账",
+                    android.widget.Toast.LENGTH_SHORT).show();
+            Log.d(TAG, "undo seq=" + seq + " queued=" + found);
+        } catch (Throwable t) {
+            Log.w(TAG, "undo failed", t);
         }
     }
 

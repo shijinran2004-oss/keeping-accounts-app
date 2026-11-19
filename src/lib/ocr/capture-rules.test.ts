@@ -60,6 +60,35 @@ describe('capture-rules 规则表', () => {
     expect(alipay?.anchors).not.toContain('订单金额')
   })
 
+  it('通知规则白名单只认微信/支付宝/银行，词表齐全', () => {
+    const notify = rules.notification
+    const packages = Object.keys(notify.packages)
+    expect(packages).toContain('com.tencent.mm')
+    expect(packages).toContain('com.eg.android.AlipayGphone')
+    // 白名单里的每个平台都得有给人看的名字
+    for (const platform of Object.values(notify.packages)) {
+      expect(Object.keys(notify.platformNames)).toContain(platform)
+    }
+    const arrays = [
+      'ignoreKeywords',
+      'expenseKeywords',
+      'incomeKeywords',
+      'refundKeywords',
+      'penaltyKeywords',
+      'merchantPatterns',
+    ] as const
+    for (const key of arrays) {
+      expect(notify[key].length, key).toBeGreaterThan(0)
+      expect(new Set(notify[key]).size, key).toBe(notify[key].length)
+    }
+    // 调试用的假白名单（adb shell 发通知）不能留在发布规则里
+    expect(packages).not.toContain('com.android.shell')
+    expect(packages).not.toContain('android')
+    expect(notify.expenseKeywords).toContain('付款成功')
+    expect(notify.refundKeywords).toContain('退款成功')
+    expect(notify.ignoreKeywords).toContain('验证码')
+  })
+
   it('版面权重在合理区间（大字放大、页脚扣分）', () => {
     const geo = rules.geometry
     expect(geo.bigRatio).toBeGreaterThan(1)

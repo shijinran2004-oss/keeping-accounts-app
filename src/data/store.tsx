@@ -16,7 +16,14 @@ import type {
 import { freshState, normalize, uid } from './normalize'
 import { openLedger, writeLegacyMirror } from './db'
 import { autoRecordToTx } from './auto'
-import { ackAutoRecords, drainAutoRecords as readAutoRecords, onAutoRecord } from '../lib'
+import {
+  ackAutoRecords,
+  ackUndos,
+  drainAutoRecords as readAutoRecords,
+  drainUndos,
+  onAutoRecord,
+  onCaptureUndo,
+} from '../lib'
 import {
   applyImport,
   createSnapshot,
@@ -89,6 +96,41 @@ export function LedgerProvider({ children }: { children: React.ReactNode }) {
     [],
   )
 
+  /**
+   * 静默记账的通知上点了「撤销」：把已经写进账本的那条删掉。
+   *
+   * survive 的办法和自动记账一样：原生存着撤销记号，删库成功才 ack，
+   * 进程中途被杀下一轮还会再删一次（按 id 删是幂等的）。
+   */
+  const applyUndos = useCallback(
+    (repo: LedgerRepository, fallback: LedgerState): Promise<LedgerState> => {
+      const run = async (): Promise<LedgerState> => {
+        const base = stateRef.current ?? fallback
+        const seqs = await drainUndos()
+        if (!seqs.length) return base
+        const ids = seqs.map((seq) => `auto-${seq}`)
+        for (const id of ids) {
+          try {
+            await repo.deleteTx(id)
+          } catch (error) {
+            console.error('[ledger] 撤销记账失败', error)
+            return base
+          }
+        }
+        await ackUndos()
+        const gone = new Set(ids)
+        const next = { ...base, txs: base.txs.filter((tx) => !gone.has(tx.id)) }
+        stateRef.current = next
+        setState(next)
+        return next
+      }
+      const next = syncChain.current.then(run, run)
+      syncChain.current = next.catch(() => undefined)
+      return next
+    },
+    [],
+  )
+
   // 打开账本：优先 IndexedDB，必要时把旧 localStorage 搬过来；失败才显示错误页
   useEffect(() => {
     let alive = true
@@ -101,6 +143,8 @@ export function LedgerProvider({ children }: { children: React.ReactNode }) {
         try {
           // 先把通知里已经确认过的记录补上，再渲染，避免首页先闪一下没有的账
           initial = await applyAutoRecords(opened.repo, opened.state)
+          // 撤销过的静默记账也要在渲染前删掉，不然首页会闪一下又消失
+          initial = await applyUndos(opened.repo, initial)
         } catch (error) {
           console.error('[ledger] 取自动记账记录失败', error)
         }
@@ -117,7 +161,7 @@ export function LedgerProvider({ children }: { children: React.ReactNode }) {
     return () => {
       alive = false
     }
-  }, [applyAutoRecords])
+  }, [applyAutoRecords, applyUndos])
 
   // 通知里点「直接记一笔」时 App 只是切到后台的话，回到前台立刻补上
   useEffect(() => {
@@ -129,6 +173,9 @@ export function LedgerProvider({ children }: { children: React.ReactNode }) {
       void applyAutoRecords(repo, current).catch((error: unknown) =>
         console.error('[ledger] 自动记账失败', error),
       )
+      void applyUndos(repo, current).catch((error: unknown) =>
+        console.error('[ledger] 撤销记账失败', error),
+      )
     }
     window.addEventListener('focus', sync)
     document.addEventListener('visibilitychange', sync)
@@ -137,12 +184,17 @@ export function LedgerProvider({ children }: { children: React.ReactNode }) {
     void onAutoRecord(sync).then((off) => {
       stop = off
     })
+    let stopUndo: (() => void) | null = null
+    void onCaptureUndo(sync).then((off) => {
+      stopUndo = off
+    })
     return () => {
       window.removeEventListener('focus', sync)
       document.removeEventListener('visibilitychange', sync)
       stop?.()
+      stopUndo?.()
     }
-  }, [applyAutoRecords])
+  }, [applyAutoRecords, applyUndos])
 
   // 主数据在 IndexedDB；localStorage 留一份最新镜像，回退到旧存储时不至于读到旧账
   useEffect(() => {

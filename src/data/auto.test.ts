@@ -42,6 +42,24 @@ describe('autoRecordToTx', () => {
     expect(tx?.note).toBe('美团外卖')
   })
 
+  it('静默记账的退款按收入记，备注用通知里认出来的商户', () => {
+    const tx = autoRecordToTx(
+      {
+        amountCents: 2345,
+        text: '退款成功 ￥23.45',
+        type: 'income',
+        merchant: '美团',
+        platform: '微信支付',
+        createdAt: 1,
+      },
+      CATEGORIES,
+      '2026-11-15',
+    )
+    expect(tx?.type).toBe('income')
+    expect(tx?.categoryId).toBe('other-income')
+    expect(tx?.note).toBe('美团')
+  })
+
   it('没有金额就不入账', () => {
     expect(autoRecordToTx({ amountCents: 0, text: '随便聊聊', createdAt: 1 }, CATEGORIES)).toBeNull()
   })

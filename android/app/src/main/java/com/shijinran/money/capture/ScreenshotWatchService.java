@@ -213,7 +213,6 @@ public class ScreenshotWatchService extends Service {
         observer = new ContentObserver(new Handler(Looper.getMainLooper())) {
             @Override
             public void onChange(boolean selfChange, Uri uri) {
-                Log.d(TAG, "media changed " + uri);
                 requestScan();
             }
         };
@@ -240,7 +239,6 @@ public class ScreenshotWatchService extends Service {
         String[] projection = new String[] {
                 MediaStore.Images.Media._ID,
                 MediaStore.Images.Media.DATE_ADDED,
-                MediaStore.Images.Media.DATE_TAKEN,
                 MediaStore.Images.Media.DISPLAY_NAME,
         };
         String selection = MediaStore.Images.Media.DATE_ADDED + " >= ?";
@@ -254,7 +252,6 @@ public class ScreenshotWatchService extends Service {
             if (cursor == null) return false;
             int idCol = cursor.getColumnIndexOrThrow(MediaStore.Images.Media._ID);
             int dateCol = cursor.getColumnIndexOrThrow(MediaStore.Images.Media.DATE_ADDED);
-            int takenCol = cursor.getColumnIndexOrThrow(MediaStore.Images.Media.DATE_TAKEN);
             int nameCol = cursor.getColumnIndexOrThrow(MediaStore.Images.Media.DISPLAY_NAME);
             while (cursor.moveToNext() && !scanner.isShutdown()) {
                 long id = cursor.getLong(idCol);
@@ -274,12 +271,7 @@ public class ScreenshotWatchService extends Service {
                 if (!looksLikeScreenshot(name)) continue;
                 // 扫描只负责发现，识别丢给另一个线程排队
                 final long shotId = id;
-                // DATE_TAKEN 是毫秒（截图拍摄那一刻），比 DATE_ADDED（整秒）准得多，
-                // 用它算「截屏→卡片」的端到端延迟
-                long taken = cursor.getLong(takenCol);
-                long age = System.currentTimeMillis() - (taken > 0 ? taken : addedSec * 1000L);
-                Log.d(TAG, "found " + name + " added=" + addedSec + " taken=" + taken + " age=" + age);
-                if (submit(recognizer, () -> handleShot(shotId, age))) found++;
+                if (submit(recognizer, () -> handleShot(shotId))) found++;
             }
         } catch (Throwable t) {
             Log.w(TAG, "scan failed", t);
@@ -287,11 +279,7 @@ public class ScreenshotWatchService extends Service {
             if (cursor != null) cursor.close();
         }
         CaptureStore.setLastCheckAt(this, System.currentTimeMillis());
-        if (found > 0) {
-            Log.d(TAG, "queued " + found + " new shot(s) for OCR");
-        } else {
-            Log.d(TAG, "scan found 0 (lastSeen=" + lastSeen + ")");
-        }
+        if (found > 0) Log.d(TAG, "queued " + found + " new shot(s) for OCR");
         return found > 0;
     }
 
@@ -496,7 +484,7 @@ public class ScreenshotWatchService extends Service {
         if (attempt > 0) Log.d(TAG, "fast ready attempt=" + attempt + " " + name);
         // 先记上：CREATE / CLOSE_WRITE / MOVED_TO 可能连着来三次
         CaptureStore.addSeenId(this, seenKey);
-        handleShotFile(file, now - mtime);
+        handleShotFile(file);
     }
 
     /** .pending-… 先建空壳再写内容：等长度稳住、图头也能解开，才算写完 */
@@ -522,45 +510,44 @@ public class ScreenshotWatchService extends Service {
     }
 
     /** 识别线程：解码 → 存缓存 → OCR（只做一次，文字随截图一起存起来）→ 入队 + 一条通知。 */
-    private void handleShot(long id, long ageMs) {
+    private void handleShot(long id) {
         Uri uri = ContentUris.withAppendedId(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, id);
-        handleShotSource(id, uri, null, ageMs);
+        handleShotSource(id, uri, null);
     }
 
     /** 快速通道：已经有文件了（FileObserver 逮到的），不用再绕媒体库 */
-    private void handleShotFile(File file, long ageMs) {
-        handleShotSource(file.getName().hashCode() & 0x7FFFFFFFL, null, file, ageMs);
+    private void handleShotFile(File file) {
+        handleShotSource(file.getName().hashCode() & 0x7FFFFFFFL, null, file);
     }
 
-    private void handleShotSource(long id, Uri uri, File file, long ageMs) {
+    private void handleShotSource(long id, Uri uri, File file) {
         long begin = System.currentTimeMillis();
         // 有「显示在其他应用上层」权限就自己画一张从顶部滑下来的卡片（QQ 那种），
         // 不靠系统横幅；没有权限才退回通知，能不能弹由厂商决定
         boolean overlay = CaptureOverlay.permitted(this);
+        // 静默模式：认出金额直接入账，不弹卡、不进待确认队列
+        boolean silent = CaptureStore.MODE_SILENT.equals(CaptureStore.mode(this));
         long key = (id << 20) ^ (System.currentTimeMillis() & 0xFFFFFL);
         int notifyId = CaptureStore.nextNotifyId(this);
         // 没有悬浮窗权限时，占位和结果共用同一个通知位：先挂「正在认金额…」，
         // 认出金额后原地更新成「识别到 ¥X」。状态栏图标只出现一次，不会
         // 因为「新建一条 + 再删掉占位」连着跳三下，也不会留下冗余通知。
-        if (!overlay) notifyProgress(notifyId);
+        if (!overlay && !silent) notifyProgress(notifyId);
         File saved = null;
         Bitmap bitmap = null;
         boolean posted = false;
         try {
             bitmap = file != null ? decodeFile(file, MAX_SIDE) : decode(uri, MAX_SIDE);
-            long tDecode = System.currentTimeMillis();
             if (bitmap == null) {
                 Log.w(TAG, "decode failed " + (file != null ? file : uri));
                 return;
             }
             saved = saveCache(bitmap, id);
-            long tCache = System.currentTimeMillis();
             if (saved == null) {
                 Log.w(TAG, "cache write failed " + id);
                 return;
             }
             OcrShot shot = ocrShot(bitmap);
-            long tOcr = System.currentTimeMillis();
             String amount = shot == null ? null : shot.amount;
             if (looksLikeMoneyButNotBill(shot)) {
                 // 认出了金额，但没有支付语境（聊天里的价格、网页商品价、股票数字…）
@@ -588,6 +575,15 @@ public class ScreenshotWatchService extends Service {
                 return;
             }
             CaptureStore.markRecent(this, dedupe, System.currentTimeMillis());
+            if (silent) {
+                // 静默模式：自己记一笔，通知栏留一条可撤销的提醒；截图缓存不用留
+                SilentRecorder.record(this, centsOf(amount), shot.text, "expense", null, null, "screenshot");
+                saved.delete();
+                if (overlay) CaptureOverlay.dismissIfKey(key);
+                Log.d(TAG, "handled id=" + id + " src=" + (file != null ? "file" : "media")
+                        + " ¥" + amount + " mode=silent in " + (System.currentTimeMillis() - begin) + "ms");
+                return;
+            }
             JSONObject evicted = CaptureStore.addShot(this, key, notifyId, saved.getAbsolutePath(),
                     centsOf(amount), shot.text);
             if (evicted != null) dropShot(evicted);
@@ -595,13 +591,8 @@ public class ScreenshotWatchService extends Service {
             // （以前先弹「正在认金额…」再收走，屏幕顶上会闪一下），卡片一出现就是金额版。
             // 悬浮窗被 ROM 拦掉时（appops 拒绝、后台弹窗限制等）卡片根本不会出现，
             // 下面用 isShowing() 判断，拦掉了就退回系统横幅。
-            long tBeforeShow = System.currentTimeMillis();
             if (overlay) CaptureOverlay.showFound(this, key, notifyId, saved.getAbsolutePath(),
                     thumb(bitmap), amount, centsOf(amount), shot.text);
-            long tShown = System.currentTimeMillis();
-            Log.d(TAG, "timing age=" + ageMs + " decode=" + (tDecode - begin)
-                    + " cache=" + (tCache - tDecode) + " ocr=" + (tOcr - tCache)
-                    + " thumbShow=" + (tShown - tBeforeShow));
             Log.d(TAG, "notice id=" + notifyId + " overlay=" + overlay
                     + " cardShowing=" + CaptureOverlay.isShowing());
             if (overlay && CaptureOverlay.isShowing()) {

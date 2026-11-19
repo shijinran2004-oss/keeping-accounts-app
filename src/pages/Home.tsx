@@ -39,7 +39,7 @@ export function Home({
   onGoMe: () => void
   onQuickAdd: (categoryId: string) => void
 }) {
-  const { state } = useLedger()
+  const { state, deleteTx } = useLedger()
   const [now, setNow] = useState(() => new Date())
   useEffect(() => {
     const tick = () => setNow(new Date())
@@ -53,6 +53,11 @@ export function Home({
       document.removeEventListener('visibilitychange', onVisible)
     }
   }, [])
+  // 静默记账写进来的流水：24 小时内都能在首页直接撤掉（各 ROM 的撤销按钮不一定显示）
+  const autoUndo = state.txs
+    .filter((tx) => tx.id.startsWith('auto-') && now.getTime() - tx.createdAt < 24 * 60 * 60 * 1000)
+    .sort((a, b) => b.createdAt - a.createdAt)
+    .slice(0, 3)
   const today = toDateStr(now)
   const ledgerName = state.settings.name?.trim() || DEFAULT_LEDGER_NAME
   const payday = state.settings.payday ?? 15
@@ -184,6 +189,36 @@ export function Home({
           </div>
         </div>
       </section>
+
+      {autoUndo.length > 0 && (
+        <section className="og-card list-card" aria-label="刚刚自动记的">
+          <div className="og-card-head is-plain">
+            <div className="og-card-copy">
+              <span className="og-eyebrow">24 小时内</span>
+              <h2>刚自动记的</h2>
+            </div>
+            <button className="og-link" onClick={onGoLedger} type="button">
+              全部
+            </button>
+          </div>
+          {autoUndo.map((tx) => (
+            <div className="auto-undo-row" key={tx.id}>
+              <span className="auto-undo-main">
+                <b>{tx.note?.trim() || findCategory(state.categories, tx.categoryId)?.name || '自动记账'}</b>
+                <em>
+                  {tx.type === 'income' ? '收入' : '支出'} · {formatDay(tx.date)}
+                </em>
+              </span>
+              <span className="auto-undo-amount">
+                {tx.type === 'income' ? '+' : '−'}¥{yuan(tx.amount)}
+              </span>
+              <button className="og-link" type="button" onClick={() => void deleteTx(tx.id)}>
+                撤销
+              </button>
+            </div>
+          ))}
+        </section>
+      )}
 
       <section className="og-card" aria-label="常记分类">
         <div className="og-card-head">

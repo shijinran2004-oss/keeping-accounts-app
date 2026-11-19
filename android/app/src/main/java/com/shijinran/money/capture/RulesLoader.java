@@ -31,9 +31,12 @@ final class RulesLoader {
                 byte[] buffer = new byte[8192];
                 int n;
                 while ((n = in.read(buffer)) > 0) out.write(buffer, 0, n);
-                ShotRules.init(new JSONObject(out.toString("UTF-8")));
+                JSONObject root = new JSONObject(out.toString("UTF-8"));
+                ShotRules.init(root);
+                // 通知栏规则和截图规则在同一份 JSON 里，一起装载
+                NotifyRules.init(root);
                 loaded = true;
-                Log.d(TAG, "capture rules loaded");
+                Log.d(TAG, "capture rules loaded silent=" + NotifyRules.isReady());
             } catch (Throwable t) {
                 Log.w(TAG, "capture rules load failed", t);
             }
