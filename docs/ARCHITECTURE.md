@@ -141,6 +141,8 @@ App / main
 | 加一个持久化字段 | `types.ts` 的 `LedgerState` + `data/normalize.ts` 的 `freshState` / `normalize` |
 | 改存储引擎 / 迁移校验 | `src/data/db/migrate.ts`；临时回退旧存储：`localStorage['shijinran.storage.engine']='ls'` |
 | 改备份格式 / 导入规则 | `src/data/backup/`（format / parse / apply / snapshot）；`DataSheet.tsx` 只负责界面 |
+| 改账单 CSV 导入导出 | `src/lib/import/`（csv / bill / categories / export）；界面在 `sheets/DataSheet.tsx` 的「账单」页签 |
+| 改快捷方式 | `android/app/src/main/res/xml/shortcuts.xml`（静态定义）+ `MainActivity.readIntent()`（接收动作）+ `App.tsx` 里的 `takeLaunchAction` / `onLaunchAction` |
 | 改小票识别规则 | `src/lib/ocr/`（amount / date / merchant / parse）；原生插件在 `android/app/src/main/java/com/shijinran/money/ocr/OcrPlugin.java` |
 | 改分享入口 / 截图监听 | `src/lib/capture/` 与 `android/app/src/main/java/com/shijinran/money/capture/`（`CapturePlugin` 收分享与开关、`ScreenshotWatchService` 监听 MediaStore、`CaptureStore` 记状态） |
 | 加内置分类 | `src/data/categories.ts` |
@@ -170,6 +172,12 @@ App / main
 预算按自然月；`salaryMonth` 是这笔钱归属的月份。发薪日只通过 `effectivePayday()` / `nextPayday()`
 影响到账倒计时和「几号到账」文案；`paydayOverrides['YYYY-MM']` 优先于默认 `payday`。
 
+## 账单 CSV 与快捷方式
+
+- 导入：`src/lib/import/` 是纯函数层（`csv.ts` 解码与切分、`bill.ts` 认支付宝与微信账单、`categories.ts` 关键词归类、`export.ts` 导出），`DataSheet` 的第三个页签只负责选文件、展示计划、确认导入。文件先按 UTF-8（BOM 会剥掉）解码，抛错再按 GBK（支付宝导出常见）解；表头在前 40 行内找，缺「交易时间 / 金额 / 收、支」直接报人话错误；「不计收支」、交易关闭 / 失败 / 退款的行计入跳过；金额一律转成整数分。导入前用 `planBillImport(解析结果, state.txs)` 和账本比对：签名是「日期 + 方向 + 金额 + 备注（去空白）」，按出现次数抵消，所以同一份账单导两次不会记重、同一天同价同店买两次也不会被吞。确认后 `useLedger().importTxs(drafts)` 先 `createSnapshot(..., 'before-import')` 再批量 `repo.putTx`，一次导入只更新一次内存 state。
+- 导出：`buildLedgerCsv(state)` 输出 UTF-8 BOM 的 CSV（日期 / 类型 / 分类 / 金额(元) / 备注，按日期升序），走和备份同一个 `exportBackupFile()`（原生写 Cache 再交给分享面板，浏览器直接下载）。
+- 快捷方式：`android/app/src/main/res/xml/shortcuts.xml` 定义「记一笔」，`MainActivity` 收到 `com.shijinran.money.action.ADD` 时把动作存进 `pendingAction`，网页用 `CapturePlugin.takeLaunchAction()` 取走（冷启动）；App 已在前台时 `CapturePlugin.pingLaunch()` 直接喊 `launchAction` 事件，`App.tsx` 两条路径都接成打开记账弹层。
+
 ## 视觉层
 
 `main.tsx` 先 import `styles/app.css`，再 import `styles/og.css`。前者是结构层，后者只做两件事：
@@ -184,7 +192,7 @@ App / main
 
 ## 版本与构建
 
-- `versionCode 71` / `versionName 1.4.31`（`android/app/build.gradle`）
+- `versionCode 74` / `versionName 1.4.34`（`android/app/build.gradle`）
 - 数据版本 `LedgerState.version = 1`，`normalize()` 读取时补全新增分类与设置
 - 存储：IndexedDB（库 `shijinran`，`txs` / `meta` / `snapshots` 三个 store），首次启动从 `localStorage` 一次性迁移；`localStorage['shijinran.storage.engine']='ls'` 可强制回退旧引擎
 - 备份：v2 容器带 `schema` / `checksum`，默认 gzip；导入先预览，支持覆盖 / 合并 / 仅设置与分类；导入、清空、恢复前自动快照（保留 5 份）

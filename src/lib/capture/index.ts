@@ -11,9 +11,11 @@ export {
   enableWatch,
   onAutoRecord,
   onCapture,
+  onLaunchAction,
   openNoticeSettings,
   requestIgnoreBattery,
   requestAllFiles,
   requestOverlay,
+  takeLaunchAction,
   watchStatus,
 } from './plugin'

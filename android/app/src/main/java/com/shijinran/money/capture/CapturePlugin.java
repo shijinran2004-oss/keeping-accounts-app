@@ -28,6 +28,7 @@ import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 import com.getcapacitor.annotation.Permission;
 import com.getcapacitor.annotation.PermissionCallback;
+import com.shijinran.money.MainActivity;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -67,6 +68,25 @@ public class CapturePlugin extends Plugin {
         if (plugin == null) return;
         plugin.getBridge().getActivity().runOnUiThread(() ->
                 plugin.notifyListeners("captureRecord", new JSObject(), true));
+    }
+
+    /** 桌面快捷方式/小组件点「记一笔」时喊一声：App 已在前台就直接开弹层 */
+    public static void pingLaunch() {
+        CapturePlugin plugin = instance;
+        if (plugin == null) return;
+        plugin.getBridge().getActivity().runOnUiThread(() -> {
+            JSObject ret = new JSObject();
+            ret.put("action", "add");
+            plugin.notifyListeners("launchAction", ret, true);
+        });
+    }
+
+    @PluginMethod
+    public void takeLaunchAction(PluginCall call) {
+        String action = MainActivity.takePendingAction();
+        JSObject ret = new JSObject();
+        ret.put("action", action == null ? "" : action);
+        call.resolve(ret);
     }
 
     @Override

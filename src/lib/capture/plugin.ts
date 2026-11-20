@@ -19,11 +19,17 @@ interface CaptureApi {
   /** 可选加速：给「所有文件访问」后不再等系统媒体库索引 */
   requestAllFiles(): Promise<{ allFiles?: string }>
   disableWatch(): Promise<WatchStatus>
+  /** 桌面快捷方式 / 小组件带过来的启动动作 */
+  takeLaunchAction(): Promise<{ action?: string }>
   addListener(
     event: 'capture',
     listener: (data: { source?: string }) => void,
   ): Promise<PluginListenerHandle>
   addListener(event: 'captureRecord', listener: () => void): Promise<PluginListenerHandle>
+  addListener(
+    event: 'launchAction',
+    listener: (data: { action?: string }) => void,
+  ): Promise<PluginListenerHandle>
   removeAllListeners(): Promise<void>
 }
 
@@ -147,6 +153,31 @@ export async function disableWatch(): Promise<WatchStatus> {
 export async function onAutoRecord(handler: () => void): Promise<() => void> {
   if (!captureAvailable()) return () => {}
   const handle = await capture().addListener('captureRecord', () => handler())
+  return () => {
+    void handle.remove()
+  }
+}
+
+/**
+ * 取走桌面快捷方式 / 小组件带过来的启动动作（只会返回一次，没有就返回 null）。
+ * 现在只有「记一笔」一个动作。
+ */
+export async function takeLaunchAction(): Promise<string | null> {
+  if (!captureAvailable()) return null
+  try {
+    const result = await capture().takeLaunchAction()
+    return result?.action ? result.action : null
+  } catch {
+    return null
+  }
+}
+
+/** App 已经开着时点快捷方式/小组件：订阅原生喊的那一声 */
+export async function onLaunchAction(handler: (action: string) => void): Promise<() => void> {
+  if (!captureAvailable()) return () => {}
+  const handle = await capture().addListener('launchAction', (data) => {
+    if (data?.action) handler(data.action)
+  })
   return () => {
     void handle.remove()
   }

@@ -39,6 +39,8 @@ export interface BackupFilePayload {
   text?: string
   /** 压缩后的二进制备份 */
   bytes?: Uint8Array
+  /** 分享面板里的说明文字，默认是账本备份 */
+  shareText?: string
 }
 
 /**
@@ -56,7 +58,7 @@ export async function exportBackupFile(file: BackupFilePayload): Promise<BackupE
     })
     await Share.share({
       title: file.fileName,
-      text: '使劲燃的钱 · 账本备份',
+      text: file.shareText ?? '使劲燃的钱 · 账本备份',
       url: uri,
       dialogTitle: '保存或发送备份文件',
     })

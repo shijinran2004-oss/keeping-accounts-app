@@ -169,6 +169,32 @@ export function LedgerProvider({ children }: { children: React.ReactNode }) {
     [persist],
   )
 
+  /**
+   * 批量导入账单：先存一份快照，任何一步失败都能从「数据备份」里恢复。
+   *
+   * 只新增不改旧账；同一批里每条给独立 id、createdAt 依次递减，
+   * 这样列表顺序和 CSV 里的顺序一致（新的在上）。
+   */
+  const importTxs = useCallback(async (drafts: TxDraft[]): Promise<{ added: number }> => {
+    const repo = repoRef.current
+    const current = stateRef.current
+    if (!repo || !current) throw new Error('账本还没打开')
+    if (!drafts.length) return { added: 0 }
+    await createSnapshot(repo, current, 'before-import')
+    const now = Date.now()
+    const txs: Tx[] = drafts.map((draft, index) => ({
+      ...draft,
+      id: uid(),
+      createdAt: now - index,
+    }))
+    await Promise.all(txs.map((tx) => repo.putTx(tx)))
+    const latest = stateRef.current ?? current
+    const next = { ...latest, txs: [...txs, ...latest.txs] }
+    stateRef.current = next
+    setState(next)
+    return { added: txs.length }
+  }, [])
+
   const updateTx = useCallback(
     (id: string, draft: TxDraft) => {
       const current = stateRef.current
@@ -327,6 +353,7 @@ export function LedgerProvider({ children }: { children: React.ReactNode }) {
     return {
       state,
       addTx,
+      importTxs,
       updateTx,
       deleteTx,
       saveSettings,
@@ -345,6 +372,7 @@ export function LedgerProvider({ children }: { children: React.ReactNode }) {
   }, [
     state,
     addTx,
+    importTxs,
     updateTx,
     deleteTx,
     saveSettings,

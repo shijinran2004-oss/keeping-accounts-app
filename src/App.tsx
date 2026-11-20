@@ -6,7 +6,15 @@ import { LedgerProvider, useLedger } from './data'
 import { Home, Ledger, Me, Onboarding, Stats } from './pages'
 import { AddSheet, TxDetailSheet } from './sheets'
 import type { CaptureImage, Tab, Tx, TxType } from './types'
-import { applyTheme, captureAvailable, closeTopModal, consumeCapture, onCapture } from './lib'
+import {
+  applyTheme,
+  captureAvailable,
+  closeTopModal,
+  consumeCapture,
+  onCapture,
+  onLaunchAction,
+  takeLaunchAction,
+} from './lib'
 import { AlertTriangle } from 'lucide-react'
 import { LaunchScreen, TabBar, ToastProvider } from './ui'
 
@@ -71,6 +79,26 @@ function Shell({ launching }: { launching: boolean }) {
       if (!alive) stop()
     })
     void consumeCapture().then(take)
+    return () => {
+      alive = false
+      off?.()
+    }
+  }, [])
+
+  // 桌面快捷方式 / 小组件点「记一笔」：冷启动和热启动都要能直接开弹层
+  useEffect(() => {
+    if (!captureAvailable()) return
+    let alive = true
+    let off: (() => void) | undefined
+    void takeLaunchAction().then((action) => {
+      if (alive && action === 'add') openAdd()
+    })
+    void onLaunchAction((action) => {
+      if (action === 'add') openAdd()
+    }).then((stop) => {
+      off = stop
+      if (!alive) stop()
+    })
     return () => {
       alive = false
       off?.()

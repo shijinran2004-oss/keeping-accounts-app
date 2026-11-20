@@ -5,6 +5,7 @@ import {
   Clipboard,
   Download,
   FileJson,
+  FileText,
   FolderOpen,
   History,
   Info,
@@ -15,8 +16,20 @@ import {
   Upload,
 } from 'lucide-react'
 import { buildBackup, buildPreview, parseBackup, useLedger } from '../data'
-import { backupFileName, exportBackupFile, formatBytes, readBackupFile, todayStr } from '../lib'
-import type { ImportMode, ParsedBackup, SnapshotKind, SnapshotMeta } from '../types'
+import {
+  BILL_SOURCE_LABEL,
+  backupFileName,
+  buildLedgerCsv,
+  decodeBillBytes,
+  exportBackupFile,
+  formatBytes,
+  ledgerCsvFileName,
+  parseBillCsv,
+  planBillImport,
+  readBackupFile,
+  todayStr,
+} from '../lib'
+import type { BillPlan, ImportMode, ParsedBackup, SnapshotKind, SnapshotMeta } from '../types'
 import { Sheet, useToast } from '../ui'
 
 const MODE_OPTIONS: { value: ImportMode; label: string }[] = [
@@ -52,9 +65,9 @@ export function DataSheet({
   onClose: () => void
   onClear: () => void
 }) {
-  const { state, importBackup, listSnapshots, restoreSnapshot } = useLedger()
+  const { state, importBackup, importTxs, listSnapshots, restoreSnapshot } = useLedger()
   const toast = useToast()
-  const [tab, setTab] = useState<'export' | 'import'>('export')
+  const [tab, setTab] = useState<'export' | 'import' | 'csv'>('export')
   const [busy, setBusy] = useState(false)
   const [legacy, setLegacy] = useState(false)
   const [exportInfo, setExportInfo] = useState<{ original: number; packed: number | null } | null>(null)
@@ -68,7 +81,13 @@ export function DataSheet({
   const [restoreId, setRestoreId] = useState('')
   const [confirmClear, setConfirmClear] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
+  const billFileRef = useRef<HTMLInputElement>(null)
   const parseSeq = useRef(0)
+  // 账单 CSV：选好文件先算导入计划，用户看过条数再确认写入
+  const [billName, setBillName] = useState('')
+  const [billPlan, setBillPlan] = useState<BillPlan | null>(null)
+  const [billError, setBillError] = useState('')
+  const [billImported, setBillImported] = useState<number | null>(null)
 
   useEffect(() => {
     if (!open) return
@@ -81,6 +100,10 @@ export function DataSheet({
     setRestoreId('')
     setConfirmClear(false)
     setBusy(false)
+    setBillName('')
+    setBillPlan(null)
+    setBillError('')
+    setBillImported(null)
   }, [open])
 
   // 打开时读一次快照列表
@@ -222,6 +245,61 @@ export function DataSheet({
     }
   }
 
+  const onBillFile = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    setBusy(true)
+    setBillError('')
+    setBillPlan(null)
+    setBillImported(null)
+    setBillName(file.name)
+    try {
+      const bytes = await readBackupFile(file)
+      const buffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer
+      const bill = parseBillCsv(decodeBillBytes(buffer))
+      setBillPlan(planBillImport(bill, state.txs))
+    } catch (error) {
+      setBillPlan(null)
+      setBillError(error instanceof Error ? error.message : '读不懂这份账单，请确认是支付宝或微信导出的 CSV')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const doBillImport = async () => {
+    if (!billPlan || busy) return
+    setBusy(true)
+    try {
+      const result = await importTxs(billPlan.drafts)
+      setBillPlan(null)
+      setBillImported(result.added)
+      toast('已导入 ' + result.added + ' 笔，可以在明细里核对', 'success')
+    } catch (error) {
+      toast(error instanceof Error ? error.message : '导入失败', 'error')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const doCsvExport = async () => {
+    if (busy) return
+    setBusy(true)
+    try {
+      const res = await exportBackupFile({
+        fileName: ledgerCsvFileName(todayStr()),
+        mime: 'text/csv',
+        text: buildLedgerCsv(state),
+        shareText: '使劲燃的钱 · 流水 CSV',
+      })
+      toast(res === 'downloaded' ? '流水已导出' : '流水文件已生成', 'success')
+    } catch {
+      toast('导出失败，稍后再试', 'error')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const doRestore = async (id: string) => {
     if (busy) return
     setBusy(true)
@@ -269,6 +347,15 @@ export function DataSheet({
           >
             <Upload size={15} strokeWidth={1.7} /> 导入
           </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === 'csv'}
+            className={tab === 'csv' ? 'is-active' : ''}
+            onClick={() => setTab('csv')}
+          >
+            <FileText size={15} strokeWidth={1.7} /> 账单
+          </button>
         </div>
 
         {tab === 'export' ? (
@@ -299,7 +386,7 @@ export function DataSheet({
               <Clipboard size={15} strokeWidth={1.7} /> 复制为文本备份
             </button>
           </>
-        ) : (
+        ) : tab === 'import' ? (
           <>
             <p className="hint">
               选备份文件，或把备份内容粘到下面。读取后先预览，确认无误再导入；导入前会自动存一份快照。
@@ -390,6 +477,96 @@ export function DataSheet({
                 </button>
               </div>
             ) : null}
+          </>
+        ) : (
+          <>
+            <p className="hint">
+              支持支付宝、微信导出的账单 CSV。导入前先和账本比对，同一份账单导入两次不会记重；写入前会自动存一份快照。
+            </p>
+            <input
+              ref={billFileRef}
+              type="file"
+              accept=".csv,text/csv"
+              className="file-input"
+              onChange={onBillFile}
+            />
+            <button
+              type="button"
+              className="btn-primary"
+              onClick={() => billFileRef.current?.click()}
+              disabled={busy}
+            >
+              <FolderOpen size={16} strokeWidth={1.8} /> 选择账单 CSV
+            </button>
+            {billName ? (
+              <p className="backup-picked">
+                <FileText size={14} strokeWidth={1.7} /> {billName}
+              </p>
+            ) : null}
+            {billError ? (
+              <p className="backup-status is-error">
+                <AlertTriangle size={14} strokeWidth={1.8} /> {billError}
+              </p>
+            ) : null}
+
+            {billPlan ? (
+              <div className="backup-preview">
+                <div className="backup-preview-head">
+                  <ShieldCheck size={18} strokeWidth={1.6} />
+                  <div>
+                    <b>{BILL_SOURCE_LABEL[billPlan.source]}账单</b>
+                    <span>
+                      {billPlan.dateFrom} 至 {billPlan.dateTo}
+                    </span>
+                  </div>
+                </div>
+                <div className="backup-preview-stats">
+                  <span>账单 {billPlan.total} 行</span>
+                  <span>将新增 {billPlan.fresh} 笔</span>
+                  <span>已有 {billPlan.duplicate} 笔</span>
+                  {billPlan.skipped ? <span>跳过 {billPlan.skipped} 行</span> : null}
+                </div>
+                {billPlan.fallback ? (
+                  <p className="hint">
+                    其中 {billPlan.fallback} 笔没认出分类，先记到「其他」，之后可以在明细里改。
+                  </p>
+                ) : null}
+                {billPlan.fresh === 0 ? <p className="hint">这些记录账本里都已经有了，不用再导入。</p> : null}
+                <button
+                  type="button"
+                  className="btn-primary"
+                  onClick={doBillImport}
+                  disabled={busy || billPlan.fresh === 0}
+                >
+                  <ShieldCheck size={16} strokeWidth={1.8} />{' '}
+                  {busy ? '正在导入…' : '确认导入 ' + billPlan.fresh + ' 笔'}
+                </button>
+              </div>
+            ) : null}
+            {billImported !== null ? (
+              <p className="backup-status">
+                <ShieldCheck size={14} strokeWidth={1.8} /> 已导入 {billImported} 笔
+              </p>
+            ) : null}
+
+            <div className="backup-card">
+              <div className="backup-file">
+                <FileText size={20} strokeWidth={1.5} />
+                <div>
+                  <b>{ledgerCsvFileName(todayStr())}</b>
+                  <span>{state.txs.length} 笔记录 · 日期 / 类型 / 分类 / 金额 / 备注</span>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={doCsvExport}
+                disabled={busy || !state.txs.length}
+              >
+                <Download size={16} strokeWidth={1.8} /> 导出流水 CSV
+              </button>
+            </div>
+            <p className="hint">导出的 CSV 带 BOM，Excel 打开中文不乱码，也能拿去别的记账软件导入。</p>
           </>
         )}
 

@@ -115,6 +115,8 @@ export interface LedgerState {
 export interface LedgerApi {
   state: LedgerState
   addTx: (draft: TxDraft) => Tx
+  /** 批量导入账单：写入前自动存快照，返回实际新增条数 */
+  importTxs: (drafts: TxDraft[]) => Promise<{ added: number }>
   updateTx: (id: string, draft: TxDraft) => void
   deleteTx: (id: string) => void
   saveSettings: (patch: Partial<Settings>) => void
@@ -342,6 +344,56 @@ export interface ToastItem {
 
 /** 导出结果：原生端走系统分享面板，浏览器直接下载 */
 export type BackupExportResult = 'shared' | 'downloaded'
+
+/* ============================================================
+ * 7. 账单 CSV（支付宝 / 微信）
+ * ========================================================== */
+
+/** 支持导入的账单来源 */
+export type BillSource = 'alipay' | 'wechat'
+
+/** 账单里的一行，金额单位：分 */
+export interface BillRow {
+  date: string
+  type: TxType
+  amount: number
+  /** 交易对方 / 商户 */
+  merchant: string
+  /** 已经拼好的备注 */
+  note: string
+  /** 猜测的分类 id；猜不到是 other / other-income */
+  categoryId: string
+}
+
+/** 解析后的账单 */
+export interface ParsedBill {
+  source: BillSource
+  rows: BillRow[]
+  /** 账单里一共有多少行数据 */
+  total: number
+  /** 不计收支、交易关闭等被跳过的行数 */
+  skipped: number
+  dateFrom: string
+  dateTo: string
+}
+
+/** 导入计划：真正要写入的草稿 + 预览数字 */
+export interface BillPlan {
+  source: BillSource
+  drafts: TxDraft[]
+  /** 账单总行数 */
+  total: number
+  /** 将新增 */
+  fresh: number
+  /** 与账本已有记录相同，跳过 */
+  duplicate: number
+  /** 不计收支、交易关闭等，跳过 */
+  skipped: number
+  dateFrom: string
+  dateTo: string
+  /** 猜不到分类、落到「其他」的行数 */
+  fallback: number
+}
 
 /* ============================================================
  * 7. 存储层（IndexedDB 主存储 / localStorage 回退）

@@ -4,4 +4,6 @@
     <string name="title_activity_main">使劲燃的钱</string>
     <string name="package_name">com.shijinran.money</string>
     <string name="custom_url_scheme">com.shijinran.money</string>
+    <string name="shortcut_add">记一笔</string>
+    <string name="shortcut_add_long">直接打开记账键盘</string>
 </resources>
