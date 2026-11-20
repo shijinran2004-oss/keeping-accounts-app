@@ -16,6 +16,7 @@ import type {
 import { freshState, normalize, uid } from './normalize'
 import { openLedger, writeLegacyMirror } from './db'
 import { autoRecordToTx } from './auto'
+import { merchantOfNote, rememberMerchant, syncCategoryHints } from './hints'
 import { ackAutoRecords, drainAutoRecords as readAutoRecords, onAutoRecord } from '../lib'
 import {
   applyImport,
@@ -58,26 +59,38 @@ export function LedgerProvider({ children }: { children: React.ReactNode }) {
         const items = await readAutoRecords()
         if (!items.length) return base
         const known = new Set(base.txs.map((tx) => tx.id))
+        const memory = base.settings.merchantRules ?? {}
         const added: Tx[] = []
         for (const item of items) {
-          const tx = autoRecordToTx(item, base.categories)
+          const tx = autoRecordToTx(item, base.categories, memory)
           if (tx && !known.has(tx.id)) added.push(tx)
         }
-        if (added.length) {
+        // 认出来的商户顺手记住，下次同一家店直接落到对的分类
+        let settings = base.settings
+        for (const tx of added) settings = rememberMerchant(settings, merchantOfNote(tx.note), tx.categoryId)
+        const settingsChanged = settings !== base.settings
+        if (added.length || settingsChanged) {
           try {
-            await Promise.all(added.map((tx) => repo.putTx(tx)))
+            await Promise.all([
+              ...added.map((tx) => repo.putTx(tx)),
+              ...(settingsChanged ? [repo.putSettings(settings)] : []),
+            ])
           } catch (error) {
             console.error('[ledger] 自动记账写入失败', error)
             return base
           }
         }
         await ackAutoRecords()
-        if (!added.length) return base
+        if (!added.length && !settingsChanged) return base
         const latest = stateRef.current ?? base
         const inState = new Set(latest.txs.map((tx) => tx.id))
         const fresh = added.filter((tx) => !inState.has(tx.id)).reverse()
-        if (!fresh.length) return latest
-        const next = { ...latest, txs: [...fresh, ...latest.txs] }
+        if (!fresh.length && !settingsChanged) return latest
+        const next = {
+          ...latest,
+          txs: fresh.length ? [...fresh, ...latest.txs] : latest.txs,
+          settings: settingsChanged ? settings : latest.settings,
+        }
         stateRef.current = next
         setState(next)
         return next
@@ -109,6 +122,8 @@ export function LedgerProvider({ children }: { children: React.ReactNode }) {
         setState(initial)
         // 一周没备份就自动补一份，失败只写日志
         void maybeWeeklySnapshot(opened.repo, initial)
+        // 把分类关键词表和商户记忆推给原生：截图弹卡时能直接猜对分类
+        void syncCategoryHints(initial.categories, initial.settings)
       })
       .catch((error: unknown) => {
         if (!alive) return
@@ -149,6 +164,16 @@ export function LedgerProvider({ children }: { children: React.ReactNode }) {
     if (state && repoRef.current?.engine === 'idb') writeLegacyMirror(state)
   }, [state])
 
+  // 分类关键词或商户记忆变了：防抖 300ms 再推给原生，改主题之类的设置不用惊动它
+  useEffect(() => {
+    if (!state) return
+    const timer = window.setTimeout(() => {
+      void syncCategoryHints(state.categories, state.settings)
+    }, 300)
+    return () => window.clearTimeout(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state?.categories, state?.settings.merchantRules])
+
   /** 所有落盘都走这里：界面先更新，写入失败只提示、不打断记账 */
   const persist = useCallback((work: (repo: LedgerRepository) => Promise<unknown>) => {
     const repo = repoRef.current
@@ -162,8 +187,18 @@ export function LedgerProvider({ children }: { children: React.ReactNode }) {
   const addTx = useCallback(
     (draft: TxDraft) => {
       const tx: Tx = { ...draft, id: uid(), createdAt: Date.now() }
-      setState((s) => (s ? { ...s, txs: [tx, ...s.txs] } : s))
-      persist((repo) => repo.putTx(tx))
+      const current = stateRef.current
+      // 手动记的一笔也参与商户记忆：备注里认得出店名就记住它归这个分类
+      const settings = current
+        ? rememberMerchant(current.settings, merchantOfNote(draft.note), draft.categoryId)
+        : null
+      const settingsChanged = !!settings && !!current && settings !== current.settings
+      setState((s) => (s ? { ...s, txs: [tx, ...s.txs], settings: settings ?? s.settings } : s))
+      if (settingsChanged && settings) {
+        persist((repo) => Promise.all([repo.putTx(tx), repo.putSettings(settings)]))
+      } else {
+        persist((repo) => repo.putTx(tx))
+      }
       return tx
     },
     [persist],
@@ -187,9 +222,20 @@ export function LedgerProvider({ children }: { children: React.ReactNode }) {
       id: uid(),
       createdAt: now - index,
     }))
-    await Promise.all(txs.map((tx) => repo.putTx(tx)))
+    // 导入的商户也进记忆：下次截图认出这家店就能直接落到同一分类
+    let settings = current.settings
+    for (const tx of txs) settings = rememberMerchant(settings, merchantOfNote(tx.note), tx.categoryId)
+    const settingsChanged = settings !== current.settings
+    await Promise.all([
+      ...txs.map((tx) => repo.putTx(tx)),
+      ...(settingsChanged ? [repo.putSettings(settings)] : []),
+    ])
     const latest = stateRef.current ?? current
-    const next = { ...latest, txs: [...txs, ...latest.txs] }
+    const next = {
+      ...latest,
+      txs: [...txs, ...latest.txs],
+      settings: settingsChanged ? settings : latest.settings,
+    }
     stateRef.current = next
     setState(next)
     return { added: txs.length }
@@ -201,8 +247,19 @@ export function LedgerProvider({ children }: { children: React.ReactNode }) {
       const before = current?.txs.find((t) => t.id === id)
       if (!current || !before) return
       const next: Tx = { ...before, ...draft, createdAt: Date.now() }
-      setState({ ...current, txs: current.txs.map((t) => (t.id === id ? next : t)) })
-      persist((repo) => repo.putTx(next))
+      // 改分类 / 改备注时把商户记忆一起更新，认过一次就不会再猜错
+      const settings = rememberMerchant(current.settings, merchantOfNote(next.note), next.categoryId)
+      const settingsChanged = settings !== current.settings
+      setState({
+        ...current,
+        txs: current.txs.map((t) => (t.id === id ? next : t)),
+        settings: settingsChanged ? settings : current.settings,
+      })
+      if (settingsChanged) {
+        persist((repo) => Promise.all([repo.putTx(next), repo.putSettings(settings)]))
+      } else {
+        persist((repo) => repo.putTx(next))
+      }
     },
     [persist],
   )

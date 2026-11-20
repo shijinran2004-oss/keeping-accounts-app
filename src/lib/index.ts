@@ -38,8 +38,12 @@ export {
 export type { AmountCandidate, DateCandidate, MerchantCandidate, ParseOptions } from './ocr'
 export {
   BILL_SOURCE_LABEL,
+  EXPENSE_RULES,
+  INCOME_RULES,
   buildLedgerCsv,
+  categoryKeywords,
   decodeBillBytes,
+  guessCategoryId,
   ledgerCsvFileName,
   parseBillCents,
   parseBillCsv,
@@ -62,6 +66,7 @@ export {
   requestIgnoreBattery,
   requestAllFiles,
   requestOverlay,
+  setCategoryHints,
   takeLaunchAction,
   watchStatus,
 } from './capture'

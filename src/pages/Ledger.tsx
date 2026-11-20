@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { CalendarDays, ReceiptText } from 'lucide-react'
+import { CalendarDays, ReceiptText, Search, X } from 'lucide-react'
 import { findCategory, useLedger } from '../data'
 import {
   addDays,
@@ -23,11 +23,19 @@ import {
   todayStr,
   weekdayLabel,
 } from '../lib'
-import type { CalendarCell, CalendarMode, Tx } from '../types'
-import { Empty, Money, MonthCalendar, SparkSummary, TxRow } from '../ui'
+import type { CalendarCell, CalendarMode, Tx, TxType } from '../types'
+import { CategoryIcon, Empty, Money, MonthCalendar, SparkSummary, TxRow } from '../ui'
+
+/** 筛选条的收支三档 */
+const TYPE_FILTERS: { id: 'all' | TxType; label: string }[] = [
+  { id: 'all', label: '全部' },
+  { id: 'expense', label: '支出' },
+  { id: 'income', label: '收入' },
+]
 
 /**
- * 明细：本期趋势、月历、选中日流水。
+ * 明细：本期趋势、月历、选中日流水；顶部一条搜索 + 分类/收支筛选。
+ * 一开筛选就把日视图换成全账本结果，翻月份不用先取消筛选。
  * 点某笔流水只回调 onOpenTx，详情弹层由 App 统一挂载。
  */
 export function Ledger({ onOpenTx, onAdd }: { onOpenTx: (tx: Tx) => void; onAdd: () => void }) {
@@ -36,6 +44,9 @@ export function Ledger({ onOpenTx, onAdd }: { onOpenTx: (tx: Tx) => void; onAdd:
   const [selected, setSelected] = useState(todayStr())
   const [mode, setMode] = useState<CalendarMode>('amount')
   const [weekOnly, setWeekOnly] = useState(false)
+  const [query, setQuery] = useState('')
+  const [typeFilter, setTypeFilter] = useState<'all' | TxType>('all')
+  const [categoryFilter, setCategoryFilter] = useState<string | null>(null)
 
   const payday = state.settings.payday ?? 15
   const salaryLag = state.settings.salaryLag ?? 0
@@ -107,6 +118,35 @@ export function Ledger({ onOpenTx, onAdd }: { onOpenTx: (tx: Tx) => void; onAdd:
   const dayIncome = sumAmount(dayTxs, 'income')
   const badge = selected === today ? '今天' : selected === addDays(today, -1) ? '昨天' : ''
 
+  // ---- 搜索与筛选：备注、分类名、金额都能搜 ----
+  const keyword = query.trim().toLowerCase()
+  const filtering = keyword !== '' || typeFilter !== 'all' || categoryFilter !== null
+  const filterCategories = state.categories.filter(
+    (category) => typeFilter === 'all' || category.type === typeFilter,
+  )
+
+  function matchTx(tx: Tx) {
+    if (typeFilter !== 'all' && tx.type !== typeFilter) return false
+    if (categoryFilter && tx.categoryId !== categoryFilter) return false
+    if (!keyword) return true
+    const category = findCategory(state.categories, tx.categoryId)
+    const haystack = `${tx.note} ${category?.name ?? ''} ${(tx.amount / 100).toFixed(2)}`
+    return haystack.toLowerCase().includes(keyword)
+  }
+
+  const searchTxs = useMemo(() => {
+    if (!filtering) return []
+    return state.txs
+      .filter(matchTx)
+      .sort((a, b) => (a.date === b.date ? b.createdAt - a.createdAt : b.date.localeCompare(a.date)))
+  }, [state.txs, filtering, keyword, typeFilter, categoryFilter])
+
+  function resetFilters() {
+    setQuery('')
+    setTypeFilter('all')
+    setCategoryFilter(null)
+  }
+
   function shiftMonth(delta: number) {
     const nextStart = shiftCycle(range.start, delta, payday)
     const nextRange = cycleRange(nextStart, payday, salaryLag)
@@ -136,79 +176,180 @@ export function Ledger({ onOpenTx, onAdd }: { onOpenTx: (tx: Tx) => void; onAdd:
         </div>
       </header>
 
-      <SparkSummary
-        label={isCurrent ? '本月支出' : `${parseDate(range.start).getMonth() + 1} 月支出`}
-        spent={sum.expense}
-        income={sum.income}
-        balance={sum.income - sum.expense}
-        spentPct={flow.spentPct}
-        points={points}
-        comparePct={comparePct}
-      />
-
-      <MonthCalendar
-        month={range.start}
-        title={formatMonth(range.start)}
-        caption={`${salaryMonthLabel(range.salaryMonth)} · ${actualPayday} 号到账`}
-        selected={selected}
-        cells={cells}
-        mode={mode}
-        weekOnly={weekOnly}
-        onChangeMonth={shiftMonth}
-        onSelect={pickDate}
-        onToday={goToday}
-        onMode={setMode}
-        onToggleWeek={() => setWeekOnly((v) => !v)}
-      />
-
-      <section className="day-group" key={selected}>
-        <div className="day-head">
-          <span>
-            {formatDay(selected)} · {weekdayLabel(selected)}
-            {badge && <em>{badge}</em>}
-          </span>
-          <span>
-            {dayExpense > 0 && (
-              <>
-                支出 <Money cents={dayExpense} symbol={false} decimals="never" />
-              </>
-            )}
-            {dayExpense > 0 && dayIncome > 0 && ' · '}
-            {dayIncome > 0 && (
-              <>
-                收入 <Money cents={dayIncome} symbol={false} decimals="never" />
-              </>
-            )}
-            {!dayExpense && !dayIncome && '没有收支'}
-          </span>
+      <div className="ledger-filters">
+        <div className="filter-search">
+          <Search size={15} aria-hidden="true" />
+          <input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="搜备注、分类或金额"
+            aria-label="搜索流水"
+          />
+          {query !== '' && (
+            <button type="button" className="filter-clear" onClick={() => setQuery('')} aria-label="清空搜索">
+              <X size={14} />
+            </button>
+          )}
         </div>
-
-        {dayTxs.length === 0 ? (
-          <div className="card">
-            <Empty
-              icon={CalendarDays}
-              title="这一天还没有记账"
-              hint="点日历上的其他日期翻翻，或者现在补一笔。"
-              action={
-                <button type="button" className="btn-ghost sm" onClick={onAdd}>
-                  去记一笔
-                </button>
-              }
-            />
-          </div>
-        ) : (
-          <div className="card list-card">
-            {dayTxs.map((tx) => (
-              <TxRow
-                key={tx.id}
-                tx={tx}
-                category={findCategory(state.categories, tx.categoryId)}
-                onClick={() => onOpenTx(tx)}
-              />
+        <div className="filter-row">
+          <div className="mini-seg filter-seg" role="tablist" aria-label="收支筛选">
+            {TYPE_FILTERS.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                role="tab"
+                aria-selected={typeFilter === item.id}
+                className={typeFilter === item.id ? 'is-active' : ''}
+                onClick={() => setTypeFilter(item.id)}
+              >
+                {item.label}
+              </button>
             ))}
           </div>
-        )}
-      </section>
+          {filtering && (
+            <button type="button" className="filter-reset" onClick={resetFilters}>
+              清掉
+            </button>
+          )}
+        </div>
+        <div className="filter-chips">
+          <button
+            type="button"
+            className={`filter-chip${categoryFilter === null ? ' is-on' : ''}`}
+            onClick={() => setCategoryFilter(null)}
+          >
+            全部分类
+          </button>
+          {filterCategories.map((category) => (
+            <button
+              key={category.id}
+              type="button"
+              className={`filter-chip${categoryFilter === category.id ? ' is-on' : ''}`}
+              onClick={() => setCategoryFilter(categoryFilter === category.id ? null : category.id)}
+            >
+              <CategoryIcon name={category.icon} size={13} />
+              {category.name}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* 筛选时把月历和本月汇总收起来，直接给结果，不用往下翻 */}
+      {!filtering && (
+        <>
+          <SparkSummary
+            label={isCurrent ? '本月支出' : `${parseDate(range.start).getMonth() + 1} 月支出`}
+            spent={sum.expense}
+            income={sum.income}
+            balance={sum.income - sum.expense}
+            spentPct={flow.spentPct}
+            points={points}
+            comparePct={comparePct}
+          />
+
+          <MonthCalendar
+            month={range.start}
+            title={formatMonth(range.start)}
+            caption={`${salaryMonthLabel(range.salaryMonth)} · ${actualPayday} 号到账`}
+            selected={selected}
+            cells={cells}
+            mode={mode}
+            weekOnly={weekOnly}
+            onChangeMonth={shiftMonth}
+            onSelect={pickDate}
+            onToday={goToday}
+            onMode={setMode}
+            onToggleWeek={() => setWeekOnly((v) => !v)}
+          />
+        </>
+      )}
+
+      {filtering ? (
+        <section className="day-group" key="search">
+          <div className="day-head">
+            <span>搜索结果 · {searchTxs.length} 笔</span>
+            <span>
+              支出 <Money cents={sumAmount(searchTxs, 'expense')} symbol={false} decimals="never" />
+              {' · '}
+              收入 <Money cents={sumAmount(searchTxs, 'income')} symbol={false} decimals="never" />
+            </span>
+          </div>
+          {searchTxs.length === 0 ? (
+            <div className="card">
+              <Empty
+                icon={Search}
+                title="没找到符合条件的记录"
+                hint="换个关键词，或者把筛选条件清掉。"
+                action={
+                  <button type="button" className="btn-ghost sm" onClick={resetFilters}>
+                    清掉筛选
+                  </button>
+                }
+              />
+            </div>
+          ) : (
+            <div className="card list-card">
+              {searchTxs.map((tx) => (
+                <TxRow
+                  key={tx.id}
+                  tx={tx}
+                  category={findCategory(state.categories, tx.categoryId)}
+                  onClick={() => onOpenTx(tx)}
+                />
+              ))}
+            </div>
+          )}
+        </section>
+      ) : (
+        <section className="day-group" key={selected}>
+          <div className="day-head">
+            <span>
+              {formatDay(selected)} · {weekdayLabel(selected)}
+              {badge && <em>{badge}</em>}
+            </span>
+            <span>
+              {dayExpense > 0 && (
+                <>
+                  支出 <Money cents={dayExpense} symbol={false} decimals="never" />
+                </>
+              )}
+              {dayExpense > 0 && dayIncome > 0 && ' · '}
+              {dayIncome > 0 && (
+                <>
+                  收入 <Money cents={dayIncome} symbol={false} decimals="never" />
+                </>
+              )}
+              {!dayExpense && !dayIncome && '没有收支'}
+            </span>
+          </div>
+
+          {dayTxs.length === 0 ? (
+            <div className="card">
+              <Empty
+                icon={CalendarDays}
+                title="这一天还没有记账"
+                hint="点日历上的其他日期翻翻，或者现在补一笔。"
+                action={
+                  <button type="button" className="btn-ghost sm" onClick={onAdd}>
+                    去记一笔
+                  </button>
+                }
+              />
+            </div>
+          ) : (
+            <div className="card list-card">
+              {dayTxs.map((tx) => (
+                <TxRow
+                  key={tx.id}
+                  tx={tx}
+                  category={findCategory(state.categories, tx.categoryId)}
+                  onClick={() => onOpenTx(tx)}
+                />
+              ))}
+            </div>
+          )}
+        </section>
+      )}
     </div>
   )
 }

@@ -1,5 +1,11 @@
 import { Capacitor, registerPlugin, type PluginListenerHandle } from '@capacitor/core'
-import type { AutoRecord, CaptureImage, CaptureSource, WatchStatus } from '../../types'
+import type {
+  AutoRecord,
+  CaptureImage,
+  CaptureSource,
+  CategoryHintPayload,
+  WatchStatus,
+} from '../../types'
 
 /**
  * 原生 Capture 插件（Android 侧见 capture/CapturePlugin.java）。
@@ -11,6 +17,8 @@ interface CaptureApi {
   drainAutoRecords(): Promise<{ records?: AutoRecord[] }>
   /** 告诉原生这批记录已经写进账本；不清的话下次还会再给一遍 */
   ackAutoRecords(): Promise<void>
+  /** 把分类关键词表和商户记忆推给原生，截图弹卡时直接猜分类 */
+  setCategoryHints(options: CategoryHintPayload): Promise<{ ok?: boolean }>
   watchStatus(): Promise<WatchStatus>
   enableWatch(): Promise<WatchStatus>
   openNoticeSettings(): Promise<void>
@@ -91,6 +99,19 @@ export async function ackAutoRecords(): Promise<void> {
     await capture().ackAutoRecords()
   } catch {
     // 原生没清掉也没关系：下一轮拿到的还是这一批，按 id 去重
+  }
+}
+
+/**
+ * 把分类关键词表和商户记忆推给原生。Web 端没有插件，直接跳过；
+ * 原生更新失败也不影响记账，只是弹卡时猜分类会退回内置规则。
+ */
+export async function setCategoryHints(payload: CategoryHintPayload): Promise<void> {
+  if (!captureAvailable()) return
+  try {
+    await capture().setCategoryHints(payload)
+  } catch {
+    // 老版本原生没有这个方法，忽略
   }
 }
 

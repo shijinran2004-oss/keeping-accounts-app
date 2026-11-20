@@ -79,6 +79,10 @@ public class ScreenshotWatchService extends Service {
     static final String EXTRA_AMOUNT = "capture_amount";
     static final String EXTRA_TEXT = "capture_text";
     static final String EXTRA_PATH = "capture_path";
+    /** 识别时顺手认出来的商户名 / 交易单号 / 建议分类，确认记账时一起带给前端 */
+    static final String EXTRA_MERCHANT = "capture_merchant";
+    static final String EXTRA_ORDER_ID = "capture_order_id";
+    static final String EXTRA_CATEGORY = "capture_category";
 
     static volatile boolean running = false;
     /** 服务实例：闹钟自检醒来时直接戳它，不用重新拉起服务 */
@@ -124,6 +128,8 @@ public class ScreenshotWatchService extends Service {
         createChannels();
         // 认金额的规则表放在 assets 里，先装载再开始监听；装载失败时 ShotRules 一律不弹卡
         RulesLoader.ensure(this);
+        // 分类提示和商户记忆是前端推过来的，后台服务自己也得有一份，截图时才能直接猜分类
+        CategoryHints.load(this);
         // 用户给了「所有文件访问」时，直接盯着截图目录，截完图 1 秒内就能弹卡，不用等系统媒体库
         syncFastWatcher();
         startForegroundCompat();
@@ -579,8 +585,9 @@ public class ScreenshotWatchService extends Service {
                 Log.d(TAG, "skip id=" + id + " no amount in " + (System.currentTimeMillis() - begin) + "ms");
                 return;
             }
-            // 10 分钟内同一张账单又截了一次：合并到已有的那张，不再重复弹
-            String dedupe = ShotRules.dedupeKey(amount, shot.text);
+            // 10 分钟内同一张账单又截了一次：合并到已有的那张，不再重复弹。
+            // 有交易单号就按单号算：同一笔账单重截会命中，同金额的两笔不同消费不会互相吃掉
+            String dedupe = ShotRules.dedupeKey(amount, shot.text, shot.orderId);
             if (CaptureStore.seenRecently(this, dedupe, System.currentTimeMillis(), PENDING_TTL_MS)) {
                 saved.delete();
                 if (overlay) CaptureOverlay.dismissIfKey(key);
@@ -589,15 +596,19 @@ public class ScreenshotWatchService extends Service {
             }
             CaptureStore.markRecent(this, dedupe, System.currentTimeMillis());
             JSONObject evicted = CaptureStore.addShot(this, key, notifyId, saved.getAbsolutePath(),
-                    centsOf(amount), shot.text);
+                    centsOf(amount), shot.text, shot.merchant, shot.categoryId, shot.orderId);
             if (evicted != null) dropShot(evicted);
             // 认出金额之后才把卡片滑下来：桌面、聊天这类没金额的截图全程一点动静都没有
             // （以前先弹「正在认金额…」再收走，屏幕顶上会闪一下），卡片一出现就是金额版。
             // 悬浮窗被 ROM 拦掉时（appops 拒绝、后台弹窗限制等）卡片根本不会出现，
             // 下面用 isShowing() 判断，拦掉了就退回系统横幅。
             long tBeforeShow = System.currentTimeMillis();
+            // 卡片上要能当场改分类：按关键词 + 商户记忆给前几个候选，选中的排最前
+            List<CategoryHints.Guess> guesses = CategoryHints.suggest(shot.text, shot.merchant,
+                    shot.categoryId, CategoryHints.DEFAULT_LIMIT);
             if (overlay) CaptureOverlay.showFound(this, key, notifyId, saved.getAbsolutePath(),
-                    thumb(bitmap), amount, centsOf(amount), shot.text);
+                    thumb(bitmap), amount, centsOf(amount), shot.text,
+                    shot.merchant, shot.orderId, shot.categoryId, guesses);
             long tShown = System.currentTimeMillis();
             Log.d(TAG, "timing age=" + ageMs + " decode=" + (tDecode - begin)
                     + " cache=" + (tCache - tDecode) + " ocr=" + (tOcr - tCache)
@@ -610,13 +621,15 @@ public class ScreenshotWatchService extends Service {
                 dropOtherShots(key);
                 CaptureStore.bumpStat(this, "shown");
                 // 卡片已经给人看过了，通知只留一条安静的备份，点开就能补记
-                notifyFound(notifyId, key, amount, saved.getAbsolutePath(), shot.text, false);
+                notifyFound(notifyId, key, amount, saved.getAbsolutePath(), shot.text,
+                        shot.merchant, shot.orderId, shot.categoryId, false);
             } else {
                 // 没有悬浮窗权限，或者 ROM 把后台弹窗拦掉了（小米/HyperOS 常见）：
                 // 退回系统横幅。按钮画在通知内容里，折叠着也能点，
                 // 不能再发静音通知，否则它会掉进「更多通知」文件夹里没人看见。
                 if (overlay) CaptureOverlay.dismissIfKey(key);
-                notifyFound(notifyId, key, amount, saved.getAbsolutePath(), shot.text, true);
+                notifyFound(notifyId, key, amount, saved.getAbsolutePath(), shot.text,
+                        shot.merchant, shot.orderId, shot.categoryId, true);
             }
             posted = true;
             CaptureStore.setLastNoticeAt(this, System.currentTimeMillis());
@@ -868,13 +881,27 @@ public class ScreenshotWatchService extends Service {
         final String text;
         /** 判定时有没有拿到行坐标（false = 退回纯文本规则） */
         final boolean layout;
+        /** 「商户全称 / 收款方」之类字段认出来的商户名，认不出是 null */
+        final String merchant;
+        /** 按关键词 + 商户记忆猜出来的分类 id，猜不出是 null */
+        final String categoryId;
+        /** 「交易单号」之类字段抽出来的编号，用来做精确去重 */
+        final String orderId;
 
         OcrShot(String amount, boolean accepted, String reason, String text, boolean layout) {
+            this(amount, accepted, reason, text, layout, null, null, null);
+        }
+
+        OcrShot(String amount, boolean accepted, String reason, String text, boolean layout,
+                String merchant, String categoryId, String orderId) {
             this.amount = amount;
             this.accepted = accepted;
             this.reason = reason;
             this.text = text == null ? "" : text;
             this.layout = layout;
+            this.merchant = merchant;
+            this.categoryId = categoryId;
+            this.orderId = orderId;
         }
     }
 
@@ -912,7 +939,10 @@ public class ScreenshotWatchService extends Service {
             String text = kept.toString();
             // 判定交给 ShotRules：金额要有付款语境、候选要有明显领先，收入/退款方向不算支出
             ShotRules.Judgement judged = ShotRules.judge(text, lines);
-            return new OcrShot(judged.amount, judged.reason == null, judged.reason, text, judged.layout);
+            // 认出的商户名 + 关键词/记忆算出建议分类；猜不出也不要紧，前端写账本时还会再兜一次
+            String categoryId = CategoryHints.guessId(text, judged.merchant);
+            return new OcrShot(judged.amount, judged.reason == null, judged.reason, text, judged.layout,
+                    judged.merchant, categoryId, judged.orderId);
         } catch (Throwable t) {
             return null;
         } finally {
@@ -954,17 +984,18 @@ public class ScreenshotWatchService extends Service {
     /**
      * 一张截图一条通知：两张同时待确认时各自有 id，都能单独点「直接记一笔」。
      */
-    private void notifyFound(int notifyId, long key, String amount, String path, String ocrText, boolean pop) {
+    private void notifyFound(int notifyId, long key, String amount, String path, String ocrText,
+                             String merchant, String orderId, String categoryId, boolean pop) {
         String text = "点「直接记一笔」马上入账，点「取消」忽略这张截图";
         // 连续截好几张时，只有第一条振动，避免口袋里的手机连震一串
         boolean vibrate = System.currentTimeMillis() - CaptureStore.lastNoticeAt(this) > QUIET_VIBRATE_MS;
         // 按钮画进内容视图里：系统对普通通知只在展开后才显示 action 按钮，
         // 小米这类默认折叠的机型上用户只会看到一行字，一个按钮都点不到
-        RemoteViews view = foundView(amount, key, notifyId, ocrText);
+        RemoteViews view = foundView(amount, key, notifyId, ocrText, merchant, orderId, categoryId);
 
         NotificationCompat.Builder builder = new NotificationCompat.Builder(this, CHANNEL_FOUND)
                 .setSmallIcon(R.mipmap.ic_launcher)
-                .setContentTitle("识别到 ¥" + amount)
+                .setContentTitle(foundTitle(amount, merchant))
                 .setContentText(text)
                 .setStyle(new NotificationCompat.DecoratedCustomViewStyle())
                 .setCustomContentView(view)
@@ -1001,23 +1032,33 @@ public class ScreenshotWatchService extends Service {
      * 用户看到的就是一条没有按钮的提醒；把按钮画进内容视图里，折叠状态也能点。
      * 折叠态只有约 64dp 高，所以这里不放说明文字，多了会被卡片下边缘裁掉。
      */
-    private RemoteViews foundView(String amount, long key, int notifyId, String ocrText) {
+    private RemoteViews foundView(String amount, long key, int notifyId, String ocrText,
+                                  String merchant, String orderId, String categoryId) {
         RemoteViews view = new RemoteViews(getPackageName(), R.layout.notification_found);
         boolean night = (getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK)
                 == Configuration.UI_MODE_NIGHT_YES;
         // 通知卡片的底色跟着系统深浅色走，文字颜色也得跟着换，否则白底白字
         int ink = night ? 0xFFF3EFE7 : 0xFF1A1713;
         int mute = night ? 0xFFB9B3A7 : 0xFF6F6A62;
-        view.setTextViewText(R.id.nf_title, "识别到 ¥" + amount);
+        view.setTextViewText(R.id.nf_title, foundTitle(amount, merchant));
         view.setTextColor(R.id.nf_title, ink);
         view.setTextColor(R.id.nf_cancel, mute);
-        view.setOnClickPendingIntent(R.id.nf_record, recordIntent(key, notifyId, amount, ocrText));
+        view.setOnClickPendingIntent(R.id.nf_record,
+                recordIntent(key, notifyId, amount, ocrText, merchant, orderId, categoryId));
         view.setOnClickPendingIntent(R.id.nf_cancel, cancelIntent(key, notifyId));
         return view;
     }
 
+    /** 通知标题：认出商户时一起显示，认不出就只有金额 */
+    private static String foundTitle(String amount, String merchant) {
+        if (merchant == null || merchant.isEmpty()) return "识别到 ¥" + amount;
+        String shortName = merchant.length() > 12 ? merchant.substring(0, 12) + "…" : merchant;
+        return "识别到 ¥" + amount + " · " + shortName;
+    }
+
     /** 「直接记一笔」：把这张截图交给接收器入队，不需要把 App 拉到前台。 */
-    private PendingIntent recordIntent(long key, int notifyId, String amount, String ocrText) {
+    private PendingIntent recordIntent(long key, int notifyId, String amount, String ocrText,
+                                       String merchant, String orderId, String categoryId) {
         Intent intent = new Intent(this, CaptureCancelReceiver.class);
         intent.setAction(CaptureCancelReceiver.ACTION_RECORD);
         intent.putExtra(EXTRA_KEY, key);
@@ -1025,6 +1066,9 @@ public class ScreenshotWatchService extends Service {
         intent.putExtra(EXTRA_AMOUNT, centsOf(amount));
         // 连同识别文字一起带上：即使队列里那张已经被点开过，按钮也还能拿到原文
         intent.putExtra(EXTRA_TEXT, ocrText == null ? "" : ocrText);
+        if (merchant != null && !merchant.isEmpty()) intent.putExtra(EXTRA_MERCHANT, merchant);
+        if (orderId != null && !orderId.isEmpty()) intent.putExtra(EXTRA_ORDER_ID, orderId);
+        if (categoryId != null && !categoryId.isEmpty()) intent.putExtra(EXTRA_CATEGORY, categoryId);
         return PendingIntent.getBroadcast(this, 20000 + notifyId, intent,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
     }

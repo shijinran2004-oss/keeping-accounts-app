@@ -53,6 +53,15 @@ export function parseBillCsv(text: string): ParsedBill {
     direction: columnIndex(cells, ['收/支']),
     amount: columnIndex(cells, ['金额(元)', '金额']),
     status: columnIndex(cells, ['交易状态', '当前状态']),
+    // 支付宝叫「交易订单号 / 商家订单号」，微信叫「交易单号 / 商户单号」
+    order: columnIndex(cells, [
+      '交易订单号',
+      '交易单号',
+      '商户单号',
+      '商家订单号',
+      '订单号',
+      '交易流水号',
+    ]),
   }
   if (idx.date < 0 || idx.amount < 0 || idx.direction < 0) {
     throw new Error('账单缺少必要列：交易时间 / 金额 / 收、支')
@@ -103,8 +112,18 @@ export function parseBillCsv(text: string): ParsedBill {
     const note = [merchant, item].filter((part) => part !== '').join(' · ').slice(0, 60) || kind
     const categoryId =
       guessCategoryId(type, kind, merchant, item) ?? (type === 'income' ? 'other-income' : 'other')
+    // 交易单号是账单里最稳的身份：同一笔重复导出两次，单号一定相同
+    const order = idx.order >= 0 ? (row[idx.order] ?? '').trim() : ''
 
-    billRows.push({ date, type, amount: Math.abs(cents), merchant, note, categoryId })
+    billRows.push({
+      date,
+      type,
+      amount: Math.abs(cents),
+      merchant,
+      note,
+      categoryId,
+      orderId: order || undefined,
+    })
   }
 
   if (!billRows.length) {
@@ -125,14 +144,18 @@ export function parseBillCsv(text: string): ParsedBill {
 /**
  * 把解析结果折算成导入计划：和账本已有流水比对，能重复导入。
  *
- * 签名 = 日期 + 方向 + 金额 + 备注（去空白）。账本里已有几条同签名记录，
- * 就允许这次导入几条，超出的才算新增——这样「同一天买两次同价同店」不会被误吞。
+ * 先去重靠交易单号：同一笔账单重复导出两次，单号一定相同，最准。
+ * 账单没带单号（或账本里的记录没存单号）时退回签名 = 日期 + 方向 + 金额 + 备注（去空白）：
+ * 账本里已有几条同签名记录，就允许这次导入几条，超出的才算新增——
+ * 这样「同一天买两次同价同店」不会被误吞。
  */
 export function planBillImport(bill: ParsedBill, existing: Tx[]): BillPlan {
   const remaining = new Map<string, number>()
+  const remainingOrders = new Map<string, number>()
   for (const tx of existing) {
     const signature = billSignature(tx.date, tx.type, tx.amount, tx.note)
     remaining.set(signature, (remaining.get(signature) ?? 0) + 1)
+    if (tx.orderId) remainingOrders.set(tx.orderId, (remainingOrders.get(tx.orderId) ?? 0) + 1)
   }
 
   let duplicate = 0
@@ -140,6 +163,13 @@ export function planBillImport(bill: ParsedBill, existing: Tx[]): BillPlan {
   const drafts: TxDraft[] = []
 
   for (const row of bill.rows) {
+    // 账本里存过这笔单号，就认定是同一笔，不再重复导入
+    const orderLeft = row.orderId ? (remainingOrders.get(row.orderId) ?? 0) : 0
+    if (row.orderId && orderLeft > 0) {
+      remainingOrders.set(row.orderId, orderLeft - 1)
+      duplicate += 1
+      continue
+    }
     const signature = billSignature(row.date, row.type, row.amount, row.note)
     const left = remaining.get(signature) ?? 0
     if (left > 0) {
@@ -153,6 +183,7 @@ export function planBillImport(bill: ParsedBill, existing: Tx[]): BillPlan {
       categoryId: row.categoryId,
       note: row.note,
       date: row.date,
+      orderId: row.orderId,
     })
     if (row.categoryId === 'other' || row.categoryId === 'other-income') fallback += 1
   }

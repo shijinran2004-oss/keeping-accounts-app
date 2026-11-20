@@ -223,6 +223,13 @@ final class CaptureStore {
      */
     static synchronized JSONObject addShot(Context context, long key, int notifyId, String path,
                                           long amountCents, String text) {
+        return addShot(context, key, notifyId, path, amountCents, text, null, null, null);
+    }
+
+    /** 带商户 / 分类 / 单号的版本：卡片确认和自动记账都直接用，前端不必再解析一遍 */
+    static synchronized JSONObject addShot(Context context, long key, int notifyId, String path,
+                                          long amountCents, String text,
+                                          String merchant, String categoryId, String orderId) {
         JSONObject evicted = null;
         try {
             JSONArray arr = shots(context);
@@ -233,6 +240,9 @@ final class CaptureStore {
             item.put("amountCents", amountCents);
             item.put("text", text == null ? "" : text);
             item.put("createdAt", System.currentTimeMillis());
+            if (merchant != null && !merchant.isEmpty()) item.put("merchant", merchant);
+            if (categoryId != null && !categoryId.isEmpty()) item.put("categoryId", categoryId);
+            if (orderId != null && !orderId.isEmpty()) item.put("orderId", orderId);
             arr.put(item);
             while (arr.length() > SHOTS_KEEP) {
                 evicted = arr.optJSONObject(0);
@@ -327,6 +337,15 @@ final class CaptureStore {
      * 等前端写进账本。App 没在跑也能先记下来。
      */
     static synchronized void pushAutoRecord(Context context, long amountCents, String text) {
+        pushAutoRecord(context, amountCents, text, null, null, null);
+    }
+
+    /**
+     * 带商户 / 分类 / 单号的版本：截图识别时已经认出来的信息不用前端再猜一遍。
+     * 缺字段就不写，老数据格式照样能读。
+     */
+    static synchronized void pushAutoRecord(Context context, long amountCents, String text,
+                                            String merchant, String categoryId, String orderId) {
         try {
             JSONArray arr = autoRecords(context);
             JSONObject item = new JSONObject();
@@ -335,6 +354,9 @@ final class CaptureStore {
             item.put("amountCents", amountCents);
             item.put("text", text == null ? "" : text);
             item.put("createdAt", System.currentTimeMillis());
+            if (merchant != null && !merchant.isEmpty()) item.put("merchant", merchant);
+            if (categoryId != null && !categoryId.isEmpty()) item.put("categoryId", categoryId);
+            if (orderId != null && !orderId.isEmpty()) item.put("orderId", orderId);
             arr.put(item);
             while (arr.length() > AUTO_KEEP) arr.remove(0);
             prefs(context).edit().putString(KEY_AUTO, arr.toString()).apply();

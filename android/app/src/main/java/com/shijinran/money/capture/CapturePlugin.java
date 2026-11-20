@@ -193,6 +193,13 @@ public class CapturePlugin extends Plugin {
                     one.put("amountCents", item.optLong("amountCents", 0L));
                     one.put("text", item.optString("text", ""));
                     one.put("createdAt", item.optLong("createdAt", 0L));
+                    // 识别时认出来的商户 / 单号 / 建议分类：有就带上，前端直接写进账本
+                    String merchant = item.optString("merchant", "");
+                    if (!merchant.isEmpty()) one.put("merchant", merchant);
+                    String categoryId = item.optString("categoryId", "");
+                    if (!categoryId.isEmpty()) one.put("categoryId", categoryId);
+                    String orderId = item.optString("orderId", "");
+                    if (!orderId.isEmpty()) one.put("orderId", orderId);
                     records.put(one);
                 }
             } catch (Throwable t) {
@@ -201,6 +208,26 @@ public class CapturePlugin extends Plugin {
         }
         JSObject ret = new JSObject();
         ret.put("records", records);
+        call.resolve(ret);
+    }
+
+    /**
+     * 前端把分类表（id / 名字 / 关键词）和「商户 → 分类」的记忆推过来：
+     * 后台服务用它猜分类，截图卡片不必等 WebView 起来才有分类可选。
+     */
+    @PluginMethod
+    public void setCategoryHints(PluginCall call) {
+        try {
+            JSArray categories = call.getArray("categories");
+            JSObject memory = call.getObject("memory");
+            JSONArray arr = categories == null ? new JSONArray() : new JSONArray(categories.toString());
+            JSONObject obj = memory == null ? new JSONObject() : new JSONObject(memory.toString());
+            CategoryHints.apply(getContext(), arr, obj);
+        } catch (Throwable t) {
+            Log.w("SnoopyCapture", "set category hints failed", t);
+        }
+        JSObject ret = new JSObject();
+        ret.put("ok", true);
         call.resolve(ret);
     }
 

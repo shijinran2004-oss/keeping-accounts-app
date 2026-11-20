@@ -378,4 +378,25 @@ public class ShotRulesTest {
     @Test public void realIncomeWordStillBlocks() {
         assertNull(ShotRules.acceptedAmount("账单详情\n-19.89\n支付成功\n退款成功\n交易单号 1"));
     }
+
+    // 商户名从账单字段里取；认不出就是 null，卡片不显示
+    @Test public void merchantNameComesFromReceiptFields() {
+        assertEquals("美团外卖", ShotRules.merchantOf(new String[]{"支付成功", "商户：美团外卖", "¥23.45"}));
+        assertEquals("星巴克咖啡", ShotRules.merchantOf(new String[]{"收款方全称", "星巴克咖啡", "¥32.00"}));
+        assertNull(ShotRules.merchantOf(new String[]{"支付成功", "¥23.45", "2026-11-16 12:00"}));
+    }
+
+    // 单号从「交易单号 / 交易订单号」里取，用来跨截图、跨导入去重
+    @Test public void orderIdIsReadFromBillText() {
+        assertEquals("4200002026111612", ShotRules.orderIdOf("交易单号 4200002026111612 支付成功"));
+        assertEquals("2026111622001123", ShotRules.orderIdOf("交易订单号：2026111622001123"));
+        assertNull(ShotRules.orderIdOf("支付成功 ¥23.45"));
+    }
+
+    @Test public void dedupeKeyUsesOrderIdWhenPresent() {
+        String a = ShotRules.dedupeKey("23.45", "支付成功 商户 星巴克", "4200002026111612");
+        String b = ShotRules.dedupeKey("23.45", "完全不同的截图文字 星巴克 拿铁", "4200002026111612");
+        assertEquals(a, b);
+        assertNotEquals(a, ShotRules.dedupeKey("23.45", "支付成功 商户 星巴克", null));
+    }
 }

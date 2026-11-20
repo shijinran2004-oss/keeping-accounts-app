@@ -46,6 +46,8 @@ export interface Tx {
   date: string
   /** 创建时间戳（毫秒），用于同日排序 */
   createdAt: number
+  /** 账单交易单号；CSV 导入和截图识别共用它做去重 */
+  orderId?: string
 }
 
 /** 新增 / 编辑一笔账时提交的数据 */
@@ -55,6 +57,8 @@ export interface TxDraft {
   categoryId: string
   note: string
   date: string
+  /** 账单交易单号；有它时导入按单号去重，比「日期+金额+备注」更准 */
+  orderId?: string
 }
 
 /** 账本设置 */
@@ -83,6 +87,8 @@ export interface Settings {
   paydaySet?: boolean
   /** 个别月份的实际到账日，key 为到账月 YYYY-MM，未记录的月份用 payday */
   paydayOverrides?: Record<string, number>
+  /** 商户记忆：备注里的商户名 → 分类 id；再识别到同一家店就自动落到这个分类 */
+  merchantRules?: Record<string, string>
 }
 
 /** 一个预算月（自然月 1 号到月末），salaryMonth 是这笔工资归属的月份 */
@@ -363,6 +369,8 @@ export interface BillRow {
   note: string
   /** 猜测的分类 id；猜不到是 other / other-income */
   categoryId: string
+  /** 账单里的交易单号；和账本里同单号即视为同一笔 */
+  orderId?: string
 }
 
 /** 解析后的账单 */
@@ -565,6 +573,19 @@ export interface CaptureImage {
   text?: string
 }
 
+/** 识别提示：一个分类的关键词，推给原生截图弹卡时猜分类用 */
+export interface CategoryHint {
+  id: string
+  name: string
+  keywords: string[]
+}
+
+/** 推给原生的识别提示：分类关键词表 + 商户记忆（商户名 → 分类 id） */
+export interface CategoryHintPayload {
+  categories: CategoryHint[]
+  memory: Record<string, string>
+}
+
 /** 通知里点了「直接记一笔」后原生暂存、等前端写进账本的一笔 */
 export interface AutoRecord {
   /** 原生自增序号：拿来当幂等 id，重复写入也只会有一条 */
@@ -575,6 +596,12 @@ export interface AutoRecord {
   text: string
   /** 入队时间戳（毫秒） */
   createdAt: number
+  /** 原生从账单上认出的商户名 */
+  merchant?: string
+  /** 原生按商户记忆 / 关键词猜的分类，前端只认账本里还在的分类 */
+  categoryId?: string
+  /** 账单交易单号 */
+  orderId?: string
 }
 
 /** 截图监听的开关状态，来自原生 Capture 插件 */

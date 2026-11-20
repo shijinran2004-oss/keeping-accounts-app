@@ -47,6 +47,18 @@ function sanitizeOverrides(input: unknown): Record<string, number> | undefined {
   return Object.keys(out).length ? out : undefined
 }
 
+/** 商户记忆：只留「商户名 → 分类 id」这种字符串对，空值丢掉 */
+function sanitizeMerchantRules(input: unknown): Record<string, string> | undefined {
+  if (!input || typeof input !== 'object') return undefined
+  const out: Record<string, string> = {}
+  for (const [key, value] of Object.entries(input as Record<string, unknown>)) {
+    const merchant = key.trim().slice(0, 24)
+    if (!merchant || typeof value !== 'string' || !value) continue
+    out[merchant] = value
+  }
+  return Object.keys(out).length ? out : undefined
+}
+
 /**
  * 把未知来源的数据收成合法 LedgerState。
  * 数据缺胳膊少腿时返回 null，由调用方决定用空账本还是报错。
@@ -74,7 +86,12 @@ export function normalize(raw: unknown): LedgerState | null {
         typeof t.date === 'string' &&
         typeof t.categoryId === 'string',
     )
-    .map((t) => ({ ...t, note: t.note ?? '', createdAt: t.createdAt ?? 0 }))
+    .map((t) => ({
+      ...t,
+      note: t.note ?? '',
+      createdAt: t.createdAt ?? 0,
+      orderId: typeof t.orderId === 'string' && t.orderId ? t.orderId : undefined,
+    }))
   const s = data.settings as Partial<Settings>
   return {
     version: 1,
@@ -93,6 +110,7 @@ export function normalize(raw: unknown): LedgerState | null {
       salaryLag: s.paydaySet === true && s.salaryLag === 1 ? 1 : 0,
       paydaySet: s.paydaySet === true,
       paydayOverrides: sanitizeOverrides(s.paydayOverrides),
+      merchantRules: sanitizeMerchantRules(s.merchantRules),
     },
   }
 }

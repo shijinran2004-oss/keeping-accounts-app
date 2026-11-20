@@ -19,6 +19,7 @@ import android.view.ViewTreeObserver;
 import android.view.WindowManager;
 import android.view.animation.DecelerateInterpolator;
 import android.widget.FrameLayout;
+import android.widget.HorizontalScrollView;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
@@ -26,6 +27,8 @@ import android.widget.TextView;
 import com.shijinran.money.MainActivity;
 import com.shijinran.money.R;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
 
 import cdflynn.android.library.checkview.CheckView;
@@ -73,6 +76,14 @@ public final class CaptureOverlay {
     private CheckView checkView;
     private long amountCents;
     private String ocrText = "";
+    /** 识别时认出来的商户名 / 交易单号 / 当前选中的分类 */
+    private String merchant;
+    private String orderId;
+    private String categoryId;
+    /** 卡片根布局，分类 chips 要插在按钮上面 */
+    private LinearLayout rootView;
+    /** 「餐饮 / 交通…」分类备选那一行；每点一次重建一遍，所以留着引用好移除 */
+    private HorizontalScrollView chipsView;
 
     private final Runnable hideTask = new Runnable() {
         @Override
@@ -124,7 +135,9 @@ public final class CaptureOverlay {
      * 同步等 UI 线程挂上去，调用方接着用 isShowing() 判断 ROM 有没有拦窗口。
      */
     public static void showFound(Context context, long key, int notifyId, String path, Bitmap thumb,
-                                 final String amount, final long amountCents, final String text) {
+                                 final String amount, final long amountCents, final String text,
+                                 final String merchant, final String orderId, final String categoryId,
+                                 final List<CategoryHints.Guess> guesses) {
         if (!permitted(context)) return;
         final Bitmap preview = thumb;
         final java.util.concurrent.CountDownLatch done = new java.util.concurrent.CountDownLatch(1);
@@ -141,8 +154,17 @@ public final class CaptureOverlay {
                     overlay.attach(preview);
                     overlay.amountCents = amountCents;
                     overlay.ocrText = text == null ? "" : text;
+                    overlay.merchant = merchant;
+                    overlay.orderId = orderId;
+                    overlay.categoryId = categoryId;
                     overlay.titleView.setText("识别到 ¥" + amount);
-                    overlay.subtitleView.setText("点「确认记录」直接记一笔，不用打开 App");
+                    // 认出商户时把店名写在副标题里：用户一眼就知道是哪笔，不用点开 App
+                    if (merchant != null && !merchant.isEmpty()) {
+                        overlay.subtitleView.setText(merchant + " · 点「确认记录」直接记一笔");
+                    } else {
+                        overlay.subtitleView.setText("点「确认记录」直接记一笔，不用打开 App");
+                    }
+                    overlay.renderChips(guesses);
                     overlay.confirmView.setAlpha(1f);
                     overlay.confirmView.setEnabled(true);
                     overlay.restartTimer();
@@ -250,6 +272,7 @@ public final class CaptureOverlay {
         root.setElevation(dp(14));
         holder.addView(root, new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT));
+        rootView = root;
 
         LinearLayout row = new LinearLayout(context);
         row.setOrientation(LinearLayout.HORIZONTAL);
@@ -364,7 +387,9 @@ public final class CaptureOverlay {
                 } catch (Throwable ignored) {
                 }
                 try {
-                    CaptureCancelReceiver.recordShot(context, key, notifyId, amountCents, ocrText);
+                    // 分类选过就按选的记；商户和单号也一起带走，前端不用再猜
+                    CaptureCancelReceiver.recordShot(context, key, notifyId, amountCents, ocrText,
+                            merchant, categoryId, orderId);
                 } catch (Throwable ignored) {
                 }
                 showRecorded();
@@ -452,6 +477,61 @@ public final class CaptureOverlay {
     }
 
     /**
+     * 分类备选：一行小圆角按钮，点一下换选中，再点「确认记录」就按这个分类记。
+     * 不点也能记——默认用识别时猜出来的那个分类，卡片不会因为要选分类挡住记账。
+     */
+    private void renderChips(final List<CategoryHints.Guess> guesses) {
+        if (rootView == null || buttonsView == null) return;
+        if (chipsView != null) {
+            int old = rootView.indexOfChild(chipsView);
+            if (old >= 0) rootView.removeViewAt(old);
+            chipsView = null;
+        }
+        if (guesses == null || guesses.isEmpty()) return;
+        HorizontalScrollView scroll = new HorizontalScrollView(context);
+        scroll.setHorizontalScrollBarEnabled(false);
+        scroll.setClipToPadding(false);
+        LinearLayout chips = new LinearLayout(context);
+        chips.setOrientation(LinearLayout.HORIZONTAL);
+        for (final CategoryHints.Guess guess : guesses) {
+            final boolean selected = guess.id.equals(categoryId);
+            final TextView chip = new TextView(context);
+            chip.setText(guess.name);
+            chip.setTextSize(12f);
+            chip.setGravity(Gravity.CENTER);
+            chip.setSingleLine(true);
+            chip.setPadding(dp(12), dp(6), dp(12), dp(6));
+            if (selected) {
+                chip.setTextColor(0xFFFFFFFF);
+                chip.setBackground(pill(ACCENT, 16, 0x40FFFFFF));
+            } else {
+                chip.setTextColor(CANCEL_INK);
+                chip.setBackground(pill(CANCEL_BG, 16, 0x1A000000));
+            }
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+            lp.setMarginEnd(dp(8));
+            chip.setLayoutParams(lp);
+            chip.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    categoryId = guess.id;
+                    renderChips(guesses);
+                }
+            });
+            chips.addView(chip);
+        }
+        scroll.addView(chips);
+        LinearLayout.LayoutParams scrollLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        scrollLp.topMargin = dp(12);
+        scroll.setLayoutParams(scrollLp);
+        chipsView = scroll;
+        int at = rootView.indexOfChild(buttonsView);
+        rootView.addView(scroll, at < 0 ? rootView.getChildCount() : at);
+    }
+
+    /**
      * 点「确认记录」之后：两行按钮收起来，换成对勾动画，停一会儿再自己滑走。
      * 之前是点完直接消失，用户根本不知道记没记上——尤其这张卡只停留 15 秒。
      */
@@ -463,7 +543,8 @@ public final class CaptureOverlay {
         }
         if (rowView != null) rowView.setVisibility(View.GONE);
         if (buttonsView != null) buttonsView.setVisibility(View.GONE);
-        successSubtitle.setText(money(amountCents) + " 已写进账本，回 App 就能看到");
+        String shop = merchant == null || merchant.isEmpty() ? "" : merchant + " · ";
+        successSubtitle.setText(shop + money(amountCents) + " 已写进账本，回 App 就能看到");
         successRow.setVisibility(View.VISIBLE);
         if (checkView != null) checkView.check();
         // 勾 300ms 画完、280ms 后开始 250ms 的缩放，再留一点时间让人看清

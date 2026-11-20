@@ -16,6 +16,7 @@ export {
   requestIgnoreBattery,
   requestAllFiles,
   requestOverlay,
+  setCategoryHints,
   takeLaunchAction,
   watchStatus,
 } from './plugin'

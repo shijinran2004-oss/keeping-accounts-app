@@ -14,7 +14,7 @@ interface KeywordRule {
   keywords: string[]
 }
 
-const EXPENSE_RULES: KeywordRule[] = [
+export const EXPENSE_RULES: KeywordRule[] = [
   { categoryId: 'food', keywords: ['餐饮', '美食', '外卖', '咖啡', '奶茶', '火锅', '烧烤', '早餐', '午餐', '晚餐', '夜宵', '食品', '餐厅', '饭店', '食堂', '星巴克', '麦当劳', '肯德基', '瑞幸', '蜜雪', '喜茶', '奈雪', '汉堡', '面包', '便利店'] },
   { categoryId: 'transport', keywords: ['交通', '打车', '滴滴', '地铁', '公交', '出租', '加油', '停车', '高铁', '火车', '机票', '航空', '单车', '哈啰', '车费', '过路费', '充电桩'] },
   { categoryId: 'shopping', keywords: ['购物', '淘宝', '天猫', '京东', '拼多多', '超市', '商场', '百货', '服饰', '服装', '鞋', '化妆品', '护肤', '数码', '电器', '苏宁', '盒马', '沃尔玛', '永辉', '日用品', '日用百货'] },
@@ -29,7 +29,7 @@ const EXPENSE_RULES: KeywordRule[] = [
   { categoryId: 'other', keywords: ['商业服务', '公共服务', '生活服务', '其他'] },
 ]
 
-const INCOME_RULES: KeywordRule[] = [
+export const INCOME_RULES: KeywordRule[] = [
   { categoryId: 'invest', keywords: ['理财', '基金', '利息', '收益', '分红', '余额宝', '股票', '定期'] },
   { categoryId: 'reimburse', keywords: ['报销', '退款', '退回', '退还'] },
   { categoryId: 'bonus', keywords: ['奖金', '年终奖', '绩效', '奖励'] },
@@ -37,6 +37,19 @@ const INCOME_RULES: KeywordRule[] = [
   { categoryId: 'redpacket', keywords: ['红包', '压岁钱', '礼金'] },
   { categoryId: 'other-income', keywords: ['转账', '收款', '其他'] },
 ]
+
+/**
+ * 一个分类的关键词。识别提示要把它推给原生，让截图弹卡时直接猜对分类。
+ * 支出和收入两张表都查，同一个词只留一份。
+ */
+export function categoryKeywords(categoryId: string): string[] {
+  const out: string[] = []
+  for (const rule of [...EXPENSE_RULES, ...INCOME_RULES]) {
+    if (rule.categoryId !== categoryId) continue
+    for (const keyword of rule.keywords) if (!out.includes(keyword)) out.push(keyword)
+  }
+  return out
+}
 
 /** 猜一个分类；猜不到返回 null，由调用方落到「其他」 */
 export function guessCategoryId(type: TxType, ...texts: string[]): string | null {

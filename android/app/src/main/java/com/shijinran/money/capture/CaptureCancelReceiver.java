@@ -40,7 +40,10 @@ public class CaptureCancelReceiver extends BroadcastReceiver {
                     intent.getLongExtra(ScreenshotWatchService.EXTRA_KEY, 0L),
                     intent.getIntExtra(ScreenshotWatchService.EXTRA_NOTIFY_ID, 0),
                     intent.getLongExtra(ScreenshotWatchService.EXTRA_AMOUNT, 0L),
-                    intent.getStringExtra(ScreenshotWatchService.EXTRA_TEXT));
+                    intent.getStringExtra(ScreenshotWatchService.EXTRA_TEXT),
+                    intent.getStringExtra(ScreenshotWatchService.EXTRA_MERCHANT),
+                    intent.getStringExtra(ScreenshotWatchService.EXTRA_CATEGORY),
+                    intent.getStringExtra(ScreenshotWatchService.EXTRA_ORDER_ID));
         } else {
             cancelShot(context,
                     intent == null ? 0L : intent.getLongExtra(ScreenshotWatchService.EXTRA_KEY, 0L),
@@ -55,6 +58,12 @@ public class CaptureCancelReceiver extends BroadcastReceiver {
      * 已记过 → 收通知（防重复两笔）；没记过 → 用通知/弹窗自带的金额补记。
      */
     static void recordShot(Context context, long key, int notifyId, long amount, String text) {
+        recordShot(context, key, notifyId, amount, text, null, null, null);
+    }
+
+    /** 带商户 / 分类 / 单号：卡片或通知里已经认出来的，直接跟着这一笔进账本 */
+    static void recordShot(Context context, long key, int notifyId, long amount, String text,
+                           String merchant, String categoryId, String orderId) {
         CaptureStore.bumpStat(context, "confirmed");
         try {
             NotificationManager nm = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
@@ -62,6 +71,9 @@ public class CaptureCancelReceiver extends BroadcastReceiver {
             if (shot != null) {
                 amount = shot.optLong("amountCents", amount);
                 text = shot.optString("text", text);
+                if (merchant == null) merchant = shot.optString("merchant", null);
+                if (categoryId == null) categoryId = shot.optString("categoryId", null);
+                if (orderId == null) orderId = shot.optString("orderId", null);
                 deleteFile(shot);
             } else if (key != 0) {
                 // 队列里没有这张：多半是点通知正文进来时已经被 consume 取走，
@@ -82,7 +94,7 @@ public class CaptureCancelReceiver extends BroadcastReceiver {
                 return;
             }
 
-            CaptureStore.pushAutoRecord(context, amount, text);
+            CaptureStore.pushAutoRecord(context, amount, text, merchant, categoryId, orderId);
             if (key != 0) CaptureStore.markRecorded(context, key);
             if (nm != null && notifyId > 0) nm.cancel(notifyId);
             notifyDone(context, amount);

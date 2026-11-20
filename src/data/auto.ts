@@ -1,22 +1,25 @@
 import type { AutoRecord, Category, Tx } from '../types'
 import { parseReceipt, todayStr } from '../lib'
+import { guessCategory, merchantOfNote } from './hints'
 import { uid } from './normalize'
 
 /** 去掉小票上「商户：」这类前缀，入账的备注只留店名 */
-function cleanMerchant(name: string | null): string {
-  return (name ?? '').replace(/^商\s*户\s*[:：]\s*/, '')
+function cleanMerchant(name: string | null | undefined): string {
+  return (name ?? '').replace(/^商\s*户\s*[:：]\s*/, '').trim()
 }
 
 /**
- * 把通知里「直接记一笔」暂存的一条记录变成真正的账目。
+ * 把原生暂存的一条识别记录变成真正的账目。
  *
- * 原生只用金额判断「值不值得提醒」，它不解析商户和分类，所以这里补上；
- * 遇到「合计 2820」这种吞小数点的行，原生会算成 100 倍，
- * 只要和解析结果对得上，就按解析出来的分算，和小票识别的口径一致。
+ * 原生只用金额判断「值不值得提醒」，商户和分类现在由原生按识别提示先猜一次
+ * （CategoryHints：关键词表 + 商户记忆），前端再用同一套评分补一次：
+ * 原生猜到的分类优先（它可能已经用过更新的记忆），没有就按关键词猜，
+ * 最后才退回小票解析的结果和「其他」。
  */
 export function autoRecordToTx(
   record: AutoRecord,
   categories: Category[],
+  memory: Record<string, string> = {},
   today: string = todayStr(),
 ): Tx | null {
   const lines = record.text
@@ -28,10 +31,19 @@ export function autoRecordToTx(
   let amount = record.amountCents
   if (parsed > 0 && (amount <= 0 || amount === parsed * 100)) amount = parsed
   if (!amount) return null
-  const categoryId =
-    draft.categoryId && categories.some((category) => category.id === draft.categoryId)
-      ? draft.categoryId
-      : 'other'
+
+  const known = (id: string | undefined | null) =>
+    !!id && categories.some((category) => category.id === id)
+  const merchant = cleanMerchant(record.merchant ?? draft.merchant)
+  // 备注可能是「星巴克 · 拿铁」，商户记忆按第一个「·」前面的店名查
+  const remembered = memory[merchantOfNote(merchant)] ?? memory[merchant] ?? ''
+  const hinted = guessCategory(categories, record.text, merchant, memory)
+  const categoryId = known(remembered)
+    ? remembered
+    : known(record.categoryId)
+      ? (record.categoryId as string)
+      : hinted ?? (known(draft.categoryId) ? (draft.categoryId as string) : 'other')
+
   return {
     // 有 seq 就用它做确定性 id：同一笔重复落库只会覆盖自己，不会多记一笔
     id: record.seq ? `auto-${record.seq}` : uid(),
@@ -39,7 +51,8 @@ export function autoRecordToTx(
     amount,
     categoryId,
     date: draft.date ?? today,
-    note: cleanMerchant(draft.merchant),
+    note: merchant,
     createdAt: record.createdAt || Date.now(),
+    orderId: record.orderId,
   }
 }

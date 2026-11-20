@@ -147,6 +147,8 @@ App / main
 | 改分享入口 / 截图监听 | `src/lib/capture/` 与 `android/app/src/main/java/com/shijinran/money/capture/`（`CapturePlugin` 收分享与开关、`ScreenshotWatchService` 监听 MediaStore、`CaptureStore` 记状态） |
 | 加内置分类 | `src/data/categories.ts` |
 | 改分类图标 | 设置 → 分类管理；`store.tsx` 的 `updateCategoryIcon`，图标库是 `data/categories.ts` 的 `ICON_CHOICES` |
+| 改商户记忆 / 关键词自动分类 | `src/data/hints.ts`（评分与商户记忆）+ `src/lib/import/categories.ts`（关键词表）；原生一侧是 `capture/CategoryHints.java` 与 `ShotRules.merchantOf()` |
+| 改明细页搜索与筛选 | `src/pages/Ledger.tsx` 的 `matchTx` / `searchTxs`，样式在 `styles/app.css` 的 `.filter-*` |
 
 ## 数据流
 
@@ -178,6 +180,14 @@ App / main
 - 导出：`buildLedgerCsv(state)` 输出 UTF-8 BOM 的 CSV（日期 / 类型 / 分类 / 金额(元) / 备注，按日期升序），走和备份同一个 `exportBackupFile()`（原生写 Cache 再交给分享面板，浏览器直接下载）。
 - 快捷方式：`android/app/src/main/res/xml/shortcuts.xml` 定义「记一笔」，`MainActivity` 收到 `com.shijinran.money.action.ADD` 时把动作存进 `pendingAction`，网页用 `CapturePlugin.takeLaunchAction()` 取走（冷启动）；App 已在前台时 `CapturePlugin.pingLaunch()` 直接喊 `launchAction` 事件，`App.tsx` 两条路径都接成打开记账弹层。
 
+## 识别提示与去重
+
+- 商户与单号：`ShotRules.merchantOf()` 从「商户全称 / 商户名称 / 收款方全称 / 对方账户 / 商户 / 商家」这类字段取商户（值不合法时看下一行），`ShotRules.orderIdOf()` 按规则表的 `orderIdKeys`（交易单号 / 商户单号 / 订单号 / 交易流水号…）抓 8–40 位单号；两者随 `Judgement` 一起返回，卡片、通知栏「确认记录」、待确认快照都带着。
+- 去重：`ShotRules.dedupeKey(amount, text, orderId)` 有单号时只按 `id|单号` 算 SHA-256，没有单号才退回「金额 + 去空白前 200 字」，所以同一张截图换个文件名也不会重记。CSV 导入先用账本里已有的 `Tx.orderId` 按单号抵消，再退回「日期 + 方向 + 金额 + 备注」的多重集计数。
+- 分类提示：`src/data/hints.ts` 是纯函数层（`scoreCategories` / `suggestCategories` / `rememberMerchant` / `buildHints`）——商户命中关键词 +3、整页命中 +1、`settings.merchantRules` 记过的商户 +20。`store.tsx` 每次落库后把提示推给原生（300ms 防抖）`CapturePlugin.setCategoryHints`，原生 `CategoryHints` 用它给弹卡排序：正在用的分类排最前，再补最多 3 个建议。
+- 商户记忆存在 `Settings.merchantRules`（商户 → 分类 id，上限 300 条，超了淘汰最早的），`normalize()` 会清洗非法值；自动记账（`autoRecordToTx`）优先用记忆，其次用原生给的建议分类，最后才用规则表。
+- 明细页搜索与筛选只在渲染层做（`Ledger.tsx` 的 `matchTx` / `searchTxs`），不写库、不动统计口径；样式是 `styles/app.css` 的 `.filter-*`。
+
 ## 视觉层
 
 `main.tsx` 先 import `styles/app.css`，再 import `styles/og.css`。前者是结构层，后者只做两件事：
@@ -192,7 +202,7 @@ App / main
 
 ## 版本与构建
 
-- `versionCode 74` / `versionName 1.4.34`（`android/app/build.gradle`）
+- `versionCode 75` / `versionName 1.4.35`（`android/app/build.gradle`）
 - 数据版本 `LedgerState.version = 1`，`normalize()` 读取时补全新增分类与设置
 - 存储：IndexedDB（库 `shijinran`，`txs` / `meta` / `snapshots` 三个 store），首次启动从 `localStorage` 一次性迁移；`localStorage['shijinran.storage.engine']='ls'` 可强制回退旧引擎
 - 备份：v2 容器带 `schema` / `checksum`，默认 gzip；导入先预览，支持覆盖 / 合并 / 仅设置与分类；导入、清空、恢复前自动快照（保留 5 份）

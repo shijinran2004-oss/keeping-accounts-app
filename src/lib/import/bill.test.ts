@@ -54,6 +54,13 @@ describe('账单 CSV 解析', () => {
     expect(bill.skipped).toBe(1)
   })
 
+  it('交易单号能读出来：支付宝取「交易订单号」，微信取「交易单号」', () => {
+    const alipay = parseBillCsv(ALIPAY)
+    expect(alipay.rows[0].orderId).toBe('2026111622001')
+    const wechat = parseBillCsv(WECHAT)
+    expect(wechat.rows[0].orderId).toBe('4200001')
+  })
+
   it('不是账单 CSV 时给出人话错误', () => {
     expect(() => parseBillCsv('姓名,年龄\n张三,18')).toThrow(/表头/)
   })
@@ -83,6 +90,7 @@ describe('账单导入计划', () => {
     expect(plan.fresh).toBe(3)
     expect(plan.duplicate).toBe(0)
     expect(plan.drafts.every((d) => d.date >= '2026-11-14')).toBe(true)
+    expect(plan.drafts.every((d) => d.orderId)).toBe(true)
   })
 
   it('同一份账单导入第二次全部跳过', () => {
@@ -93,6 +101,15 @@ describe('账单导入计划', () => {
     const plan = planBillImport(bill, existing)
     expect(plan.fresh).toBe(0)
     expect(plan.duplicate).toBe(3)
+  })
+
+  it('交易单号相同就算同一笔：金额被改过也能认出来', () => {
+    const bill = parseBillCsv(WECHAT)
+    // 账本里这笔的金额和备注都和账单对不上，但单号一致
+    const plan = planBillImport(bill, [tx({ orderId: '4200001', amount: 9999, note: '改过的备注' })])
+    expect(plan.duplicate).toBe(1)
+    expect(plan.fresh).toBe(1)
+    expect(plan.drafts[0].orderId).toBe('100005')
   })
 
   it('同一天同价同店买两次，第二次仍然能导入（按出现次数抵消）', () => {

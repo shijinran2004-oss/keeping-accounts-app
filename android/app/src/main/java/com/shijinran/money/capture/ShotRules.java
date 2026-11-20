@@ -54,6 +54,9 @@ final class ShotRules {
     private static String[] incomeWords = new String[0];
     private static String[] notIncomeWords = new String[0];
     private static String[] notExpenseWords = new String[0];
+    /** 「交易单号 / 商户单号」这类字段名，用来从截图里抽单号做精确去重 */
+    private static String[] orderIdKeys = new String[0];
+    private static volatile Pattern orderIdPattern;
     private static volatile List<Template> templates = new ArrayList<>();
 
     /** 版面打分的权重，也放在 JSON 的 geometry 段里，方便真机调参 */
@@ -120,15 +123,25 @@ final class ShotRules {
         final String reason;
         /** 这次判定有没有用上行坐标（日志里能看出纯文本降级是不是在生效） */
         final boolean layout;
+        /** 截图上认出来的商户名；认不出是 null，卡片就不显示这一行 */
+        final String merchant;
+        /** 截图上认出来的交易单号；用来精确去重，认不出是 null */
+        final String orderId;
 
         Judgement(String amount, String reason) {
-            this(amount, reason, false);
+            this(amount, reason, false, null, null);
         }
 
         Judgement(String amount, String reason, boolean layout) {
+            this(amount, reason, layout, null, null);
+        }
+
+        Judgement(String amount, String reason, boolean layout, String merchant, String orderId) {
             this.amount = amount;
             this.reason = reason;
             this.layout = layout;
+            this.merchant = merchant;
+            this.orderId = orderId;
         }
     }
 
@@ -198,6 +211,9 @@ final class ShotRules {
         incomeWords = strings(g, "incomeWords");
         notIncomeWords = strings(g, "notIncomeWords");
         notExpenseWords = strings(g, "notExpenseWords");
+        orderIdKeys = strings(g, "orderIdKeys");
+        orderIdPattern = orderIdKeys.length == 0 ? null
+                : Pattern.compile("(?:" + alt(orderIdKeys) + ")\\s*[:：]?\\s*([A-Za-z0-9]{8,40})");
 
         List<Template> list = new ArrayList<>();
         JSONArray tpls = root.optJSONArray("templates");
@@ -293,6 +309,9 @@ final class ShotRules {
         String[] parts = text.split("\n", -1);
         Layout layout = layoutOf(align(lines, parts));
         Template tpl = templateFor(text);
+        // 商户和单号只影响卡片展示和去重，认不出也不影响金额判定
+        String merchant = merchantOf(parts);
+        String orderId = orderIdOf(text);
         List<Candidate> found = new ArrayList<>();
         collectKeyed(parts, found);
         collectYen(parts, found);
@@ -312,11 +331,11 @@ final class ShotRules {
         }
         Candidate best = pick(found);
         boolean usedLayout = layout != null;
-        if (best == null) return new Judgement(null, found.isEmpty() ? "no_amount" : "uncertain", usedLayout);
-        if (best.plus || "income".equals(direction(text))) return new Judgement(best.value, "income", usedLayout);
-        if (containsAny(text, notExpenseWords)) return new Judgement(best.value, "not_expense", usedLayout);
-        if (!hasPaymentSignal(raw)) return new Judgement(best.value, "no_signal", usedLayout);
-        return new Judgement(best.value, null, usedLayout);
+        if (best == null) return new Judgement(null, found.isEmpty() ? "no_amount" : "uncertain", usedLayout, merchant, orderId);
+        if (best.plus || "income".equals(direction(text))) return new Judgement(best.value, "income", usedLayout, merchant, orderId);
+        if (containsAny(text, notExpenseWords)) return new Judgement(best.value, "not_expense", usedLayout, merchant, orderId);
+        if (!hasPaymentSignal(raw)) return new Judgement(best.value, "no_signal", usedLayout, merchant, orderId);
+        return new Judgement(best.value, null, usedLayout, merchant, orderId);
     }
 
     /**
@@ -670,11 +689,103 @@ final class ShotRules {
         return raw.contains("识别到") && raw.contains("确认记录");
     }
 
+    /**
+     * 从账单页的「商户全称 / 收款方全称 / 商家名称」这类字段里取商户名。
+     * 微信转账页那种「字段名一行、值在下一行」的版式也认；认不出返回 null，卡片就不显示商户。
+     */
+    static String merchantOf(String[] parts) {
+        if (parts == null) return null;
+        for (int i = 0; i < parts.length; i++) {
+            String line = parts[i].trim();
+            if (line.isEmpty()) continue;
+            for (String key : merchantKeys) {
+                int at = line.indexOf(key);
+                if (at < 0) continue;
+                String value = cleanMerchantValue(line.substring(at + key.length()));
+                if (isMerchantValue(value)) return value;
+                // 字段名单独一行时，值在下一两行里
+                for (int j = i + 1; j < Math.min(parts.length, i + 3); j++) {
+                    String next = cleanMerchantValue(parts[j].trim());
+                    if (next.isEmpty()) continue;
+                    if (isMerchantValue(next)) return next;
+                    break;
+                }
+            }
+        }
+        return null;
+    }
+
+    private static String cleanMerchantValue(String raw) {
+        String value = raw == null ? "" : raw.trim();
+        while (!value.isEmpty()) {
+            char head = value.charAt(0);
+            if (head != ':' && head != '：' && head != '>' && head != '»' && head != '-') break;
+            value = value.substring(1).trim();
+        }
+        while (!value.isEmpty()) {
+            char tail = value.charAt(value.length() - 1);
+            if (tail != '>' && tail != '»') break;
+            value = value.substring(0, value.length() - 1).trim();
+        }
+        return value;
+    }
+
+    /** 商户名要像店名：不能是金额、单号、时间、状态这类字段值，也不能太长 */
+    private static boolean isMerchantValue(String value) {
+        if (value == null) return false;
+        if (value.length() < 2 || value.length() > 24) return false;
+        if (BARE_LINE.matcher(value).matches()) return false;
+        if (value.contains("¥") || value.contains("￥")) return false;
+        if (value.matches("^[0-9:\\-/\\s]+$")) return false;
+        String[] noise = {"单号", "编号", "时间", "方式", "状态", "金额", "账单", "订单", "详情",
+                "成功", "失败", "支付", "付款", "收款", "退款", "说明", "备注"};
+        for (String key : noise) {
+            if (value.contains(key)) return false;
+        }
+        return true;
+    }
+
+    /** 从「交易单号 / 转账单号 / 商户单号」后面的字母数字串里取单号；认不出返回 null。 */
+    static String orderIdOf(String text) {
+        Pattern pattern = orderIdPattern;
+        if (pattern == null || text == null || text.isEmpty()) return null;
+        Matcher matcher = pattern.matcher(text);
+        while (matcher.find()) {
+            String id = matcher.group(1);
+            if (id != null && id.length() >= 8) return id;
+        }
+        return null;
+    }
+
+    /** 把关键词数组拼成正则的 | 分支（每个词都转义） */
+    private static String alt(String[] keys) {
+        StringBuilder sb = new StringBuilder();
+        for (String key : keys) {
+            if (key == null || key.isEmpty()) continue;
+            if (sb.length() > 0) sb.append('|');
+            sb.append(Pattern.quote(key));
+        }
+        return sb.toString();
+    }
+
     /** 去重 hash：金额 + 去掉空白后的前 200 个字符，同一张账单重截会得到同一个值。 */
     static String dedupeKey(String amount, String text) {
-        String norm = (text == null ? "" : text).replaceAll("\\s+", "");
-        if (norm.length() > 200) norm = norm.substring(0, 200);
-        String source = amount + "|" + norm;
+        return dedupeKey(amount, text, null);
+    }
+
+    /**
+     * 去重 hash：有交易单号时只按单号算（同一笔账单重截、同金额不同单都能区分），
+     * 没有单号再退回「金额 + 去掉空白后的前 200 个字符」。
+     */
+    static String dedupeKey(String amount, String text, String orderId) {
+        String source;
+        if (orderId != null && !orderId.isEmpty()) {
+            source = "id|" + orderId;
+        } else {
+            String norm = (text == null ? "" : text).replaceAll("\\s+", "");
+            if (norm.length() > 200) norm = norm.substring(0, 200);
+            source = amount + "|" + norm;
+        }
         try {
             MessageDigest md = MessageDigest.getInstance("SHA-256");
             byte[] digest = md.digest(source.getBytes(StandardCharsets.UTF_8));
@@ -682,7 +793,7 @@ final class ShotRules {
             for (int i = 0; i < 8; i++) sb.append(String.format("%02x", digest[i]));
             return sb.toString();
         } catch (java.security.NoSuchAlgorithmException e) {
-            return amount + "|" + norm.hashCode();
+            return source.hashCode() + "";
         }
     }
 }
